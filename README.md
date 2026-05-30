@@ -2,25 +2,91 @@
 
 `meeting-ingest` is a platform-agnostic meeting and transcript ingestion tool.
 
-It is intended to turn raw meeting artifacts such as `.docx`, `.txt`, and `.vtt` files into structured project knowledge with a strong done process:
+It is intended to turn raw meeting artifacts such as `.docx`, `.txt`, and `.vtt` files into structured project knowledge with a strong done process.
 
-- deterministic meeting IDs
-- structured markdown meeting summaries
-- structured observations / signals
-- idempotent source ledgering
-- processed archive copies
-- inbox reconciliation only after confirmed success
+## Why
 
-## Direction
+Meeting transcripts often contain real project value:
 
-This repository is the starting point for rebuilding an existing Claude-first workflow into a host-neutral engine that can work cleanly with:
+- decisions
+- action items
+- asks
+- dependencies
+- risks
+- communication signals
+- stakeholder intent
+
+But raw transcripts are noisy and hard to reuse directly.
+
+`meeting-ingest` exists to transform those artifacts into durable, structured project outputs that are consistent, idempotent, and easy to integrate into broader workflows.
+
+## Product Direction
+
+The long-term target is a host-neutral engine that can work cleanly with:
 
 - Codex
 - Claude Code
-- T3 harness workflows
+- Codex via T3 harness
 - optionally Gemini CLI
 - plain shell automation
 
-## Status
+The tool should support:
 
-Early scaffold. The next step is to define package layout, CLI shape, config model, and provider abstraction.
+- project-local first-run initialization
+- deterministic meeting IDs
+- structured markdown outputs
+- structured signals / observations
+- source-ledger idempotency
+- processed archives
+- inbox reconciliation only after confirmed success
+
+## Design Principles
+
+- One engine, many wrappers
+- Strong done process
+- Provenance matters
+- Idempotency by content hash, not filename
+- Provider-backed extraction should be swappable
+- Human-readable project artifacts remain important
+
+## Relationship To iQ Context
+
+`meeting-ingest` is separate from `iQ Context`.
+
+- `meeting-ingest` = specialized artifact producer
+- `iQ Context` = session/context operating system
+
+They should integrate cleanly, but they should not be collapsed into one codebase prematurely.
+
+## Repo Focus
+
+This repo is for the ingestion tool itself.
+
+It should stay focused on:
+
+- transcript extraction
+- structured meeting summarization
+- signal extraction
+- roster/identity resolution
+- project-local ingest directories and config
+- archive/ledger/reconcile behavior
+- host-neutral CLI and provider model
+
+## Current Status
+
+Early scaffold with a clear direction.
+
+The immediate exploration areas are:
+
+- package layout
+- CLI shape
+- project-local config model
+- provider abstraction
+- roster storage design
+- migration path from the current Claude-first implementation
+
+## Start Here
+
+- [Context Primer](docs/context-primer.md)
+
+That document is the agent-optimized starting point for architecture and roadmap exploration in this repo.
