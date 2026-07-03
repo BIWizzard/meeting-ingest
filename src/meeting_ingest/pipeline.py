@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from meeting_ingest.archive import archive_and_reconcile, reconcile_duplicate_source
+from meeting_ingest.archive import archive_and_reconcile, repair_duplicate_source
 from meeting_ingest.clock import Clock
 from meeting_ingest.config import MeetingIngestConfig
 from meeting_ingest.doctor import find_issues, project_status
@@ -238,12 +238,19 @@ def reconcile(start: Path) -> RunSummary:
                     }
                 )
                 continue
-            reconcile_result = reconcile_duplicate_source(source, paths)
+            repair_result = _repair_duplicate_source(
+                source,
+                paths=paths,
+                source_sha256=source_sha256,
+                record=existing_record,
+                clock=None,
+            )
             repaired.append(
                 {
-                    "path": reconcile_result.get("path", ""),
-                    "status": reconcile_result["status"],
-                    "reason": reconcile_result["reason"],
+                    "path": repair_result["reconcile"].get("path", ""),
+                    "status": repair_result["reconcile"]["status"],
+                    "reason": repair_result["reconcile"]["reason"],
+                    "processed_path": repair_result["processed_path"],
                 }
             )
     return RunSummary(
@@ -311,7 +318,8 @@ def _write_artifact(path: Path, markdown: str) -> None:
 
 
 def _no_op_summary(source: Path, paths: ProjectPaths, source_sha256: str, record: dict[str, object]) -> RunSummary:
-    reconcile = reconcile_duplicate_source(source, paths)
+    repair_result = _repair_duplicate_source(source, paths=paths, source_sha256=source_sha256, record=record, clock=None)
+    reconcile = repair_result["reconcile"]
     artifacts = record.get("artifacts", {})
     existing_artifacts = {}
     if isinstance(artifacts, dict):
@@ -331,9 +339,42 @@ def _no_op_summary(source: Path, paths: ProjectPaths, source_sha256: str, record
         details={
             "reason": "source_already_ingested",
             "existing_artifacts": existing_artifacts,
+            "archive": {"processed_path": repair_result["processed_path"]},
             "reconcile": reconcile,
         },
     )
+
+
+def _repair_duplicate_source(
+    source: Path,
+    *,
+    paths: ProjectPaths,
+    source_sha256: str,
+    record: dict[str, object],
+    clock: Clock | None,
+) -> dict[str, object]:
+    repair = repair_duplicate_source(source, source_sha256, paths)
+    processed_path = str(repair.processed_path.relative_to(paths.meetings_root))
+    reconcile = {**repair.reconcile, "processed_path": processed_path}
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="reconcile_repaired",
+            source_sha256=source_sha256,
+            meeting_id=str(record.get("meeting_id")),
+            ingest_run_id=str(record.get("ingest_run_id") or "repair"),
+            source_path=str(source),
+            artifacts=_dict_value(record.get("artifacts")),
+            signals=_dict_value(record.get("signals")),
+            reconcile=reconcile,
+        ),
+        clock=clock,
+    )
+    return {"processed_path": processed_path, "reconcile": reconcile}
+
+
+def _dict_value(value: object) -> dict:
+    return value if isinstance(value, dict) else {}
 
 
 def _append_ingest_snapshot(

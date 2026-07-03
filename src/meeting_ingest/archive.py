@@ -17,7 +17,7 @@ class ArchiveResult:
 
 
 def archive_and_reconcile(source: Path, source_sha256: str, paths: ProjectPaths) -> ArchiveResult:
-    processed_path = _processed_path(source, source_sha256, paths)
+    processed_path = processed_path_for_source(source, source_sha256, paths)
     try:
         shutil.copy2(source, processed_path)
     except OSError as exc:
@@ -34,14 +34,34 @@ def archive_and_reconcile(source: Path, source_sha256: str, paths: ProjectPaths)
     return ArchiveResult(processed_path=processed_path, reconcile=reconcile)
 
 
-def reconcile_duplicate_source(source: Path, paths: ProjectPaths) -> dict[str, str]:
+def repair_duplicate_source(source: Path, source_sha256: str, paths: ProjectPaths) -> ArchiveResult:
+    processed_path = processed_path_for_source(source, source_sha256, paths)
+    archived = False
+    if not processed_path.exists():
+        try:
+            shutil.copy2(source, processed_path)
+            archived = True
+        except OSError as exc:
+            raise MeetingIngestError(
+                phase="archive",
+                code="archive_repair_failed",
+                message=f"Could not repair processed source archive: {source}",
+                exit_code=EXIT_ARCHIVE_RECONCILE,
+                recoverable=True,
+                details={"source": str(source), "processed_path": str(processed_path)},
+            ) from exc
     reconcile = _reconcile_inbox_source(source, paths)
-    return {**reconcile, "reason": "source_already_ingested"}
+    return ArchiveResult(
+        processed_path=processed_path,
+        reconcile={**reconcile, "reason": "source_already_ingested", "archive_repaired": str(archived).lower()},
+    )
 
 
-def _processed_path(source: Path, source_sha256: str, paths: ProjectPaths) -> Path:
+def processed_path_for_source(source: Path, source_sha256: str, paths: ProjectPaths) -> Path:
     safe_name = source.name.replace("/", "-")
     candidate = paths.processed / f"{source_sha256[:8]}-{safe_name}"
+    if candidate.exists():
+        return candidate
     counter = 2
     while candidate.exists():
         candidate = paths.processed / f"{source_sha256[:8]}-{counter}-{safe_name}"

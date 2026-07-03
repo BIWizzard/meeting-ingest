@@ -75,6 +75,23 @@ def test_doctor_reports_missing_ledger_artifact(tmp_path: Path) -> None:
     } in summary.details["issues"]
 
 
+def test_doctor_reports_missing_processed_copy(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    result = ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    processed = paths.meetings_root / result.details["archive"]["processed_path"]
+    processed.unlink()
+
+    summary = doctor(tmp_path)
+
+    assert {
+        "code": "missing_processed_source",
+        "message": "Ledger references a missing path.",
+        "path": result.details["archive"]["processed_path"],
+    } in summary.details["issues"]
+
+
 def test_doctor_reports_malformed_ledger_line(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     paths.ledger.write_text("{not-json\n", encoding="utf-8")
