@@ -9,7 +9,7 @@ from meeting_ingest.cli import main
 from meeting_ingest.errors import ConfigError
 from meeting_ingest.ledger import read_records
 from meeting_ingest.paths import init_project
-from meeting_ingest.pipeline import ingest
+from meeting_ingest.pipeline import ingest, reconcile
 
 
 def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
@@ -141,6 +141,36 @@ def test_pipeline_ingest_duplicate_source_returns_no_op_and_reconciles_inbox(tmp
     assert not redrop.exists()
     assert (paths.inbox_done / "2026-07-03-kushali-sync-2.txt").exists()
     assert len(ledger_records) == 2
+
+
+def test_reconcile_repairs_duplicate_inbox_sources_only(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+    ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    duplicate = paths.inbox / "duplicate-name.txt"
+    duplicate.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+    unknown = paths.inbox / "unknown.txt"
+    unknown.write_text("Different content\n", encoding="utf-8")
+
+    summary = reconcile(tmp_path)
+
+    assert summary.status == "success"
+    assert summary.details["repaired"] == [
+        {
+            "path": "_inbox/_done/duplicate-name.txt",
+            "status": "completed",
+            "reason": "source_already_ingested",
+        }
+    ]
+    assert summary.details["skipped"] == [
+        {
+            "path": "_inbox/unknown.txt",
+            "reason": "source_not_in_ledger",
+        }
+    ]
+    assert not duplicate.exists()
+    assert unknown.exists()
 
 
 def test_ingest_rejects_remote_provider_when_privacy_gate_disabled(tmp_path: Path) -> None:

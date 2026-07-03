@@ -223,7 +223,38 @@ def status(start: Path) -> RunSummary:
 
 
 def reconcile(start: Path) -> RunSummary:
-    raise PipelineNotImplementedError("reconcile")
+    _, paths = load_project(start)
+    repaired: list[dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
+    with ProjectLock(lock_path(paths.cache)):
+        for source in _inbox_sources(paths):
+            source_sha256 = sha256_file(source)
+            existing_record = latest_record_for_source(paths.ledger, source_sha256)
+            if existing_record is None:
+                skipped.append(
+                    {
+                        "path": str(source.relative_to(paths.meetings_root)),
+                        "reason": "source_not_in_ledger",
+                    }
+                )
+                continue
+            reconcile_result = reconcile_duplicate_source(source, paths)
+            repaired.append(
+                {
+                    "path": reconcile_result.get("path", ""),
+                    "status": reconcile_result["status"],
+                    "reason": reconcile_result["reason"],
+                }
+            )
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        details={
+            "command": "reconcile",
+            "repaired": repaired,
+            "skipped": skipped,
+        },
+    )
 
 
 def _validate_ingest_options(config: MeetingIngestConfig, mode: str, provider: str) -> None:
@@ -250,6 +281,19 @@ def _slug(value: str, *, max_length: int = 80) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     slug = re.sub(r"-{2,}", "-", slug)
     return slug[:max_length].strip("-")
+
+
+def _inbox_sources(paths: ProjectPaths) -> list[Path]:
+    if not paths.inbox.exists():
+        return []
+    sources: list[Path] = []
+    for path in paths.inbox.rglob("*"):
+        if not path.is_file():
+            continue
+        if paths.inbox_done in path.parents:
+            continue
+        sources.append(path)
+    return sources
 
 
 def _write_artifact(path: Path, markdown: str) -> None:
