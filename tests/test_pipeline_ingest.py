@@ -299,3 +299,43 @@ def test_ingest_records_failed_external_source_without_quarantine(tmp_path: Path
     assert records[-1]["event"] == "ingest_failed"
     assert records[-1]["quarantine"] is None
     assert records[-1]["error"]["code"] == "unsupported_source_format"
+
+
+def test_retry_after_failed_external_source_can_ingest_successfully(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = tmp_path / "2026-07-03-meeting.pdf"
+    source.write_text("not supported", encoding="utf-8")
+
+    with pytest.raises(UnsupportedSourceFormatError):
+        ingest(source, start=tmp_path, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    source = tmp_path / "2026-07-03-meeting.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    summary = ingest(source, start=tmp_path, clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)))
+    records = read_records(paths.ledger)
+
+    assert summary.status == "success"
+    assert [record["event"] for record in records] == ["ingest_failed", "primary_artifacts_ready", "ingest_completed"]
+    assert records[-1]["artifacts"]["summary-plus-verbatim"]["status"] == "ready"
+
+
+def test_reconcile_skips_failed_record_without_repairing_as_duplicate(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-meeting.pdf"
+    source.write_text("not supported", encoding="utf-8")
+
+    with pytest.raises(UnsupportedSourceFormatError):
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    retry_source = paths.inbox / "2026-07-03-meeting.pdf"
+    retry_source.write_text("not supported", encoding="utf-8")
+
+    summary = reconcile(tmp_path)
+
+    assert summary.details["repaired"] == []
+    assert summary.details["skipped"] == [
+        {
+            "path": "_inbox/2026-07-03-meeting.pdf",
+            "reason": "source_not_in_ledger",
+        }
+    ]
+    assert retry_source.exists()

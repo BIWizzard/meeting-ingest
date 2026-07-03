@@ -82,8 +82,8 @@ def _ingest_locked(
     source = source.resolve()
     source_sha256 = sha256_file(source)
     existing_record = latest_record_for_source(paths.ledger, source_sha256)
-    if existing_record is not None:
-        return _no_op_summary(source, paths, source_sha256, existing_record)
+    if _record_has_primary_artifacts(existing_record):
+        return _no_op_summary(source, paths, source_sha256, existing_record, clock=clock)
 
     try:
         extraction = extract_source(source)
@@ -262,7 +262,7 @@ def reconcile(start: Path) -> RunSummary:
         for source in _inbox_sources(paths):
             source_sha256 = sha256_file(source)
             existing_record = latest_record_for_source(paths.ledger, source_sha256)
-            if existing_record is None:
+            if not _record_has_primary_artifacts(existing_record):
                 skipped.append(
                     {
                         "path": str(source.relative_to(paths.meetings_root)),
@@ -349,8 +349,15 @@ def _write_artifact(path: Path, markdown: str) -> None:
         ) from exc
 
 
-def _no_op_summary(source: Path, paths: ProjectPaths, source_sha256: str, record: dict[str, object]) -> RunSummary:
-    repair_result = _repair_duplicate_source(source, paths=paths, source_sha256=source_sha256, record=record, clock=None)
+def _no_op_summary(
+    source: Path,
+    paths: ProjectPaths,
+    source_sha256: str,
+    record: dict[str, object],
+    *,
+    clock: Clock | None,
+) -> RunSummary:
+    repair_result = _repair_duplicate_source(source, paths=paths, source_sha256=source_sha256, record=record, clock=clock)
     reconcile = repair_result["reconcile"]
     artifacts = record.get("artifacts", {})
     existing_artifacts = {}
@@ -411,6 +418,15 @@ def _repair_duplicate_source(
 
 def _dict_value(value: object) -> dict:
     return value if isinstance(value, dict) else {}
+
+
+def _record_has_primary_artifacts(record: dict[str, object] | None) -> bool:
+    if record is None:
+        return False
+    if record.get("event") not in {"primary_artifacts_ready", "ingest_completed", "reconcile_repaired"}:
+        return False
+    artifacts = record.get("artifacts")
+    return isinstance(artifacts, dict) and bool(artifacts)
 
 
 def _signal_records_from_provider(
