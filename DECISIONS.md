@@ -152,7 +152,7 @@ Ledger entries should track per-artifact status, provider/model/schema metadata,
 
 The append-only ledger should define a current-state rule such as "last valid record wins per source hash."
 
-Ledger records should be complete current-state snapshots, not partial deltas. V1 ledger events should distinguish primary artifact readiness, completed ingest, failed ingest, quarantine, regeneration, title repair, and derived updates.
+Ledger records should be complete current-state snapshots, not partial deltas. V1 ledger events should distinguish primary artifact readiness, completed ingest, reconcile repair, failed ingest, quarantine, regeneration, title repair, and derived updates.
 
 ### 18. V1 signal extraction should stay factual and minimal
 
@@ -197,6 +197,8 @@ The ingest workflow should live in a library-level orchestrator such as `pipelin
 If a duplicate source is detected but the ledger shows incomplete archive or reconcile work, v1 may complete the missing archive/reconcile work instead of returning a passive no-op.
 
 This is intended to prevent inbox residue from becoming permanent workflow debt.
+
+Repair work should append a complete `reconcile_repaired` snapshot when archive or reconcile state changes.
 
 ## Working Assumptions
 

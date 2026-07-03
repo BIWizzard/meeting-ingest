@@ -201,6 +201,22 @@ def test_pipeline_ingest_duplicate_source_returns_no_op_and_reconciles_inbox(tmp
     assert ledger_records[-1]["reconcile"]["status"] == "completed"
 
 
+def test_duplicate_external_source_no_op_does_not_append_repair_snapshot(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = tmp_path / "2026-07-03-external-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    first = ingest(source, start=tmp_path, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+
+    second = ingest(source, start=tmp_path, clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)))
+    ledger_records = read_records(paths.ledger)
+
+    assert second.status == "no_op"
+    assert second.meeting_id == first.meeting_id
+    assert second.details["reconcile"]["status"] == "skipped"
+    assert second.details["reconcile"]["archive_repaired"] == "false"
+    assert [record["event"] for record in ledger_records] == ["primary_artifacts_ready", "ingest_completed"]
+
+
 def test_reconcile_repairs_duplicate_inbox_sources_only(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = paths.inbox / "2026-07-03-kushali-sync.txt"

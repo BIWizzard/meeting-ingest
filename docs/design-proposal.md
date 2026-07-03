@@ -230,7 +230,7 @@ Source-level ledger is easier for user-facing idempotency: if the same transcrip
 
 The append-only ledger should define a current-state rule, such as "last valid record wins per source hash." This allows state repair, regeneration, and derived-work status updates without rewriting history.
 
-Ledger records should be complete current-state snapshots, not deltas. Event values should include `primary_artifacts_ready`, `ingest_completed`, `ingest_failed`, `source_quarantined`, `artifact_regenerated`, `title_repaired`, and `derived_updated`.
+Ledger records should be complete current-state snapshots, not deltas. Event values should include `primary_artifacts_ready`, `ingest_completed`, `reconcile_repaired`, `ingest_failed`, `source_quarantined`, `artifact_regenerated`, `title_repaired`, and `derived_updated`.
 
 The ledger should support regeneration from the processed archive copy, because a source may be reconciled out of `_inbox` before a later artifact mode or renderer repair is requested.
 

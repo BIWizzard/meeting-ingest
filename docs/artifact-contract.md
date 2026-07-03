@@ -555,6 +555,7 @@ Recommended v1 event values:
 
 - `primary_artifacts_ready`
 - `ingest_completed`
+- `reconcile_repaired`
 - `ingest_failed`
 - `source_quarantined`
 - `artifact_regenerated`
@@ -565,8 +566,9 @@ Write timing:
 
 1. After markdown and signal files are written, append `primary_artifacts_ready`.
 2. After processed archive copy and inbox reconciliation complete or are explicitly skipped, append `ingest_completed`.
-3. If ingest fails before primary artifacts are ready, append `ingest_failed` or `source_quarantined` when possible.
-4. Playbook updates append `derived_updated` and must not rewrite prior ingest records.
+3. If a duplicate/no-op run repairs a missing processed copy or reconciles a re-dropped source, append `reconcile_repaired`.
+4. If ingest fails before primary artifacts are ready, append `ingest_failed` or `source_quarantined` when possible.
+5. Playbook updates append `derived_updated` and must not rewrite prior ingest records.
 
 A source-level ledger record should include mode-specific artifacts.
 
@@ -730,7 +732,7 @@ Duplicate/no-op summary:
 }
 ```
 
-A duplicate/no-op run may still perform repair work when the ledger shows an otherwise-ingested source has incomplete archive or reconcile state. In that case, keep `status: "no_op"` and exit `0`, include the repair action in `warnings` or a future explicit `repairs` field, and append a complete ledger snapshot reflecting the repaired archive/reconcile state.
+A duplicate/no-op run may still perform repair work when the ledger shows an otherwise-ingested source has incomplete archive or reconcile state. In that case, keep `status: "no_op"` and exit `0`, include the repair action in `warnings`, and append a complete `reconcile_repaired` ledger snapshot reflecting the repaired archive/reconcile state. If no archive or reconcile state changed, do not append a repair snapshot.
 
 Failure summary:
 

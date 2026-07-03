@@ -14,6 +14,7 @@ from meeting_ingest.paths import ProjectPaths
 class ArchiveResult:
     processed_path: Path
     reconcile: dict[str, str]
+    changed: bool = False
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ def archive_and_reconcile(source: Path, source_sha256: str, paths: ProjectPaths)
         ) from exc
 
     reconcile = _reconcile_inbox_source(source, paths)
-    return ArchiveResult(processed_path=processed_path, reconcile=reconcile)
+    return ArchiveResult(processed_path=processed_path, reconcile=reconcile, changed=True)
 
 
 def repair_duplicate_source(source: Path, source_sha256: str, paths: ProjectPaths) -> ArchiveResult:
@@ -60,6 +61,7 @@ def repair_duplicate_source(source: Path, source_sha256: str, paths: ProjectPath
     return ArchiveResult(
         processed_path=processed_path,
         reconcile={**reconcile, "reason": "source_already_ingested", "archive_repaired": str(archived).lower()},
+        changed=archived or reconcile.get("status") == "completed",
     )
 
 

@@ -394,21 +394,22 @@ def _repair_duplicate_source(
     if not source_state:
         source_state = _source_state(paths, source, source.suffix.lower().lstrip(".") or "unknown")
     source_state = {**source_state, "processed_path": processed_path}
-    append_snapshot(
-        paths.ledger,
-        LedgerSnapshot(
-            event="reconcile_repaired",
-            source_sha256=source_sha256,
-            meeting_id=str(record.get("meeting_id")),
-            ingest_run_id=str(record.get("ingest_run_id") or "repair"),
-            source=source_state,
-            artifacts=_dict_value(record.get("artifacts")),
-            signals=_dict_value(record.get("signals")),
-            reconcile=reconcile,
-        ),
-        clock=clock,
-    )
-    return {"processed_path": processed_path, "reconcile": reconcile}
+    if repair.changed:
+        append_snapshot(
+            paths.ledger,
+            LedgerSnapshot(
+                event="reconcile_repaired",
+                source_sha256=source_sha256,
+                meeting_id=str(record.get("meeting_id")),
+                ingest_run_id=str(record.get("ingest_run_id") or "repair"),
+                source=source_state,
+                artifacts=_dict_value(record.get("artifacts")),
+                signals=_dict_value(record.get("signals")),
+                reconcile=reconcile,
+            ),
+            clock=clock,
+        )
+    return {"processed_path": processed_path, "reconcile": reconcile, "changed": repair.changed}
 
 
 def _dict_value(value: object) -> dict:
