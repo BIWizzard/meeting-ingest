@@ -1009,6 +1009,26 @@ def test_session_provider_model_id_falls_back_to_host_session(tmp_path: Path) ->
     assert "model_id: codex-session" in artifact.read_text(encoding="utf-8")
 
 
+def test_session_provider_phase2_warns_on_cli_quality_mismatch(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox, quality="balanced")
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+
+    summary = ingest(source, start=paths.inbox, provider="session", quality="fast", provider_response=response_path)
+    artifact = paths.meetings_root / summary.artifacts[0]["path"]
+
+    assert summary.details["quality"] == "balanced"
+    assert summary.warnings == [
+        "phase 2 ignored CLI quality 'fast'; using persisted provider request quality 'balanced'"
+    ]
+    assert "model_alias: balanced" in artifact.read_text(encoding="utf-8")
+
+
 def test_provider_request_duplicate_source_returns_no_op_without_request_file(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     _allow_session_provider(paths.config_path)

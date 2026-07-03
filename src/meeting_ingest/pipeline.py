@@ -124,6 +124,8 @@ def ingest(
                 source,
                 provider_response=provider_response,
                 paths=paths,
+                selected_mode=selected_mode,
+                selected_quality=selected_quality,
                 clock=clock,
             )
         return _ingest_locked(
@@ -401,6 +403,8 @@ def _complete_session_ingest_locked(
     *,
     provider_response: Path,
     paths: ProjectPaths,
+    selected_mode: str,
+    selected_quality: str,
     clock: Clock | None,
 ) -> RunSummary:
     source = source.resolve()
@@ -432,17 +436,20 @@ def _complete_session_ingest_locked(
         raise provider_error from exc
 
     prepared = _prepared_ingest_from_session_request(source, source_sha256=source_sha256, envelope=envelope)
+    request_mode = str(envelope.request["output_mode"])
+    request_quality = envelope.metadata.model_alias
     summary = _finish_ingest(
         prepared,
         paths=paths,
-        selected_mode=str(envelope.request["output_mode"]),
+        selected_mode=request_mode,
         selected_provider="session",
-        selected_quality=envelope.metadata.model_alias,
+        selected_quality=request_quality,
         provider_response=envelope.response,
         model_id=envelope.metadata.model_id,
         provider_host=envelope.metadata.provider_host,
         clock=clock,
     )
+    summary.warnings.extend(_session_phase2_option_warnings(selected_mode, selected_quality, request_mode, request_quality))
     cleanup_session_provider_files(envelope)
     return summary
 
@@ -650,6 +657,24 @@ def _resolve_provider_response_path(path: Path, paths: ProjectPaths) -> Path:
     if meetings_candidate.exists():
         return meetings_candidate
     return cwd_candidate
+
+
+def _session_phase2_option_warnings(
+    selected_mode: str,
+    selected_quality: str,
+    request_mode: str,
+    request_quality: str,
+) -> list[str]:
+    warnings: list[str] = []
+    if selected_mode != request_mode:
+        warnings.append(
+            f"phase 2 ignored CLI mode {selected_mode!r}; using persisted provider request mode {request_mode!r}"
+        )
+    if selected_quality != request_quality:
+        warnings.append(
+            f"phase 2 ignored CLI quality {selected_quality!r}; using persisted provider request quality {request_quality!r}"
+        )
+    return warnings
 
 
 def _record_session_failure_from_response_path(

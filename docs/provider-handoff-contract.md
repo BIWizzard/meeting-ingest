@@ -101,6 +101,8 @@ Recommended path shape:
 <meetings_root>/_cache/provider-responses/<ingest_run_id>.response.json
 ```
 
+The cache path above is the default handoff location, not a hard trust boundary. The CLI may accept an absolute path or a relative path outside `_cache/provider-responses` when a wrapper writes responses elsewhere. Regardless of location, phase 2 must still locate and verify the persisted request file under `_cache/provider-requests/` for the response envelope's `ingest_run_id`.
+
 Required top-level envelope:
 
 ```json
@@ -294,6 +296,8 @@ An externally supplied provider response must enter the pipeline before signal e
 
 If the source is already ingested by the time phase 2 starts, phase 2 should return the normal duplicate/no-op summary and must not render new artifacts from the stale response. If phase 2 fails before primary artifacts are ready, retry must start from a new phase-1 provider request with a new `ingest_run_id`; the old request/response pair must not be reused for a new ingest attempt.
 
+If phase 2 is invoked with CLI `--mode` or `--quality` values that differ from the persisted request, the engine must not reinterpret the response. It should use the verified request's `output_mode` and `quality` values, then include warnings in the run summary so callers can detect a stale or inconsistent command line. Today only `summary-plus-verbatim` is supported, so `--mode` mismatch warnings are mainly a forward-compatibility rule.
+
 ## CLI And Library Shape
 
 Implementation should prefer a reusable library primitive first, then expose it through CLI/wrappers.
@@ -312,6 +316,8 @@ meeting-ingest ingest SOURCE --provider session --provider-response PATH --json
 ```
 
 `ingest --provider-response` is phase 2 of this flow and hard-requires the matching persisted request file. It must not accept an arbitrary provider response envelope without the corresponding request file.
+
+`PATH` may be absolute or relative. Relative paths are resolved first from the current working directory and then from the meetings root when needed. Wrappers should prefer the engine-returned `expected_response_path` under `_cache/provider-responses/`, but alternate response locations are valid as long as the envelope and persisted request verify.
 
 For fully managed host/session operation, a wrapper may hide the two commands from the user:
 

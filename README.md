@@ -86,6 +86,7 @@ Python CLI/library implementation with:
 - sequential inbox batch ingest
 - mock provider for local deterministic tests
 - Anthropic provider adapter behind an explicit privacy gate
+- session provider handoff for subscription-backed host sessions
 - cleaned-verbatim transcript extraction for `.txt`, `.vtt`, and `.docx`
 - markdown artifact rendering
 - signal JSONL output
@@ -147,6 +148,62 @@ Quality aliases map to Anthropic models as follows:
 - `fast`: `claude-haiku-4-5`
 - `balanced`: `claude-sonnet-5`
 - `deep`: `claude-opus-4-8`
+
+Session-backed extraction is available only when the session provider privacy gate is enabled:
+
+```toml
+[privacy]
+allow_session_provider = true
+```
+
+Use `provider-request` to create a transcript-bearing request for the active host session:
+
+```bash
+python3 -m meeting_ingest.cli provider-request _local/project-context/meetings/_inbox/example.vtt --provider session --quality balanced --json
+```
+
+The command returns `request_path` and `expected_response_path`. A dedicated extraction agent should read the request file and write the expected response envelope. The response envelope must use `provider.name: "session"` and place the structured meeting extraction under `response`:
+
+```json
+{
+  "schema_version": "1.0",
+  "handoff_type": "provider_response",
+  "provider_contract": "meeting-ingest-provider-response-v1",
+  "meeting_id": "mtg-20260703-abc12345",
+  "ingest_run_id": "ingest-20260703-20260703T120000Z-abcd",
+  "source_sha256": "...",
+  "normalized_transcript_sha256": "...",
+  "provider": {
+    "name": "session",
+    "host": "codex",
+    "model_alias": "balanced",
+    "model_id": "codex-session",
+    "generated_at": "2026-07-03T12:00:00Z"
+  },
+  "response": {
+    "title": "Example meeting",
+    "tl_dr": "Short grounded summary.",
+    "meeting_type": "unknown",
+    "attendees": [],
+    "topics": [],
+    "decisions": [],
+    "action_items": [],
+    "stakeholder_asks": [],
+    "dependencies_risks": [],
+    "communication_signals": [],
+    "open_questions": [],
+    "cross_references": []
+  }
+}
+```
+
+Complete the ingest with the response file:
+
+```bash
+python3 -m meeting_ingest.cli ingest _local/project-context/meetings/_inbox/example.vtt --provider session --provider-response _local/project-context/meetings/_cache/provider-responses/ingest-20260703-20260703T120000Z-abcd.response.json --json
+```
+
+Phase 2 requires the persisted request file that matches the response `ingest_run_id`; arbitrary response-only ingests are rejected. The response path may be absolute or relative and does not have to live under `_cache/provider-responses`, though that cache path is the default. If `--mode` or `--quality` is supplied during phase 2 and differs from the persisted request, the engine uses the persisted request values and emits a warning.
 
 ## Start Here
 

@@ -160,7 +160,8 @@ V1 commands:
 
 ```text
 meeting-ingest init
-meeting-ingest ingest <source> [--mode summary-plus-verbatim] [--provider mock|anthropic] [--quality fast|balanced|deep] [--json]
+meeting-ingest provider-request <source> [--mode summary-plus-verbatim] --provider session [--quality fast|balanced|deep] [--json]
+meeting-ingest ingest <source> [--mode summary-plus-verbatim] [--provider mock|anthropic] [--quality fast|balanced|deep] [--provider-response path] [--json]
 meeting-ingest ingest-inbox [--json]
 meeting-ingest doctor
 meeting-ingest status
@@ -174,6 +175,8 @@ This auto-init decision should be confirmed before implementation.
 `reconcile` is included in v1 as a narrow recovery command for sources whose primary artifacts are ready but archive/reconcile did not complete.
 
 `ingest-inbox` should process files directly under `_inbox/` one at a time and skip `_inbox/_done/`. Unsupported formats should be reported as per-file failures using normal ingest/quarantine behavior. It should return a batch JSON summary with per-source results and continue processing after recoverable per-file failures.
+
+`provider-request` is phase 1 for host/session-backed extraction and writes a request envelope under `_cache/provider-requests/` plus an expected response path under `_cache/provider-responses/`. `ingest --provider session --provider-response path` is phase 2 and must verify the matching persisted request before adopting request-side identity and completing the normal ingest pipeline.
 
 Future enhancement: add controlled parallelism for inbox ingestion, such as `--jobs`, or harness-level fan-out to multiple focused sub-agents. This should wait until the engine has explicit coordination for shared ledger writes, lock behavior, provider rate limits, and per-file reporting.
 

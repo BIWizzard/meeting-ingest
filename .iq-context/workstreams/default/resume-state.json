@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Optional follow-up: add README/docs CLI examples for provider-request and session response completion, and clarify contract stance on accepting --provider-response paths outside _cache/provider-responses plus whether CLI-supplied --mode/--quality mismatches in phase 2 should warn."
+    "Optional next step: add a small wrapper/sub-agent prompt template that reads provider-request JSON and writes a compliant provider-response envelope."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Optional follow-up: add README/docs CLI examples for provider-request and session response completion, and clarify contract stance on accepting --provider-response paths outside _cache/provider-responses plus whether CLI-supplied --mode/--quality mismatches in phase 2 should warn.",
-  "updated_at": "2026-07-03T19:34:40.770Z"
+  "resume_from": "Resume with: Optional next step: add a small wrapper/sub-agent prompt template that reads provider-request JSON and writes a compliant provider-response envelope.",
+  "updated_at": "2026-07-03T19:40:17.381Z"
 }
