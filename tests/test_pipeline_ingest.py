@@ -4,9 +4,11 @@ from pathlib import Path
 
 import pytest
 
+import meeting_ingest.archive as archive_module
+import meeting_ingest.pipeline as pipeline_module
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.cli import main
-from meeting_ingest.errors import ConfigError, UnsupportedSourceFormatError
+from meeting_ingest.errors import EXIT_ARCHIVE_RECONCILE, EXIT_ARTIFACT_WRITE, EXIT_LEDGER_WRITE, ConfigError, MeetingIngestError, UnsupportedSourceFormatError
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
@@ -96,6 +98,145 @@ def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path
     assert signal_payload["signal_type"] == "explicit_ask"
     assert signal_payload["evidence"]["kind"] == "paraphrase"
     assert "| `sig-20260703-001` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown
+
+
+def test_artifact_write_failure_stops_before_ledger_archive_and_reconcile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    def fail_write_artifact(path: Path, markdown: str) -> None:
+        raise MeetingIngestError(
+            phase="artifact_write",
+            code="artifact_write_failed",
+            message="boom",
+            exit_code=EXIT_ARTIFACT_WRITE,
+            recoverable=True,
+        )
+
+    monkeypatch.setattr(pipeline_module, "_write_artifact", fail_write_artifact)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+
+    assert exc.value.code == "artifact_write_failed"
+    assert exc.value.exit_code == EXIT_ARTIFACT_WRITE
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert read_records(paths.ledger) == []
+    assert list(paths.processed.iterdir()) == []
+    assert list(paths.meetings_root.glob("*.md")) == []
+
+
+def test_signal_write_failure_stops_before_artifact_ledger_archive_and_reconcile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-signal.txt"
+    source.write_text("Kushali: [mock-signal] Please clarify the source.\n", encoding="utf-8")
+
+    def fail_write_signal_jsonl(path: Path, signals: object) -> object:
+        raise MeetingIngestError(
+            phase="signal_write",
+            code="signal_write_failed",
+            message="boom",
+            exit_code=EXIT_ARTIFACT_WRITE,
+            recoverable=True,
+        )
+
+    monkeypatch.setattr(pipeline_module, "write_signal_jsonl", fail_write_signal_jsonl)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+
+    assert exc.value.code == "signal_write_failed"
+    assert exc.value.exit_code == EXIT_ARTIFACT_WRITE
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert read_records(paths.ledger) == []
+    assert list(paths.processed.iterdir()) == []
+    assert list(paths.meetings_root.glob("*.md")) == []
+
+
+def test_primary_ledger_write_failure_leaves_source_unreconciled_with_orphan_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    def fail_append_snapshot(*args: object, **kwargs: object) -> None:
+        raise MeetingIngestError(
+            phase="ledger",
+            code="ledger_write_failed",
+            message="boom",
+            exit_code=EXIT_LEDGER_WRITE,
+            recoverable=True,
+        )
+
+    monkeypatch.setattr(pipeline_module, "append_snapshot", fail_append_snapshot)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+
+    assert exc.value.code == "ledger_write_failed"
+    assert exc.value.exit_code == EXIT_LEDGER_WRITE
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert read_records(paths.ledger) == []
+    assert list(paths.processed.iterdir()) == []
+    assert (paths.meetings_root / "2026-07-03-kushali-sync.md").exists()
+    assert list(paths.signals.glob("*.jsonl"))
+
+
+def test_archive_copy_failure_keeps_primary_ready_state_and_source_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    def fail_copy2(*args: object, **kwargs: object) -> None:
+        raise OSError("copy failed")
+
+    monkeypatch.setattr(archive_module.shutil, "copy2", fail_copy2)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    records = read_records(paths.ledger)
+
+    assert exc.value.code == "archive_write_failed"
+    assert exc.value.exit_code == EXIT_ARCHIVE_RECONCILE
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert list(paths.processed.iterdir()) == []
+    assert [record["event"] for record in records] == ["primary_artifacts_ready"]
+    assert records[-1]["reconcile"]["status"] == "pending"
+
+
+def test_reconcile_move_failure_keeps_processed_copy_and_source_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    def fail_move(*args: object, **kwargs: object) -> None:
+        raise OSError("move failed")
+
+    monkeypatch.setattr(archive_module.shutil, "move", fail_move)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    records = read_records(paths.ledger)
+
+    assert exc.value.code == "inbox_reconcile_failed"
+    assert exc.value.exit_code == EXIT_ARCHIVE_RECONCILE
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert (paths.processed / "bf3b2898-2026-07-03-kushali-sync.txt").exists()
+    assert [record["event"] for record in records] == ["primary_artifacts_ready"]
+    assert records[-1]["reconcile"]["status"] == "pending"
 
 
 def test_cli_ingest_json_from_nested_project_directory(tmp_path: Path, monkeypatch, capsys) -> None:

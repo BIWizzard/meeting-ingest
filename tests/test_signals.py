@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.schema import ProviderValidationError, SignalEvidence, SignalRecord
 from meeting_ingest.signals import write_signal_jsonl
 
@@ -62,3 +63,15 @@ def test_write_signal_jsonl_validates_records(tmp_path: Path) -> None:
 
     with pytest.raises(ProviderValidationError):
         write_signal_jsonl(path, [signal])
+
+
+def test_write_signal_jsonl_wraps_write_failures(tmp_path: Path) -> None:
+    path = tmp_path / "signals-as-directory"
+    path.mkdir()
+
+    with pytest.raises(MeetingIngestError) as exc:
+        write_signal_jsonl(path, [])
+
+    assert exc.value.phase == "signal_write"
+    assert exc.value.code == "signal_write_failed"
+    assert exc.value.exit_code == 7

@@ -8,6 +8,7 @@ from typing import Any
 import json
 
 from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
+from meeting_ingest.errors import EXIT_LEDGER_WRITE, MeetingIngestError
 
 
 @dataclass(frozen=True)
@@ -52,10 +53,20 @@ class LedgerReadIssue:
 
 
 def append_snapshot(ledger_path: Path, snapshot: LedgerSnapshot, *, clock: Clock | None = None) -> None:
-    ledger_path.parent.mkdir(parents=True, exist_ok=True)
-    with ledger_path.open("a", encoding="utf-8") as ledger:
-        ledger.write(json.dumps(snapshot.to_dict(clock=clock), sort_keys=True))
-        ledger.write("\n")
+    try:
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        with ledger_path.open("a", encoding="utf-8") as ledger:
+            ledger.write(json.dumps(snapshot.to_dict(clock=clock), sort_keys=True))
+            ledger.write("\n")
+    except OSError as exc:
+        raise MeetingIngestError(
+            phase="ledger",
+            code="ledger_write_failed",
+            message=f"Could not append ledger snapshot: {ledger_path}",
+            exit_code=EXIT_LEDGER_WRITE,
+            recoverable=True,
+            details={"ledger_path": str(ledger_path)},
+        ) from exc
 
 
 def read_records(ledger_path: Path) -> list[dict[str, Any]]:
