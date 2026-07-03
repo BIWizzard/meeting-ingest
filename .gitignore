@@ -9,3 +9,14 @@ __pycache__/
 node_modules/
 dist/
 build/
+
+# Agent/runtime scaffolding
+.claude-flow/
+.claude/
+.swarm/
+ruvector.db
+CLAUDE.md
+docs/brief.md
+docs/captures.md
+docs/discovery-log.md
+docs/open-mind.yaml

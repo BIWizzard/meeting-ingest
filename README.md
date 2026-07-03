@@ -22,11 +22,14 @@ But raw transcripts are noisy and hard to reuse directly.
 
 ## Product Direction
 
+The first serious build is scoped around the maintainer's personal and professional workflows. Broader productization may come later, but early design should solve the real current workflow first.
+
 The long-term target is a host-neutral engine that can work cleanly with:
 
 - Codex
 - Claude Code
 - Codex via T3 harness
+- Supa Code
 - optionally Gemini CLI
 - plain shell automation
 
@@ -35,7 +38,9 @@ The tool should support:
 - project-local first-run initialization
 - deterministic meeting IDs
 - structured markdown outputs
+- selectable output modes, including summary-only and summary-plus-verbatim
 - structured signals / observations
+- stakeholder communication signals
 - source-ledger idempotency
 - processed archives
 - inbox reconciliation only after confirmed success
@@ -88,5 +93,8 @@ The immediate exploration areas are:
 ## Start Here
 
 - [Context Primer](docs/context-primer.md)
+- [Personal Workflow Scope](docs/personal-workflow-scope.md)
+- [Current Output Evaluation](docs/current-output-evaluation.md)
+- [Design Proposal](docs/design-proposal.md)
 
-That document is the agent-optimized starting point for architecture and roadmap exploration in this repo.
+The context primer is the agent-optimized starting point for architecture and roadmap exploration. The personal workflow scope captures the initial product requirements that should guide near-term design. The current output evaluation summarizes what to preserve and improve from real Claude skill outputs. The design proposal turns those findings into an initial implementation shape.

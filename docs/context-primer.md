@@ -15,9 +15,12 @@ This repo exists to turn that working but Claude-first workflow into a host-neut
 
 - Codex
 - Claude Code
+- Supa Code
 - Codex via T3 harness
 - optionally Gemini CLI
 - plain shell / automation
+
+The initial product scope is personal-workflow first. The maintainer's own meeting, transcript, stakeholder communication, and agentic harness workflows should shape the first build before any broader market-facing generalization.
 
 ## Existing Implementation Reference
 
@@ -69,6 +72,17 @@ The current workflow already has meaningful product shape:
 
 The durable asset is the ingest engine, not the old Claude wrapper.
 
+## What The Existing Workflow Should Improve
+
+The rebuild should specifically improve these pain points:
+
+- slow runs where deterministic work or smaller model calls would be enough
+- inconsistent final document shapes
+- unclear selection between summary-only and summary-plus-verbatim outputs
+- lack of an explicitly scoped verbatim transcript mode
+- host-specific orchestration that makes Claude, Codex, Supa Code, and T3 Code feel different
+- communication signals that are useful but not yet first-class enough for stakeholder messaging workflows
+
 ## What To Preserve From The Existing Implementation
 
 The rebuild should assume the following are valuable unless a strong reason emerges to change them:
@@ -93,6 +107,9 @@ The rebuilt tool should:
 - remain idempotent and provenance-aware
 - keep the done process strong
 - expose a host-neutral extraction/provider boundary
+- make output depth easy to choose per ingest
+- support sub-agent operation through thin host wrappers
+- produce stakeholder communication signals that preserve asks, priorities, framing, and commitments
 
 ## What To Replace Or Redesign
 
@@ -187,6 +204,31 @@ Every important output should preserve provenance:
 - speaker/person info where available
 - certainty boundaries where useful
 
+### 7. Personal Workflow Output Modes
+
+The tool should make it easy to choose between:
+
+- smart summary
+- summary plus verbatim transcript
+- verbatim-only normalized transcript
+
+For summary plus verbatim, the preferred artifact shape is one markdown file with a templated summary first and the transcript second.
+
+### 8. Stakeholder Communication Intelligence
+
+The tool should capture meeting signals that help the user communicate in their own voice with specific stakeholders.
+
+Important signals include:
+
+- what stakeholders asked for
+- how they framed their asks
+- what outcomes, risks, or constraints they care about
+- communication style cues
+- commitments made by or to the stakeholder
+- recurring concerns across meetings
+
+This should remain grounded in source provenance and should support practical communication memory rather than broad profiling.
+
 ## Relationship To iQ Context
 
 `meeting-ingest` and `iQ Context` are separate but complementary.
@@ -223,6 +265,8 @@ Hosts should wrap this CLI or its library API instead of reimplementing the beha
 6. How should failures, quarantine, and partial writes be handled?
 7. How should tests cover deterministic ingest behavior vs provider-backed extraction?
 8. What is the cleanest migration path from the current Claude-first implementation?
+9. How should output modes affect artifact naming, ledger state, and re-ingest behavior?
+10. How should communication signals be represented so they are useful for stakeholder messaging without becoming a separate messaging product?
 
 ## Non-Goals
 
