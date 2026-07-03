@@ -24,7 +24,7 @@ from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
-from meeting_ingest.providers.mock import MockProvider
+from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
 from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, SignalRecord
@@ -93,7 +93,8 @@ def _ingest_locked(
     meeting_id = mint_meeting_id(extraction.effective_date.value, source_sha256)
     ingest_run_id = mint_ingest_run_id(extraction.effective_date.value, clock=clock)
 
-    provider_response = MockProvider().extract(
+    provider_impl = get_provider(selected_provider)
+    provider_response = provider_impl.extract(
         ProviderRequest(
             transcript=extraction.normalized_text,
             source_name=source.name,
@@ -117,7 +118,7 @@ def _ingest_locked(
             output_mode=selected_mode,
             provider=selected_provider,
             model_alias=selected_quality,
-            model_id="none" if selected_provider == "mock" else selected_provider,
+            model_id=provider_impl.model_id,
         ),
         clock=clock,
     )
@@ -147,7 +148,7 @@ def _ingest_locked(
             "path": str(relative_artifact_path),
             "provider": selected_provider,
             "model_alias": selected_quality,
-            "model_id": "none" if selected_provider == "mock" else selected_provider,
+            "model_id": provider_impl.model_id,
             "schema_version": "1.0",
             "title": provider_response.title,
             "slug": artifact_slug,

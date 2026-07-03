@@ -19,6 +19,7 @@ class ProviderRequest:
 
 class Provider(Protocol):
     name: str
+    model_id: str
 
     def extract(self, request: ProviderRequest) -> ProviderResponse:
         """Return structured meeting data for deterministic rendering."""

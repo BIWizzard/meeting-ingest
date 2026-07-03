@@ -11,6 +11,7 @@ from meeting_ingest.schema import Attendee, ProviderResponse, Topic
 
 class MockProvider:
     name = "mock"
+    model_id = "none"
 
     def extract(self, request: ProviderRequest) -> ProviderResponse:
         attendees = _infer_attendees(request.transcript)
