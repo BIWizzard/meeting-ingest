@@ -78,4 +78,43 @@ Subscription-backed provider workflows should use dedicated sub-agents for model
 
 API-backed providers remain important for portability and productization. Host/session-backed providers exist to support personal workflows in active subscription-backed Claude Code, Codex, Supa Code, and T3 Code sessions without requiring a separate API call.
 
+Reusable agent affordances live alongside these repo-local instructions:
+
+- Claude Code: `~/.claude/skills/meeting-ingest` plus `~/.claude/agents/meeting-ingest-session-provider`
+- Codex: `~/.codex/skills/meeting-ingest`
+
+The skill is the natural-language trigger surface. The `meeting-ingest` CLI is the reliability layer.
+
+## Meeting Ingest Inbox Processing
+
+When the user asks an agent to process the Meeting Ingest inbox, assume the intended provider is `session` unless the user explicitly asks for another provider.
+
+Do not use `mock` for real workflow tests. Do not switch to an API-backed provider just because it is available. The normal personal workflow is subscription-backed session extraction inside the active agent host.
+
+Before processing the inbox, verify the project config under `_local/project-context/meetings/meeting-ingest.toml` has:
+
+```toml
+default_provider = "session"
+
+[privacy]
+allow_session_provider = true
+```
+
+If the config is missing or still defaults to `mock`, update it for this local workflow before processing.
+
+`meeting-ingest ingest-inbox` currently does not complete `provider=session` work by itself because session extraction requires the active agent to produce the provider response JSON. Until a first-class session inbox wrapper exists, process each direct file in `_local/project-context/meetings/_inbox/` with this loop:
+
+1. Run `uv run meeting-ingest provider-request <source> --provider session --quality balanced --json`.
+2. Read the generated request file from the returned `request_path`.
+3. Produce the expected provider response JSON at the returned `expected_response_path`.
+4. Run `uv run meeting-ingest ingest <source> --provider session --provider-response <expected_response_path> --json`.
+5. Confirm the run summary reports `status: "success"`, `provider: "session"`, a markdown artifact path, signal artifact path, archive path, and completed reconcile path.
+6. Continue until no direct files remain in `_inbox/` except files under `_inbox/_done/`.
+
+The agent may act as the session extraction agent when no dedicated sub-agent is available, but the response must still be provider-level JSON only. The engine must remain responsible for validation, markdown rendering, signal enrichment, ledger writes, archive, and reconcile.
+
+Use [docs/session-provider-inbox-agent-workflow.md](docs/session-provider-inbox-agent-workflow.md) for the exact operational workflow.
+
+For Codex specifically, the reusable skill source is maintained at [docs/codex-skills/meeting-ingest/SKILL.md](docs/codex-skills/meeting-ingest/SKILL.md) and installed to `~/.codex/skills/meeting-ingest/SKILL.md`. Keep those in sync when changing Codex-facing behavior.
+
 This is currently a lightweight local continuity layer. Semantic retrieval and richer host integrations are future work.

@@ -180,6 +180,8 @@ This auto-init decision should be confirmed before implementation.
 
 Future enhancement: add controlled parallelism for inbox ingestion, such as `--jobs`, or harness-level fan-out to multiple focused sub-agents. This should wait until the engine has explicit coordination for shared ledger writes, lock behavior, provider rate limits, and per-file reporting.
 
+Current personal-workflow gap: `ingest-inbox` rejects `provider=session`, so the active agent must currently run the two-phase session-provider loop for each direct inbox file. The expected agent workflow is documented in `docs/session-provider-inbox-agent-workflow.md`. A near-term follow-up should add a first-class session inbox wrapper or engine-assisted workflow so a user can tell Codex or Claude Code to process the inbox and the agent can complete provider-request, extraction response, phase-2 ingest, archive, and reconcile without ad hoc command selection.
+
 ## Project Layout
 
 V1 project layout:

@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Committed documentation and review workflow updates in 7ae9dbe. Added docs/session-provider-host-wrappers.md with Claude Code, Supa Code, and T3 Code provider=session wrapper snippets that resolve handoff paths correctly; added docs/claude-code-review-prompt.md with the formal read-only Claude Code review prompt, Meeting Ingest-specific review focus, and prompt generator. Linked docs from AGENTS.md, README.md, and provider handoff contract. Follow-up Claude review resolved prior majors and returned commit-ready-with-notes. Working tree clean after commit.",
+  "status_summary": "Session focused on validating and hardening the Meeting Ingest personal agent workflow. Ran meeting-ingest init, processed inbox files first with mock and then corrected workflow to provider=session. Fixed a real DOCX Teams speaker parsing bug for comma-form names and contractor labels, added extraction regression tests, and isolated a CLI scaffold test from repo-local config; verification stayed green with uv run pytest => 113 passed. Configured local Meeting Ingest project for session provider by default. Processed multiple real transcripts through the two-phase session flow, producing useful markdown artifacts and signal JSONL outputs. Added docs/session-provider-inbox-agent-workflow.md and updated AGENTS.md, README.md, and docs/implementation-plan.md so agents know that 'process the inbox' means session-provider processing, not mock/API. Created active Claude Code skill ~/.claude/skills/meeting-ingest, archived legacy ingest-meeting skill under docs/legacy/claude-ingest-meeting-skill, and replaced active legacy ingest-meeting SKILL.md with a deprecation shim. Added Claude Code sub-agent ~/.claude/agents/meeting-ingest-session-provider and durable repo source docs/claude-agents/meeting-ingest-session-provider.md. Created Codex skill ~/.codex/skills/meeting-ingest with durable repo source docs/codex-skills/meeting-ingest/SKILL.md. Validated Claude Code natural prompt now selects meeting-ingest and successfully processes inbox files through session provider. Current important product gap remains: ingest-inbox rejects provider=session, so agents manually run provider-request -> response JSON -> phase 2 per file; this should become a first-class session inbox workflow. Working tree has intentional uncommitted changes across docs, skills, tests, parser fix, local runtime project state, and iQ Context state.",
   "active_plan": null,
   "active_task": null,
   "active_files": [],
@@ -15,16 +15,16 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Next workstream can either push main, address the deferred prompt-extraction nit with explicit markers, or move on to the next Meeting Ingest feature."
+    "Create the roadmap implementation plan recommended after the product review. It should sequence V1 completion polish, output modes and repair/regenerate workflows, first-class session inbox automation, provider/wrapper hardening, stakeholder playbook V1, migration/existing corpus adoption, broader communication artifact ingest, and iQ Context integration. Separate ready-to-implement items from areas still needing design decisions, and include acceptance criteria for each roadmap layer."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Next workstream can either push main, address the deferred prompt-extraction nit with explicit markers, or move on to the next Meeting Ingest feature.",
+  "continuation_hint": "Session focused on validating and hardening the Meeting Ingest personal agent workflow. Ran meeting-ingest init, processed inbox files first with mock and then corrected workflow to provider=session. Fixed a real DOCX Teams speaker parsing bug for comma-form names and contractor labels, added extraction regression tests, and isolated a CLI scaffold test from repo-local config; verification stayed green with uv run pytest => 113 passed. Configured local Meeting Ingest project for session provider by default. Processed multiple real transcripts through the two-phase session flow, producing useful markdown artifacts and signal JSONL outputs. Added docs/session-provider-inbox-agent-workflow.md and updated AGENTS.md, README.md, and docs/implementation-plan.md so agents know that 'process the inbox' means session-provider processing, not mock/API. Created active Claude Code skill ~/.claude/skills/meeting-ingest, archived legacy ingest-meeting skill under docs/legacy/claude-ingest-meeting-skill, and replaced active legacy ingest-meeting SKILL.md with a deprecation shim. Added Claude Code sub-agent ~/.claude/agents/meeting-ingest-session-provider and durable repo source docs/claude-agents/meeting-ingest-session-provider.md. Created Codex skill ~/.codex/skills/meeting-ingest with durable repo source docs/codex-skills/meeting-ingest/SKILL.md. Validated Claude Code natural prompt now selects meeting-ingest and successfully processes inbox files through session provider. Current important product gap remains: ingest-inbox rejects provider=session, so agents manually run provider-request -> response JSON -> phase 2 per file; this should become a first-class session inbox workflow. Working tree has intentional uncommitted changes across docs, skills, tests, parser fix, local runtime project state, and iQ Context state.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-03T20:31:14.792Z",
-  "last_wrapped_at": "2026-07-03T20:02:35.202Z",
+  "last_saved_at": "2026-07-03T21:57:23.850Z",
+  "last_wrapped_at": "2026-07-03T21:58:28.485Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-03T20:31:14.792Z"
+  "updated_at": "2026-07-03T21:58:28.485Z"
 }

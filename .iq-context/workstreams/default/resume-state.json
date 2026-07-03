@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Next workstream can either push main, address the deferred prompt-extraction nit with explicit markers, or move on to the next Meeting Ingest feature."
+    "Create the roadmap implementation plan recommended after the product review. It should sequence V1 completion polish, output modes and repair/regenerate workflows, first-class session inbox automation, provider/wrapper hardening, stakeholder playbook V1, migration/existing corpus adoption, broader communication artifact ingest, and iQ Context integration. Separate ready-to-implement items from areas still needing design decisions, and include acceptance criteria for each roadmap layer."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Next workstream can either push main, address the deferred prompt-extraction nit with explicit markers, or move on to the next Meeting Ingest feature.",
-  "updated_at": "2026-07-03T20:31:14.792Z"
+  "resume_from": "Resume with: Create the roadmap implementation plan recommended after the product review. It should sequence V1 completion polish, output modes and repair/regenerate workflows, first-class session inbox automation, provider/wrapper hardening, stakeholder playbook V1, migration/existing corpus adoption, broader communication artifact ingest, and iQ Context integration. Separate ready-to-implement items from areas still needing design decisions, and include acceptance criteria for each roadmap layer.",
+  "updated_at": "2026-07-03T21:58:28.485Z"
 }

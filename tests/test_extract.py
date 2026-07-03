@@ -115,6 +115,47 @@ def test_extract_docx_normalizes_teams_speaker_timestamps(tmp_path: Path) -> Non
     assert result.normalized_text == "**Chandra McCrary** (0:05): Is anybody else coming?\n**John Wilson** (12:31): That works.\n"
 
 
+def test_extract_docx_normalizes_teams_comma_names_and_contractors(tmp_path: Path) -> None:
+    source = tmp_path / "20260703-meeting.docx"
+    document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Olaleye, Mark 0:14</w:t></w:r></w:p>
+    <w:p><w:r><w:t>How are you doing?</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Graham, Ken (Contractor) 0:16</w:t></w:r></w:p>
+    <w:p><w:r><w:t>How's it going?</w:t></w:r></w:p>
+  </w:body>
+</w:document>
+"""
+    with ZipFile(source, "w") as docx:
+        docx.writestr("word/document.xml", document_xml)
+
+    result = extract_source(source)
+
+    assert result.normalized_text == (
+        "**Olaleye, Mark** (0:14): How are you doing?\n"
+        "**Graham, Ken (Contractor)** (0:16): How's it going?\n"
+    )
+
+
+def test_extract_docx_does_not_treat_plain_text_time_reference_as_speaker(tmp_path: Path) -> None:
+    source = tmp_path / "20260703-meeting.docx"
+    document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Graham, Ken (Contractor) 0:16</w:t></w:r></w:p>
+    <w:p><w:r><w:t>This was based off of a run from 6:23.</w:t></w:r></w:p>
+  </w:body>
+</w:document>
+"""
+    with ZipFile(source, "w") as docx:
+        docx.writestr("word/document.xml", document_xml)
+
+    result = extract_source(source)
+
+    assert result.normalized_text == "**Graham, Ken (Contractor)** (0:16): This was based off of a run from 6:23.\n"
+
+
 def test_extract_docx_attaches_paragraphs_after_split_teams_speaker_lines(tmp_path: Path) -> None:
     source = tmp_path / "20260703-meeting.docx"
     document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

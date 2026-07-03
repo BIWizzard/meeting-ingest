@@ -17,7 +17,9 @@ def test_init_json_outputs_run_summary(tmp_path: Path, capsys) -> None:
     assert Path(summary["meetings_root"]).is_dir()
 
 
-def test_ingest_without_project_returns_config_failure(capsys) -> None:
+def test_ingest_without_project_returns_config_failure(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+
     exit_code = main(["ingest", "missing.txt", "--json"])
 
     captured = capsys.readouterr()

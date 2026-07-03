@@ -9,7 +9,10 @@ import re
 _WEBVTT_TIMING = re.compile(r"^(?P<start>\d{2}:\d{2}:\d{2})\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}")
 _WEBVTT_CUE_ID = re.compile(r"^[0-9A-Za-z_-]+/\d+-\d+$")
 _VOICE_TAG_START = re.compile(r"^<v(?:\.[^ >]+)*\s+([^>]+)>(.*)$")
-_TEAMS_DOCX_SPEAKER = re.compile(r"^([A-Z][A-Za-z'.-]*(?:\s+[A-Z][A-Za-z'.-]*){1,5})\s+(\d{1,2}:\d{2}(?::\d{2})?)(.*)$")
+_TEAMS_DOCX_SPEAKER = re.compile(
+    r"^([A-Z][A-Za-z'.-]*(?:,\s*[A-Z][A-Za-z'.-]*)?(?:\s+\([^)]+\))?(?:\s+[A-Z][A-Za-z'.-]*){0,4})\s+"
+    r"(\d{1,2}:\d{2}(?::\d{2})?)(?:([A-Za-z].*)|$)"
+)
 _TEAMS_DOCX_SPEAKER_NORMALIZED = re.compile(r"^(.+?) \((\d{1,2}:\d{2}(?::\d{2})?)\):\s*(.*)$")
 _DOCX_EXPORT_STAMP = re.compile(r".*-20\d{6}_\d{6}-Meeting Transcript$")
 _DOCX_DATE_LINE = re.compile(r"^[A-Z][a-z]+ \d{1,2}, 20\d{2}, \d{1,2}:\d{2}(?:AM|PM)$")
@@ -119,6 +122,7 @@ def normalize_teams_docx_text(text: str) -> str:
             speaker, timestamp, content = match.groups()
             active_speaker = speaker
             active_timestamp = timestamp
+            content = content or ""
             active_text = [content.strip()] if content.strip() else []
             continue
         normalized_match = _TEAMS_DOCX_SPEAKER_NORMALIZED.match(raw_line)

@@ -25,3 +25,7 @@ docs/open-mind.yaml
 .iq-context/workstreams/current.txt
 .iq-context/workstreams/*/host-bindings.json
 .iq-context/logs/
+
+# Meeting Ingest runtime cache
+/_local/
+/_local/project-context/meetings/_cache/
