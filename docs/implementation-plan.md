@@ -226,6 +226,7 @@ ledger = "_ledger.jsonl"
 
 [privacy]
 allow_remote_provider = false
+allow_session_provider = false
 ```
 
 Provider configuration should avoid accidentally routing sensitive client transcripts to multiple vendors.
@@ -598,6 +599,8 @@ Deliverables:
 - tests proving externally supplied provider JSON passes the same schema, renderer, signal, ledger, archive, and reconcile flow
 
 The handoff contract is now specified in `docs/provider-handoff-contract.md`. Implementation should add shared JSON parsing for the existing API-backed provider payload and the host/session response envelope, then route externally supplied provider output into the pipeline immediately before `validate_provider_response`.
+
+Hard dependency: land provider failure semantics first, including typed provider failure, exit `5`, provider-validation exit `6`, and `ingest_failed` ledger recording before primary artifacts are ready. The session provider path should use canonical provider name `session`, respect `privacy.allow_session_provider`, persist provider request/response files under `_cache`, and complete through a two-phase flow where phase 2 verifies the response against the persisted request before adopting request-side identity.
 
 Lead review:
 

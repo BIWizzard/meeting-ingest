@@ -264,7 +264,7 @@ Provider types:
 
 Both provider types must produce the same structured provider response and pass the same validation. Host/session-backed providers should delegate transcript-heavy extraction to dedicated sub-agents when practical, so the main session stays focused on orchestration, review, and user interaction. Host/session-backed providers may change how the model judgment is obtained, but they must not change artifact rendering, signal enrichment, ledger semantics, archive, reconcile, or run-summary behavior.
 
-The host/session handoff contract is defined in `docs/provider-handoff-contract.md`. In short: the engine writes a transcript-bearing provider request file, a dedicated extraction sub-agent writes a provider response envelope whose `response` payload maps directly to `ProviderResponse`, and the engine ingests that external response through the same validation, signal enrichment, renderer, ledger, archive, reconcile, and run-summary path as API-backed providers.
+The host/session handoff contract is defined in `docs/provider-handoff-contract.md`. In short: the engine writes a transcript-bearing provider request file, a dedicated extraction sub-agent writes a provider response envelope whose `response` payload maps directly to `ProviderResponse`, and the engine ingests that external response through the same validation, signal enrichment, renderer, ledger, archive, reconcile, and run-summary path as API-backed providers. This is a two-phase flow: phase 2 must verify the response against the persisted request, adopt identity from that request, and re-run duplicate/no-op checks under a fresh lock before consuming the response.
 
 ## Model Right-Sizing
 

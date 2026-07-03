@@ -186,6 +186,7 @@ duration: PT16M12S
 source_started_at: 2026-06-12T04:42:00-04:00
 timezone: America/Detroit
 project: htv-iq-dataanalytics
+provider_host: codex
 ```
 
 Rules:
@@ -194,6 +195,7 @@ Rules:
 - `title` and `slug` may change on repair.
 - `model_alias` is the configured quality tier.
 - `model_id` is the resolved provider model identifier.
+- `provider_host` is optional and should be present when `provider: session` and the active harness is known.
 - If no provider was used, set `provider: none` and `model_id: none`.
 - `schema_version` must be quoted as a string in YAML.
 - `meeting_type` is free-form in v1, but recommended values are `one-on-one`, `small-group`, `standup`, `status`, `discovery`, `design-review`, and `unknown`.
@@ -597,7 +599,8 @@ Example:
       "slug": "kushali-adbook-fact-revenue-detail",
       "provider": "anthropic",
       "model_alias": "balanced",
-      "model_id": "claude-sonnet-placeholder"
+      "model_id": "claude-sonnet-placeholder",
+      "provider_host": null
     }
   },
   "signals": {

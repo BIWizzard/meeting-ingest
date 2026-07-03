@@ -257,6 +257,8 @@ Resolved direction:
 - `schema.py`, shared errors, shared fixtures, and docs should be lead-owned unless explicitly delegated
 - host/session-backed provider extraction uses a request/response JSON handoff documented in `docs/provider-handoff-contract.md`
 - the dedicated extraction sub-agent returns only provider-level JSON; the engine still validates output, enriches signals, renders markdown, writes the ledger, archives, reconciles, and emits the run summary
+- host/session-backed extraction is a two-phase flow; phase 2 verifies the response against the persisted request, adopts request-side identity, reacquires the lock, and rechecks duplicate/no-op state before consuming response JSON
+- canonical provider name is `session`, gated by a dedicated session-provider privacy setting rather than the direct remote-provider gate
 
 ### 14. How should stakeholder communication signals be modeled?
 

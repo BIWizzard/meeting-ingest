@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Defined host/session-backed provider handoff contract for Meeting Ingest. Added docs/provider-handoff-contract.md covering engine/request JSON, sub-agent response envelope, ProviderResponse payload, identity verification, engine ingest flow, CLI/library shape, failure behavior, and privacy/source-control rules. Cross-linked the contract from design proposal, current questions, implementation plan, and decisions.",
+  "status_summary": "Addressed Claude review findings on provider handoff contract. Tightened two-phase mechanics: phase 2 verifies response against persisted request, adopts request-side identity, reacquires lock, rechecks duplicate/no-op state, and cannot run standalone. Added session privacy gate direction, advisory person ID handling, provider_host provenance, failure-semantics dependency, and request/response file lifecycle rules.",
   "active_plan": null,
   "active_task": null,
   "active_files": [],
@@ -15,16 +15,16 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Implement host/session-backed provider path: factor shared ProviderResponse JSON parsing out of anthropic provider, add request/response envelope dataclasses or helpers, add --provider session/--provider-response handling, and test that externally supplied provider JSON uses the same validation, signal enrichment, renderer, ledger, archive, and reconcile flow."
+    "Before implementing session provider path, land provider failure semantics: typed provider failure exit 5, provider-validation exit 6, and ingest_failed ledger recording before primary artifacts. Then implement session provider request/response helpers, privacy.allow_session_provider, --provider session two-phase CLI, request-bound identity verification, and tests for stale response/no-op behavior."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Implement host/session-backed provider path: factor shared ProviderResponse JSON parsing out of anthropic provider, add request/response envelope dataclasses or helpers, add --provider session/--provider-response handling, and test that externally supplied provider JSON uses the same validation, signal enrichment, renderer, ledger, archive, and reconcile flow.",
+  "continuation_hint": "Next: Before implementing session provider path, land provider failure semantics: typed provider failure exit 5, provider-validation exit 6, and ingest_failed ledger recording before primary artifacts. Then implement session provider request/response helpers, privacy.allow_session_provider, --provider session two-phase CLI, request-bound identity verification, and tests for stale response/no-op behavior.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-03T18:53:27.197Z",
+  "last_saved_at": "2026-07-03T19:04:55.361Z",
   "last_wrapped_at": "2026-07-03T18:47:13.076Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-03T18:53:27.197Z"
+  "updated_at": "2026-07-03T19:04:55.361Z"
 }
