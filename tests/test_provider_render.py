@@ -6,7 +6,14 @@ from meeting_ingest.clock import FrozenClock
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers.mock import MockProvider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
-from meeting_ingest.schema import ProviderResponse, ProviderValidationError, Topic, validate_provider_response
+from meeting_ingest.schema import (
+    ProviderResponse,
+    ProviderValidationError,
+    SignalEvidence,
+    SignalRecord,
+    Topic,
+    validate_provider_response,
+)
 
 
 def test_mock_provider_returns_valid_deterministic_response() -> None:
@@ -100,3 +107,43 @@ def test_render_summary_plus_verbatim_escapes_table_cells() -> None:
     )
 
     assert "| T1 | A \\| B | Line one line two | source \\| quote |" in markdown
+
+
+def test_render_summary_plus_verbatim_derives_signal_table_from_record() -> None:
+    response = ProviderResponse(
+        title="Signals",
+        tl_dr="Summary",
+        communication_signals=[
+            SignalRecord(
+                signal_id="sig-20260703-001",
+                meeting_id="mtg-20260703-f953bbd2",
+                ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
+                effective_at="2026-07-03",
+                recorded_at="20260703T120000Z",
+                signal_type="explicit_ask",
+                stakeholder_id="person-kushali",
+                stakeholder_name="Kushali",
+                summary="Asked for source clarity.",
+                evidence=SignalEvidence(kind="paraphrase", text="Kushali asked for source clarity."),
+                inference_level="explicit",
+                confidence="high",
+            )
+        ],
+    )
+    context = RenderContext(
+        meeting_id="mtg-20260703-f953bbd2",
+        ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
+        source_name="source.txt",
+        source_sha256="f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8",
+        slug="signals",
+        effective_date="2026-07-03",
+    )
+
+    markdown = render_summary_plus_verbatim(
+        response,
+        "Ken: Hello\n",
+        context,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    assert "| `sig-20260703-001` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown

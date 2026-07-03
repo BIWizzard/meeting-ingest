@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from meeting_ingest.clock import Clock, SystemClock, format_timestamp
-from meeting_ingest.schema import ProviderResponse, validate_provider_response
+from meeting_ingest.schema import ProviderResponse, SignalRecord, validate_provider_response
 
 
 @dataclass(frozen=True)
@@ -189,8 +189,9 @@ def _signals(response: ProviderResponse) -> list[str]:
         return [*lines, "None identified.", ""]
     lines.extend(["| Signal ID | Type | Stakeholder | Summary | Confidence |", "|---|---|---|---|---|"])
     for signal in response.communication_signals:
+        summary = signal.to_summary() if isinstance(signal, SignalRecord) else signal
         lines.append(
-            f"| `{_cell(signal.signal_id)}` | {_cell(signal.type)} | {_cell(signal.stakeholder)} | {_cell(signal.summary)} | {_cell(signal.confidence)} |"
+            f"| `{_cell(summary.signal_id)}` | {_cell(summary.type)} | {_cell(summary.stakeholder)} | {_cell(summary.summary)} | {_cell(summary.confidence)} |"
         )
     lines.append("")
     return lines

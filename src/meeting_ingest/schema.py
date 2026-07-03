@@ -11,6 +11,11 @@ SCHEMA_VERSION = "1.0"
 SUPPORTED_OUTPUT_MODES = ("summary-plus-verbatim",)
 SUPPORTED_PROVIDERS = ("mock", "anthropic")
 SUPPORTED_QUALITIES = ("fast", "balanced", "deep")
+SIGNAL_TYPES = ("explicit_ask", "stakeholder_priority", "decision_rationale", "commitment", "risk_or_concern")
+EVIDENCE_KINDS = ("quote", "paraphrase", "timestamp_only")
+INFERENCE_LEVELS = ("explicit", "strong_inference", "weak_inference")
+CONFIDENCE_VALUES = ("high", "medium", "low")
+RECURRENCE_VALUES = ("one_off", "recurring", "unknown")
 
 
 @dataclass(frozen=True)
@@ -79,6 +84,44 @@ class SignalSummary:
 
 
 @dataclass(frozen=True)
+class SignalEvidence:
+    kind: str
+    text: str
+    speaker: str | None = None
+    timestamp: str | None = None
+
+
+@dataclass(frozen=True)
+class SignalRecord:
+    signal_id: str
+    meeting_id: str
+    ingest_run_id: str
+    effective_at: str
+    recorded_at: str
+    signal_type: str
+    stakeholder_id: str | None
+    stakeholder_name: str
+    summary: str
+    evidence: SignalEvidence
+    inference_level: str
+    confidence: str
+    topics: list[str] = field(default_factory=list)
+    project_refs: list[str] = field(default_factory=list)
+    recurrence: str = "unknown"
+    status: str = "active"
+    schema_version: str = SCHEMA_VERSION
+
+    def to_summary(self) -> SignalSummary:
+        return SignalSummary(
+            signal_id=self.signal_id,
+            type=self.signal_type,
+            stakeholder=self.stakeholder_name,
+            summary=self.summary,
+            confidence=self.confidence,
+        )
+
+
+@dataclass(frozen=True)
 class OpenQuestion:
     id: str
     question: str
@@ -124,7 +167,25 @@ def validate_provider_response(response: ProviderResponse) -> None:
     _validate_ids("action_items", [item.id for item in response.action_items])
     _validate_ids("stakeholder_asks", [ask.id for ask in response.stakeholder_asks])
     _validate_ids("dependencies_risks", [item.id for item in response.dependencies_risks])
+    _validate_ids("communication_signals", [signal.signal_id for signal in response.communication_signals])
     _validate_ids("open_questions", [question.id for question in response.open_questions])
+
+
+def validate_signal_record(signal: SignalRecord) -> None:
+    _require(signal.schema_version == SCHEMA_VERSION, f"Unsupported signal schema_version {signal.schema_version!r}.")
+    _require(bool(signal.signal_id.strip()), "signal_id is required.")
+    _require(bool(signal.meeting_id.strip()), "meeting_id is required.")
+    _require(bool(signal.ingest_run_id.strip()), "ingest_run_id is required.")
+    _require(bool(signal.effective_at.strip()), "effective_at is required.")
+    _require(bool(signal.recorded_at.strip()), "recorded_at is required.")
+    _require(signal.signal_type in SIGNAL_TYPES, f"Unsupported signal_type {signal.signal_type!r}.")
+    _require(bool(signal.stakeholder_name.strip()), "stakeholder_name is required.")
+    _require(bool(signal.summary.strip()), "summary is required.")
+    _require(signal.evidence.kind in EVIDENCE_KINDS, f"Unsupported evidence.kind {signal.evidence.kind!r}.")
+    _require(bool(signal.evidence.text.strip()), "evidence.text is required.")
+    _require(signal.inference_level in INFERENCE_LEVELS, f"Unsupported inference_level {signal.inference_level!r}.")
+    _require(signal.confidence in CONFIDENCE_VALUES, f"Unsupported confidence {signal.confidence!r}.")
+    _require(signal.recurrence in RECURRENCE_VALUES, f"Unsupported recurrence {signal.recurrence!r}.")
 
 
 def _validate_ids(section: str, ids: list[str]) -> None:
@@ -135,3 +196,8 @@ def _validate_ids(section: str, ids: list[str]) -> None:
         if item_id in seen:
             raise ProviderValidationError(f"{section} contains duplicate ID {item_id!r}.")
         seen.add(item_id)
+
+
+def _require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ProviderValidationError(message)

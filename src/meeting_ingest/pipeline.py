@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from meeting_ingest.archive import archive_and_reconcile, repair_duplicate_source
-from meeting_ingest.clock import Clock
+from meeting_ingest.clock import Clock, SystemClock, format_timestamp
 from meeting_ingest.config import MeetingIngestConfig
 from meeting_ingest.doctor import find_issues, project_status
 from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingIngestError, PipelineNotImplementedError
@@ -20,7 +20,7 @@ from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers.mock import MockProvider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES
+from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, SignalRecord
 from meeting_ingest.signals import write_signal_jsonl
 
 
@@ -112,7 +112,20 @@ def _ingest_locked(
     )
     _write_artifact(artifact_path, markdown)
     signal_path = paths.signals / f"{meeting_id}.jsonl"
-    signal_result = write_signal_jsonl(signal_path, provider_response.communication_signals)
+    signal_records = _signal_records_from_provider(
+        provider_response.communication_signals,
+        meeting_id=meeting_id,
+        ingest_run_id=ingest_run_id,
+        effective_at=extraction.effective_date.value,
+        recorded_at=format_timestamp((clock or SystemClock()).now_utc()),
+    )
+    signal_result = write_signal_jsonl(signal_path, signal_records)
+    provider_response = provider_response.__class__(
+        **{
+            **provider_response.__dict__,
+            "communication_signals": [signal.to_summary() for signal in signal_records],
+        }
+    )
 
     relative_artifact_path = artifact_path.relative_to(paths.meetings_root)
     relative_signal_path = signal_result.path.relative_to(paths.meetings_root)
@@ -379,6 +392,21 @@ def _repair_duplicate_source(
 
 def _dict_value(value: object) -> dict:
     return value if isinstance(value, dict) else {}
+
+
+def _signal_records_from_provider(
+    signals: object,
+    *,
+    meeting_id: str,
+    ingest_run_id: str,
+    effective_at: str,
+    recorded_at: str,
+) -> list[SignalRecord]:
+    records: list[SignalRecord] = []
+    for signal in signals:
+        if isinstance(signal, SignalRecord):
+            records.append(signal)
+    return records
 
 
 def _append_ingest_snapshot(
