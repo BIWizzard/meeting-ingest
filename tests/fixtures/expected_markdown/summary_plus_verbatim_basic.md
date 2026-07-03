@@ -7,6 +7,8 @@ output_mode: summary-plus-verbatim
 title: "Kushali Sync"
 slug: kushali-sync
 date: 2026-07-03
+date_confidence: unknown
+date_source: unknown
 meeting_type: unknown
 source_file: "2026-07-03-kushali-sync.txt"
 source_sha256: f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8

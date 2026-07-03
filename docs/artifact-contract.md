@@ -161,6 +161,8 @@ output_mode: summary-plus-verbatim
 title: Kushali x Ken - AdBook fact_revenue detail design
 slug: kushali-adbook-fact-revenue-detail
 date: 2026-06-12
+date_confidence: high
+date_source: content
 meeting_type: one-on-one
 source_file: Call with G, Kushali (5).docx
 source_sha256: 2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a

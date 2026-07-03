@@ -16,6 +16,9 @@ class RenderContext:
     source_sha256: str
     slug: str
     effective_date: str
+    date_confidence: str = "unknown"
+    date_source: str = "unknown"
+    duration: str | None = None
     output_mode: str = "summary-plus-verbatim"
     transcript_policy: str = "cleaned-verbatim"
     provider: str = "mock"
@@ -63,6 +66,8 @@ def _front_matter(response: ProviderResponse, context: RenderContext, generated_
         f"title: {_quote(response.title)}",
         f"slug: {context.slug}",
         f"date: {context.effective_date}",
+        f"date_confidence: {context.date_confidence}",
+        f"date_source: {context.date_source}",
         f"meeting_type: {response.meeting_type}",
         f"source_file: {_quote(context.source_name)}",
         f"source_sha256: {context.source_sha256}",
@@ -72,6 +77,7 @@ def _front_matter(response: ProviderResponse, context: RenderContext, generated_
         f"model_id: {context.model_id}",
         f"generated_by: meeting-ingest {context.tool_version}",
         f"generated_at: {generated_at}",
+        *([f"duration: {context.duration}"] if context.duration else []),
         "---",
         "",
     ]
