@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Use iq-context go at the start of future agent sessions."
+    "Resume with host/session-backed provider design: define the sub-agent JSON handoff contract and how the engine ingests externally supplied provider output."
   ],
-  "paused_reason": "Project scaffold created; first session has not started yet.",
-  "resume_from": "Resume with: Use iq-context go at the start of future agent sessions.",
-  "updated_at": "2026-07-03T18:21:57.112Z"
+  "paused_reason": "Session wrapped; resume from the stored continuation state.",
+  "resume_from": "Resume with: Resume with host/session-backed provider design: define the sub-agent JSON handoff contract and how the engine ingests externally supplied provider output.",
+  "updated_at": "2026-07-03T18:47:13.076Z"
 }
