@@ -205,6 +205,8 @@ python3 -m meeting_ingest.cli ingest _local/project-context/meetings/_inbox/exam
 
 Phase 2 requires the persisted request file that matches the response `ingest_run_id`; arbitrary response-only ingests are rejected. The response path may be absolute or relative and does not have to live under `_cache/provider-responses`, though that cache path is the default. If `--mode` or `--quality` is supplied during phase 2 and differs from the persisted request, the engine uses the persisted request values and emits a warning.
 
+For a reusable extraction sub-agent prompt, see [Session Provider Sub-Agent Prompt](docs/session-provider-subagent-prompt.md).
+
 ## Start Here
 
 - [Context Primer](docs/context-primer.md)

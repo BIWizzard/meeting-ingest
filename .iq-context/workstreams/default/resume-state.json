@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Optional next step: add a small wrapper/sub-agent prompt template that reads provider-request JSON and writes a compliant provider-response envelope."
+    "Optional next step: consider host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Optional next step: add a small wrapper/sub-agent prompt template that reads provider-request JSON and writes a compliant provider-response envelope.",
-  "updated_at": "2026-07-03T19:40:17.381Z"
+  "resume_from": "Resume with: Optional next step: consider host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically.",
+  "updated_at": "2026-07-03T19:42:39.670Z"
 }

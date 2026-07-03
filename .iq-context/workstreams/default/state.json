@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Added README and contract docs for the session provider two-phase CLI flow, clarified response path and phase-2 mode/quality mismatch behavior, and added a warning when phase 2 CLI quality differs from the persisted request. Verification: uv run pytest => 109 passed; py_compile meeting_ingest modules passed.",
+  "status_summary": "Added docs/session-provider-subagent-prompt.md with a generic host/session extraction sub-agent prompt, linked it from README and the provider handoff contract, and verified pytest plus py_compile still pass.",
   "active_plan": null,
   "active_task": null,
   "active_files": [],
@@ -15,16 +15,16 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Optional next step: add a small wrapper/sub-agent prompt template that reads provider-request JSON and writes a compliant provider-response envelope."
+    "Optional next step: consider host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Optional next step: add a small wrapper/sub-agent prompt template that reads provider-request JSON and writes a compliant provider-response envelope.",
+  "continuation_hint": "Next: Optional next step: consider host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-03T19:40:17.381Z",
+  "last_saved_at": "2026-07-03T19:42:39.670Z",
   "last_wrapped_at": "2026-07-03T19:31:42.624Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-03T19:40:17.381Z"
+  "updated_at": "2026-07-03T19:42:39.670Z"
 }

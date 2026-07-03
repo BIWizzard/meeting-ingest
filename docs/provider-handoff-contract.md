@@ -332,6 +332,8 @@ The exact command names may change during implementation, but the contract shoul
 - model extraction is sub-agent-owned
 - response validation and all ingest side effects are engine-owned
 
+For a generic extraction sub-agent prompt template, see `docs/session-provider-subagent-prompt.md`.
+
 ## Failure Behavior
 
 Milestone 7 depends on provider failure semantics being implemented first: a typed provider failure error, exit code `5`, provider-validation exit code `6`, and `ingest_failed` ledger recording before primary artifacts are ready.
