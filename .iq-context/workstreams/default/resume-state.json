@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Implement session provider path: shared ProviderResponse JSON parser, privacy.allow_session_provider, provider request/response envelope helpers, two-phase CLI, persisted-request identity verification, and stale response/no-op tests."
+    "Implement the session provider path: factor shared ProviderResponse JSON parsing, add privacy.allow_session_provider config and validation, add provider request/response envelope helpers, implement the two-phase CLI/library flow, verify phase-2 responses against persisted request files, adopt request-side identity, preserve provider_host provenance, clean up successful request/response files, add doctor stale-cache checks, and test stale response/no-op behavior plus full validation/render/ledger/archive/reconcile flow."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Implement session provider path: shared ProviderResponse JSON parser, privacy.allow_session_provider, provider request/response envelope helpers, two-phase CLI, persisted-request identity verification, and stale response/no-op tests.",
-  "updated_at": "2026-07-03T19:09:05.289Z"
+  "resume_from": "Resume with: Implement the session provider path: factor shared ProviderResponse JSON parsing, add privacy.allow_session_provider config and validation, add provider request/response envelope helpers, implement the two-phase CLI/library flow, verify phase-2 responses against persisted request files, adopt request-side identity, preserve provider_host provenance, clean up successful request/response files, add doctor stale-cache checks, and test stale response/no-op behavior plus full validation/render/ledger/archive/reconcile flow.",
+  "updated_at": "2026-07-03T19:10:36.655Z"
 }
