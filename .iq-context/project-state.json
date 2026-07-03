@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "project_id": "meeting-ingest",
+  "project_name": "Meeting Ingest",
+  "objective": "Build and maintain continuity for Meeting Ingest.",
+  "default_briefing_mode": "standard",
+  "tracked_artifacts": [
+    "README.md",
+    "docs/**/*.md"
+  ],
+  "global_assumptions": [],
+  "stale_warnings": [],
+  "workstreams": [
+    "default"
+  ],
+  "created_at": "2026-07-03T18:02:26.396Z",
+  "updated_at": "2026-07-03T18:02:26.396Z"
+}

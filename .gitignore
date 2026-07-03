@@ -15,8 +15,13 @@ build/
 .claude/
 .swarm/
 ruvector.db
-CLAUDE.md
 docs/brief.md
 docs/captures.md
 docs/discovery-log.md
 docs/open-mind.yaml
+
+# iQ Context volatile local runtime state
+.iq-context/focus-state.json
+.iq-context/workstreams/current.txt
+.iq-context/workstreams/*/host-bindings.json
+.iq-context/logs/

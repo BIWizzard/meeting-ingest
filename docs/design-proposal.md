@@ -262,7 +262,7 @@ Provider types:
 - API-backed providers call a model API directly and are the canonical path for portable automation, productization, and host-agnostic deployments.
 - Host/session-backed providers use the active agentic harness session to perform the structured extraction step, allowing subscription-backed workflows to avoid a separate API call when the user is already working inside Claude Code, Codex, Supa Code, or T3 Code.
 
-Both provider types must produce the same structured provider response and pass the same validation. Host/session-backed providers may change how the model judgment is obtained, but they must not change artifact rendering, signal enrichment, ledger semantics, archive, reconcile, or run-summary behavior.
+Both provider types must produce the same structured provider response and pass the same validation. Host/session-backed providers should delegate transcript-heavy extraction to dedicated sub-agents when practical, so the main session stays focused on orchestration, review, and user interaction. Host/session-backed providers may change how the model judgment is obtained, but they must not change artifact rendering, signal enrichment, ledger semantics, archive, reconcile, or run-summary behavior.
 
 ## Model Right-Sizing
 
@@ -299,7 +299,7 @@ Design implication:
 - wrappers should call the same pipeline/orchestrator API
 - wrappers should not manually implement ledger/archive/reconcile behavior
 - wrappers may delegate to a focused sub-agent
-- wrappers may support a host/session-backed provider mode where the active subscription-backed model session returns structured extraction JSON for the engine to validate and render
+- wrappers may support a host/session-backed provider mode where a dedicated sub-agent in the active subscription-backed model session returns structured extraction JSON for the engine to validate and render
 - near-term batch inbox ingest should be orchestrated by one focused sub-agent calling the engine sequentially
 - CLI output should include a machine-readable run summary with a stable JSON shape
 - JSON status should distinguish success, no-op, partial/derived-work issues, and failure states

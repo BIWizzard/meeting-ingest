@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "workstream_id": "default",
+  "title": "Default",
+  "objective": "Start the default workstream for Meeting Ingest.",
+  "lifecycle_status": "active",
+  "mode": "design",
+  "status_summary": "Documented iQ Context usage for future Meeting Ingest agents.",
+  "active_plan": null,
+  "active_task": null,
+  "active_files": [],
+  "active_artifacts": [
+    "AGENTS.md"
+  ],
+  "blockers": [],
+  "open_questions": [],
+  "next_actions": [
+    "Use iq-context go at the start of future agent sessions."
+  ],
+  "assumptions": [],
+  "continuation_hint": "Next: Use iq-context go at the start of future agent sessions.",
+  "branch": "main",
+  "worktree": null,
+  "environment_id": "local-default",
+  "last_saved_at": "2026-07-03T18:21:57.112Z",
+  "last_wrapped_at": null,
+  "completed_at": null,
+  "created_at": "2026-07-03T18:02:26.396Z",
+  "updated_at": "2026-07-03T18:21:57.112Z"
+}

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "plan_path": null,
+  "completed_waves": [],
+  "next_wave": null,
+  "completed_tasks": [],
+  "remaining_tasks": [
+    "Use iq-context go at the start of future agent sessions."
+  ],
+  "paused_reason": "Project scaffold created; first session has not started yet.",
+  "resume_from": "Resume with: Use iq-context go at the start of future agent sessions.",
+  "updated_at": "2026-07-03T18:21:57.112Z"
+}

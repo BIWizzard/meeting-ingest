@@ -1,0 +1,18 @@
+version: 1
+project_id: meeting-ingest
+project_name: Meeting Ingest
+default_briefing_mode: standard
+default_workstream: default
+tracked_artifacts:
+  - README.md
+  - docs/**/*.md
+durable_artifact_dirs:
+  sessions: docs/sessions
+  decisions: docs/decisions
+  discoveries: docs/discoveries
+  assumptions: docs/assumptions
+state_paths:
+  project: .iq-context/project-state.json
+  focus: .iq-context/focus-state.json
+  workstreams: .iq-context/workstreams
+  logs: .iq-context/logs

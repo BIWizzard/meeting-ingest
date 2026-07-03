@@ -50,6 +50,7 @@ Design implication:
 - the sub-agent should call the same underlying engine instead of reimplementing extraction, archive, ledger, or reconciliation behavior
 - the repo should provide reusable agent-facing instructions or wrapper entry points that make this easy from Supa Code and T3 Code
 - subscription-backed active sessions should be able to perform model extraction without requiring a separate API key when the user is already operating inside Claude Code, Codex, Supa Code, or T3 Code
+- subscription-backed model extraction should be delegated to a dedicated sub-agent when practical so transcript-heavy context does not pollute the main session
 - API-backed providers should still exist for portability, automation, and future marketability
 
 The sub-agent should be right-sized for the job. It should not default to the largest or most expensive model when a deterministic step, small model, or template pass is sufficient.

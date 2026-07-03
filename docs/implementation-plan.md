@@ -369,7 +369,7 @@ Defines provider interface and structured response shape.
 Provider paths:
 
 - API-backed providers call external model APIs directly.
-- Host/session-backed providers let an active agentic harness produce the same structured provider response through the current subscription-backed session.
+- Host/session-backed providers let a dedicated extraction sub-agent in an active agentic harness produce the same structured provider response through the current subscription-backed session.
 
 The engine should treat both paths as providers only if they return the same validated response shape.
 
@@ -592,7 +592,7 @@ Lead review:
 Deliverables:
 
 - generic agent-facing extraction prompt that returns provider JSON only
-- handoff contract for a sub-agent to provide structured provider output back to the engine
+- handoff contract for a dedicated extraction sub-agent to provide structured provider output back to the engine
 - CLI or wrapper mechanism for ingesting with externally supplied provider JSON
 - Supa Code / T3 Code / Claude Code / Codex usage notes
 - tests proving externally supplied provider JSON passes the same schema, renderer, signal, ledger, archive, and reconcile flow
@@ -600,6 +600,7 @@ Deliverables:
 Lead review:
 
 - verify subscription-backed workflows do not require API keys
+- verify transcript-heavy extraction context stays in the dedicated sub-agent rather than the main session
 - verify host/session-backed extraction does not fragment the artifact contract or done process
 - verify API-backed providers remain the canonical portable path
 
