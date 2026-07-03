@@ -25,6 +25,7 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
 
     artifact = paths.meetings_root / summary.artifacts[0]["path"]
     signal_file = paths.meetings_root / summary.artifacts[1]["path"]
+    done_file = paths.inbox_done / source.name
     markdown = artifact.read_text(encoding="utf-8")
     ledger_records = read_records(paths.ledger)
 
@@ -48,13 +49,18 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     assert artifact.exists()
     assert signal_file.exists()
     assert signal_file.read_text(encoding="utf-8") == ""
+    assert not source.exists()
+    assert done_file.exists()
+    assert (paths.meetings_root / summary.details["archive"]["processed_path"]).exists()
     assert "# Kushali Sync" in markdown
     assert "## Verbatim Transcript" in markdown
     assert markdown.endswith("<!-- transcript:end -->")
     assert [record["event"] for record in ledger_records] == ["primary_artifacts_ready", "ingest_completed"]
+    assert ledger_records[0]["reconcile"]["status"] == "pending"
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["path"] == "2026-07-03-kushali-sync.md"
     assert ledger_records[-1]["signals"]["path"] == "_signals/mtg-20260703-bf3b2898.jsonl"
-    assert ledger_records[-1]["reconcile"]["status"] == "skipped"
+    assert ledger_records[-1]["reconcile"]["status"] == "completed"
+    assert ledger_records[-1]["reconcile"]["path"] == "_inbox/_done/2026-07-03-kushali-sync.txt"
 
 
 def test_cli_ingest_json_from_nested_project_directory(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -81,6 +87,29 @@ def test_cli_ingest_json_from_nested_project_directory(tmp_path: Path, monkeypat
     assert summary["artifacts"][0]["path"] == "2026-07-03-team-sync.md"
     assert summary["artifacts"][1]["path"].startswith("_signals/mtg-20260703-")
     assert (paths.meetings_root / summary["artifacts"][0]["path"]).exists()
+    assert (paths.inbox_done / source.name).exists()
+
+
+def test_pipeline_ingest_archives_but_skips_reconcile_for_external_source(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = tmp_path / "2026-07-03-external-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    summary = ingest(
+        source,
+        start=tmp_path,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    ledger_records = read_records(paths.ledger)
+
+    assert source.exists()
+    assert (paths.meetings_root / summary.details["archive"]["processed_path"]).exists()
+    assert summary.details["reconcile"] == {
+        "status": "skipped",
+        "reason": "source_not_in_inbox",
+        "processed_path": summary.details["archive"]["processed_path"],
+    }
+    assert ledger_records[-1]["reconcile"]["status"] == "skipped"
 
 
 def test_ingest_rejects_remote_provider_when_privacy_gate_disabled(tmp_path: Path) -> None:

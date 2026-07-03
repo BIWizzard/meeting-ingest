@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+from meeting_ingest.archive import archive_and_reconcile
 from meeting_ingest.clock import Clock
 from meeting_ingest.config import MeetingIngestConfig
 from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingIngestError, PipelineNotImplementedError
@@ -103,20 +104,21 @@ def ingest(
         "schema_version": "1.0",
     }
     source_path = str(source)
-    append_snapshot(
-        paths.ledger,
-        LedgerSnapshot(
-            event="primary_artifacts_ready",
-            source_sha256=source_sha256,
-            meeting_id=meeting_id,
-            ingest_run_id=ingest_run_id,
-            source_path=source_path,
-            artifacts=artifact_state,
-            signals=signal_state,
-            reconcile={"status": "skipped"},
-        ),
+    _append_ingest_snapshot(
+        paths,
+        event="primary_artifacts_ready",
+        source_sha256=source_sha256,
+        meeting_id=meeting_id,
+        ingest_run_id=ingest_run_id,
+        source_path=source_path,
+        artifacts=artifact_state,
+        signals=signal_state,
+        reconcile={"status": "pending"},
         clock=clock,
     )
+    archive_result = archive_and_reconcile(source, source_sha256, paths)
+    processed_path = archive_result.processed_path.relative_to(paths.meetings_root)
+    completed_reconcile = {**archive_result.reconcile, "processed_path": str(processed_path)}
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
@@ -127,7 +129,7 @@ def ingest(
             source_path=source_path,
             artifacts=artifact_state,
             signals=signal_state,
-            reconcile={"status": "skipped"},
+            reconcile=completed_reconcile,
         ),
         clock=clock,
     )
@@ -162,7 +164,8 @@ def ingest(
                 "confidence": "medium",
                 "rename_suggestion": None,
             },
-            "reconcile": {"status": "skipped"},
+            "archive": {"processed_path": str(processed_path)},
+            "reconcile": completed_reconcile,
         },
     )
 
@@ -217,3 +220,32 @@ def _write_artifact(path: Path, markdown: str) -> None:
             recoverable=True,
             details={"path": str(path)},
         ) from exc
+
+
+def _append_ingest_snapshot(
+    paths: ProjectPaths,
+    *,
+    event: str,
+    source_sha256: str,
+    meeting_id: str,
+    ingest_run_id: str,
+    source_path: str,
+    artifacts: dict[str, dict[str, str]],
+    signals: dict[str, str | int],
+    reconcile: dict[str, str],
+    clock: Clock | None,
+) -> None:
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event=event,
+            source_sha256=source_sha256,
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
+            source_path=source_path,
+            artifacts=artifacts,
+            signals=signals,
+            reconcile=reconcile,
+        ),
+        clock=clock,
+    )
