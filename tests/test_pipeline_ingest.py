@@ -597,6 +597,35 @@ def test_ingest_rejects_remote_provider_when_privacy_gate_disabled(tmp_path: Pat
     assert exc.value.code == "remote_provider_disabled"
 
 
+def test_ingest_allows_anthropic_when_privacy_gate_enabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths = init_project(tmp_path)
+    config_text = paths.config_path.read_text(encoding="utf-8")
+    paths.config_path.write_text(config_text.replace("allow_remote_provider = false", "allow_remote_provider = true"), encoding="utf-8")
+    source = paths.inbox / "2026-07-03-synthetic.txt"
+    source.write_text("Ken: Hello\nKushali: Please clarify the source.\n", encoding="utf-8")
+
+    class SyntheticAnthropicProvider:
+        name = "anthropic"
+        model_id = "claude-sonnet-5"
+
+        def extract(self, request: object) -> ProviderResponse:
+            return ProviderResponse(title="Synthetic", tl_dr="Synthetic summary.")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: SyntheticAnthropicProvider())
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        provider="anthropic",
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    artifact = paths.meetings_root / summary.artifacts[0]["path"]
+
+    assert summary.status == "success"
+    assert "provider: anthropic" in artifact.read_text(encoding="utf-8")
+    assert "model_id: claude-sonnet-5" in artifact.read_text(encoding="utf-8")
+
+
 def test_ingest_quarantines_unsupported_inbox_source_and_records_failure(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = paths.inbox / "2026-07-03-meeting.pdf"

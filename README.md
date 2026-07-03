@@ -79,16 +79,19 @@ It should stay focused on:
 
 ## Current Status
 
-Early Python scaffold with a clear direction.
+Python CLI/library implementation with:
 
-The immediate exploration areas are:
-
-- package layout
-- CLI shape
-- project-local config model
-- provider abstraction
-- roster storage design
-- migration path from the current Claude-first implementation
+- project initialization
+- single-file ingest
+- sequential inbox batch ingest
+- mock provider for local deterministic tests
+- Anthropic provider adapter behind an explicit privacy gate
+- cleaned-verbatim transcript extraction for `.txt`, `.vtt`, and `.docx`
+- markdown artifact rendering
+- signal JSONL output
+- append-only ledger
+- archive/reconcile behavior
+- doctor/status/reconcile commands
 
 ## Development
 
@@ -103,6 +106,47 @@ Initialize a project-local meetings layout with:
 ```bash
 python3 -m meeting_ingest.cli init --root . --json
 ```
+
+Ingest one source:
+
+```bash
+python3 -m meeting_ingest.cli ingest _local/project-context/meetings/_inbox/example.vtt --json
+```
+
+Ingest every direct file in `_inbox/`:
+
+```bash
+python3 -m meeting_ingest.cli ingest-inbox --json
+```
+
+## Providers
+
+The default provider is `mock`, which never sends transcript content outside the local process.
+
+Anthropic is available only when remote provider use is explicitly enabled:
+
+```toml
+[privacy]
+allow_remote_provider = true
+```
+
+Set the API key in the environment:
+
+```bash
+export ANTHROPIC_API_KEY=...
+```
+
+Then request Anthropic explicitly:
+
+```bash
+python3 -m meeting_ingest.cli ingest _local/project-context/meetings/_inbox/example.vtt --provider anthropic --json
+```
+
+Quality aliases map to Anthropic models as follows:
+
+- `fast`: `claude-haiku-4-5`
+- `balanced`: `claude-sonnet-5`
+- `deep`: `claude-opus-4-8`
 
 ## Start Here
 

@@ -442,10 +442,13 @@ def reconcile(start: Path) -> RunSummary:
 def _validate_ingest_options(config: MeetingIngestConfig, mode: str, provider: str) -> None:
     if mode not in SUPPORTED_OUTPUT_MODES:
         raise ConfigError(f"Unsupported output mode: {mode}", code="unsupported_output_mode")
-    if provider != "mock":
-        if provider == "anthropic" and not config.privacy.allow_remote_provider:
+    if provider == "mock":
+        return
+    if provider == "anthropic":
+        if not config.privacy.allow_remote_provider:
             raise ConfigError("Remote provider use is disabled by config.", code="remote_provider_disabled")
-        raise ConfigError(f"Provider is not implemented yet: {provider}", code="provider_not_implemented")
+        return
+    raise ConfigError(f"Provider is not implemented yet: {provider}", code="provider_not_implemented")
 
 
 def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> Path:

@@ -12,4 +12,10 @@ def test_get_provider_returns_mock_provider() -> None:
 
 def test_get_provider_rejects_unknown_provider() -> None:
     with pytest.raises(KeyError):
-        get_provider("anthropic")
+        get_provider("unknown")
+
+
+def test_get_provider_returns_anthropic_provider() -> None:
+    provider = get_provider("anthropic")
+
+    assert provider.name == "anthropic"
