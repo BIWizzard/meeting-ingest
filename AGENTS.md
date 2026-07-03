@@ -43,6 +43,8 @@ Use `save` for checkpoints, `capture` for useful facts or artifacts, `wrap` when
 
 ## Source Control
 
+See [docs/decisions/iq-context-source-control-policy.md](docs/decisions/iq-context-source-control-policy.md) for the durable iQ Context source-control policy.
+
 Commit durable memory when useful:
 
 - `AGENTS.md`
