@@ -57,6 +57,30 @@ class ConfigError(MeetingIngestError):
         )
 
 
+class UnsupportedSourceFormatError(MeetingIngestError):
+    def __init__(self, path: str) -> None:
+        super().__init__(
+            phase="source_read",
+            code="unsupported_source_format",
+            message=f"Unsupported source format: {path}",
+            exit_code=EXIT_UNSUPPORTED_SOURCE,
+            recoverable=False,
+            details={"path": path},
+        )
+
+
+class SourceExtractionError(MeetingIngestError):
+    def __init__(self, path: str, message: str) -> None:
+        super().__init__(
+            phase="source_read",
+            code="source_extraction_failed",
+            message=message,
+            exit_code=EXIT_EXTRACTION_FAILURE,
+            recoverable=True,
+            details={"path": path},
+        )
+
+
 class PipelineNotImplementedError(MeetingIngestError):
     def __init__(self, command: str) -> None:
         super().__init__(
