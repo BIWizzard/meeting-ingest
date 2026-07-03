@@ -11,12 +11,14 @@ from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingInges
 from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id
+from meeting_ingest.ledger import LedgerSnapshot, append_snapshot
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers.mock import MockProvider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
 from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES
+from meeting_ingest.signals import write_signal_jsonl
 
 
 def initialize(project_root: Path) -> RunSummary:
@@ -78,8 +80,57 @@ def ingest(
         clock=clock,
     )
     _write_artifact(artifact_path, markdown)
+    signal_path = paths.signals / f"{meeting_id}.jsonl"
+    signal_result = write_signal_jsonl(signal_path, provider_response.communication_signals)
 
     relative_artifact_path = artifact_path.relative_to(paths.meetings_root)
+    relative_signal_path = signal_result.path.relative_to(paths.meetings_root)
+    artifact_state = {
+        selected_mode: {
+            "kind": "markdown",
+            "status": "ready",
+            "path": str(relative_artifact_path),
+            "provider": selected_provider,
+            "model_alias": selected_quality,
+            "model_id": selected_provider,
+            "schema_version": "1.0",
+        }
+    }
+    signal_state = {
+        "status": "ready",
+        "path": str(relative_signal_path),
+        "count": signal_result.count,
+        "schema_version": "1.0",
+    }
+    source_path = str(source)
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="primary_artifacts_ready",
+            source_sha256=source_sha256,
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
+            source_path=source_path,
+            artifacts=artifact_state,
+            signals=signal_state,
+            reconcile={"status": "skipped"},
+        ),
+        clock=clock,
+    )
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="ingest_completed",
+            source_sha256=source_sha256,
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
+            source_path=source_path,
+            artifacts=artifact_state,
+            signals=signal_state,
+            reconcile={"status": "skipped"},
+        ),
+        clock=clock,
+    )
     return RunSummary(
         status="success",
         exit_code=0,
@@ -92,7 +143,13 @@ def ingest(
                 "mode": selected_mode,
                 "status": "ready",
                 "path": str(relative_artifact_path),
-            }
+            },
+            {
+                "kind": "signals",
+                "status": "ready",
+                "path": str(relative_signal_path),
+                "count": signal_result.count,
+            },
         ],
         details={
             "command": "ingest",
