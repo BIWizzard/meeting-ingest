@@ -16,6 +16,12 @@ class ArchiveResult:
     reconcile: dict[str, str]
 
 
+@dataclass(frozen=True)
+class QuarantineResult:
+    path: Path
+    reason: str
+
+
 def archive_and_reconcile(source: Path, source_sha256: str, paths: ProjectPaths) -> ArchiveResult:
     processed_path = processed_path_for_source(source, source_sha256, paths)
     try:
@@ -55,6 +61,22 @@ def repair_duplicate_source(source: Path, source_sha256: str, paths: ProjectPath
         processed_path=processed_path,
         reconcile={**reconcile, "reason": "source_already_ingested", "archive_repaired": str(archived).lower()},
     )
+
+
+def quarantine_source(source: Path, source_sha256: str, paths: ProjectPaths, *, reason: str) -> QuarantineResult:
+    quarantine_path = _quarantine_path(source, source_sha256, paths)
+    try:
+        shutil.move(str(source), str(quarantine_path))
+    except OSError as exc:
+        raise MeetingIngestError(
+            phase="quarantine",
+            code="quarantine_failed",
+            message=f"Could not quarantine source: {source}",
+            exit_code=EXIT_ARCHIVE_RECONCILE,
+            recoverable=True,
+            details={"source": str(source), "quarantine_path": str(quarantine_path)},
+        ) from exc
+    return QuarantineResult(path=quarantine_path, reason=reason)
 
 
 def processed_path_for_source(source: Path, source_sha256: str, paths: ProjectPaths) -> Path:
@@ -98,5 +120,14 @@ def _done_path(source: Path, paths: ProjectPaths) -> Path:
     counter = 2
     while candidate.exists():
         candidate = paths.inbox_done / f"{source.stem}-{counter}{source.suffix}"
+        counter += 1
+    return candidate
+
+
+def _quarantine_path(source: Path, source_sha256: str, paths: ProjectPaths) -> Path:
+    candidate = paths.quarantine / f"{source_sha256[:8]}-{source.name}"
+    counter = 2
+    while candidate.exists():
+        candidate = paths.quarantine / f"{source_sha256[:8]}-{counter}-{source.name}"
         counter += 1
     return candidate

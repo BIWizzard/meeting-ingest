@@ -5,11 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from meeting_ingest.archive import archive_and_reconcile, repair_duplicate_source
+from meeting_ingest.archive import archive_and_reconcile, quarantine_source, repair_duplicate_source
 from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
 from meeting_ingest.config import MeetingIngestConfig
 from meeting_ingest.doctor import find_issues, project_status
-from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingIngestError, PipelineNotImplementedError
+from meeting_ingest.errors import (
+    ConfigError,
+    EXIT_ARTIFACT_WRITE,
+    MeetingIngestError,
+    PipelineNotImplementedError,
+    SourceExtractionError,
+    UnsupportedSourceFormatError,
+)
 from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id
@@ -78,7 +85,11 @@ def _ingest_locked(
     if existing_record is not None:
         return _no_op_summary(source, paths, source_sha256, existing_record)
 
-    extraction = extract_source(source)
+    try:
+        extraction = extract_source(source)
+    except (UnsupportedSourceFormatError, SourceExtractionError) as exc:
+        _record_source_failure(paths, source=source, source_sha256=source_sha256, error=exc, clock=clock)
+        raise
     meeting_id = mint_meeting_id(extraction.effective_date.value, source_sha256)
     ingest_run_id = mint_ingest_run_id(extraction.effective_date.value, clock=clock)
 
@@ -445,6 +456,43 @@ def _append_ingest_snapshot(
     )
 
 
+def _record_source_failure(
+    paths: ProjectPaths,
+    *,
+    source: Path,
+    source_sha256: str,
+    error: MeetingIngestError,
+    clock: Clock | None,
+) -> None:
+    source_state = _source_state(paths, source, source.suffix.lower().lstrip(".") or "unknown")
+    quarantine_block = None
+    event = "ingest_failed"
+    if isinstance(error, (UnsupportedSourceFormatError, SourceExtractionError)) and _is_in_inbox(paths, source):
+        quarantine = quarantine_source(source, source_sha256, paths, reason=error.code)
+        quarantine_block = {
+            "status": "quarantined",
+            "path": str(quarantine.path.relative_to(paths.meetings_root)),
+            "reason": quarantine.reason,
+        }
+        event = "source_quarantined"
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event=event,
+            source_sha256=source_sha256,
+            meeting_id=None,
+            ingest_run_id=None,
+            source=source_state,
+            artifacts={},
+            signals={"status": "skipped", "path": None, "count": 0},
+            reconcile={"status": "skipped", "reason": "primary_artifacts_not_ready"},
+            error=error.to_error_block(),
+            quarantine=quarantine_block,
+        ),
+        clock=clock,
+    )
+
+
 def _source_state(paths: ProjectPaths, source: Path, source_type: str) -> dict[str, str | None]:
     return {
         "original_path": _relative_to_meetings(paths, source),
@@ -458,3 +506,11 @@ def _relative_to_meetings(paths: ProjectPaths, path: Path) -> str:
         return str(path.relative_to(paths.meetings_root))
     except ValueError:
         return str(path)
+
+
+def _is_in_inbox(paths: ProjectPaths, path: Path) -> bool:
+    try:
+        path.relative_to(paths.inbox)
+    except ValueError:
+        return False
+    return paths.inbox_done not in path.parents

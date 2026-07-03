@@ -6,7 +6,7 @@ import pytest
 
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.cli import main
-from meeting_ingest.errors import ConfigError
+from meeting_ingest.errors import ConfigError, UnsupportedSourceFormatError
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
@@ -263,3 +263,39 @@ def test_ingest_rejects_remote_provider_when_privacy_gate_disabled(tmp_path: Pat
         ingest(source, start=paths.inbox, provider="anthropic")
 
     assert exc.value.code == "remote_provider_disabled"
+
+
+def test_ingest_quarantines_unsupported_inbox_source_and_records_failure(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-meeting.pdf"
+    source.write_text("not supported", encoding="utf-8")
+
+    with pytest.raises(UnsupportedSourceFormatError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    records = read_records(paths.ledger)
+
+    assert exc.value.code == "unsupported_source_format"
+    assert not source.exists()
+    quarantined = list(paths.quarantine.iterdir())
+    assert len(quarantined) == 1
+    assert records[-1]["event"] == "source_quarantined"
+    assert records[-1]["meeting_id"] is None
+    assert records[-1]["error"]["code"] == "unsupported_source_format"
+    assert records[-1]["quarantine"]["status"] == "quarantined"
+    assert records[-1]["quarantine"]["path"].startswith("_quarantine/")
+
+
+def test_ingest_records_failed_external_source_without_quarantine(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = tmp_path / "2026-07-03-meeting.pdf"
+    source.write_text("not supported", encoding="utf-8")
+
+    with pytest.raises(UnsupportedSourceFormatError) as exc:
+        ingest(source, start=tmp_path, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    records = read_records(paths.ledger)
+
+    assert exc.value.code == "unsupported_source_format"
+    assert source.exists()
+    assert records[-1]["event"] == "ingest_failed"
+    assert records[-1]["quarantine"] is None
+    assert records[-1]["error"]["code"] == "unsupported_source_format"
