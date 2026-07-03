@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Review final uncommitted diff, then commit the session provider implementation and iQ Context state. Optional follow-up: add README/docs CLI examples for provider-request and session response completion, and clarify contract stance on accepting --provider-response paths outside _cache/provider-responses plus whether CLI-supplied --mode/--quality mismatches in phase 2 should warn."
+    "Optional follow-up: add README/docs CLI examples for provider-request and session response completion, and clarify contract stance on accepting --provider-response paths outside _cache/provider-responses plus whether CLI-supplied --mode/--quality mismatches in phase 2 should warn."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Review final uncommitted diff, then commit the session provider implementation and iQ Context state. Optional follow-up: add README/docs CLI examples for provider-request and session response completion, and clarify contract stance on accepting --provider-response paths outside _cache/provider-responses plus whether CLI-supplied --mode/--quality mismatches in phase 2 should warn.",
-  "updated_at": "2026-07-03T19:31:42.624Z"
+  "resume_from": "Resume with: Optional follow-up: add README/docs CLI examples for provider-request and session response completion, and clarify contract stance on accepting --provider-response paths outside _cache/provider-responses plus whether CLI-supplied --mode/--quality mismatches in phase 2 should warn.",
+  "updated_at": "2026-07-03T19:34:40.770Z"
 }
