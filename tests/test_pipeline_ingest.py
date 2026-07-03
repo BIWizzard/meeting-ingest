@@ -72,6 +72,32 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     assert ledger_records[-1]["reconcile"]["path"] == "_inbox/_done/2026-07-03-kushali-sync.txt"
 
 
+def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-signal.txt"
+    source.write_text("Kushali: [mock-signal] Please clarify the source.\n", encoding="utf-8")
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    artifact = paths.meetings_root / summary.artifacts[0]["path"]
+    signal_file = paths.meetings_root / summary.artifacts[1]["path"]
+    signal_payload = json.loads(signal_file.read_text(encoding="utf-8"))
+    markdown = artifact.read_text(encoding="utf-8")
+
+    assert summary.artifacts[1]["count"] == 1
+    assert signal_payload["signal_id"] == "sig-20260703-001"
+    assert signal_payload["meeting_id"] == summary.meeting_id
+    assert signal_payload["ingest_run_id"] == summary.ingest_run_id
+    assert signal_payload["recorded_at"] == "2026-07-03T12:00:00Z"
+    assert signal_payload["signal_type"] == "explicit_ask"
+    assert signal_payload["evidence"]["kind"] == "paraphrase"
+    assert "| `sig-20260703-001` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown
+
+
 def test_cli_ingest_json_from_nested_project_directory(tmp_path: Path, monkeypatch, capsys) -> None:
     paths = init_project(tmp_path)
     nested = paths.inbox / "nested"

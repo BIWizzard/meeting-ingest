@@ -27,7 +27,7 @@ from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, SignalRecord
+from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, ProviderResponse, ProviderSignal, SignalRecord
 from meeting_ingest.signals import write_signal_jsonl
 
 
@@ -105,8 +105,18 @@ def _ingest_locked(
     )
     artifact_path = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
     artifact_slug = _slug(provider_response.title)
+    signal_path = paths.signals / f"{meeting_id}.jsonl"
+    signal_records = _signal_records_from_provider(
+        provider_response.communication_signals,
+        meeting_id=meeting_id,
+        ingest_run_id=ingest_run_id,
+        effective_at=extraction.effective_date.value,
+        recorded_at=format_iso_timestamp((clock or SystemClock()).now_utc()),
+    )
+    signal_result = write_signal_jsonl(signal_path, signal_records)
+    render_response = _provider_response_with_signals(provider_response, signal_records)
     markdown = render_summary_plus_verbatim(
-        provider_response,
+        render_response,
         extraction.normalized_text,
         RenderContext(
             meeting_id=meeting_id,
@@ -123,21 +133,6 @@ def _ingest_locked(
         clock=clock,
     )
     _write_artifact(artifact_path, markdown)
-    signal_path = paths.signals / f"{meeting_id}.jsonl"
-    signal_records = _signal_records_from_provider(
-        provider_response.communication_signals,
-        meeting_id=meeting_id,
-        ingest_run_id=ingest_run_id,
-        effective_at=extraction.effective_date.value,
-        recorded_at=format_iso_timestamp((clock or SystemClock()).now_utc()),
-    )
-    signal_result = write_signal_jsonl(signal_path, signal_records)
-    provider_response = provider_response.__class__(
-        **{
-            **provider_response.__dict__,
-            "communication_signals": [signal.to_summary() for signal in signal_records],
-        }
-    )
 
     relative_artifact_path = artifact_path.relative_to(paths.meetings_root)
     relative_signal_path = signal_result.path.relative_to(paths.meetings_root)
@@ -430,7 +425,7 @@ def _record_has_primary_artifacts(record: dict[str, object] | None) -> bool:
 
 
 def _signal_records_from_provider(
-    signals: object,
+    signals: list[ProviderSignal | SignalRecord],
     *,
     meeting_id: str,
     ingest_run_id: str,
@@ -438,10 +433,51 @@ def _signal_records_from_provider(
     recorded_at: str,
 ) -> list[SignalRecord]:
     records: list[SignalRecord] = []
-    for signal in signals:
+    for index, signal in enumerate(signals, start=1):
         if isinstance(signal, SignalRecord):
             records.append(signal)
+            continue
+        if isinstance(signal, ProviderSignal):
+            records.append(
+                SignalRecord(
+                    signal_id=f"sig-{effective_at.replace('-', '')}-{index:03d}",
+                    meeting_id=meeting_id,
+                    ingest_run_id=ingest_run_id,
+                    effective_at=effective_at,
+                    recorded_at=recorded_at,
+                    signal_type=signal.signal_type,
+                    stakeholder_id=signal.stakeholder_id,
+                    stakeholder_name=signal.stakeholder_name,
+                    summary=signal.summary,
+                    evidence=signal.evidence,
+                    inference_level=signal.inference_level,
+                    confidence=signal.confidence,
+                    topics=signal.topics,
+                    project_refs=signal.project_refs,
+                    recurrence=signal.recurrence,
+                    status=signal.status,
+                )
+            )
+            continue
+        raise ConfigError(f"Unsupported provider signal shape: {type(signal).__name__}", code="invalid_provider_signal")
     return records
+
+
+def _provider_response_with_signals(response: ProviderResponse, signals: list[SignalRecord]) -> ProviderResponse:
+    return ProviderResponse(
+        title=response.title,
+        tl_dr=response.tl_dr,
+        meeting_type=response.meeting_type,
+        attendees=response.attendees,
+        topics=response.topics,
+        decisions=response.decisions,
+        action_items=response.action_items,
+        stakeholder_asks=response.stakeholder_asks,
+        dependencies_risks=response.dependencies_risks,
+        communication_signals=signals,
+        open_questions=response.open_questions,
+        cross_references=response.cross_references,
+    )
 
 
 def _append_ingest_snapshot(

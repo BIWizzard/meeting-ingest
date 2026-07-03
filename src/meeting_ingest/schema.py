@@ -122,6 +122,21 @@ class SignalRecord:
 
 
 @dataclass(frozen=True)
+class ProviderSignal:
+    signal_type: str
+    stakeholder_id: str | None
+    stakeholder_name: str
+    summary: str
+    evidence: SignalEvidence
+    inference_level: str
+    confidence: str
+    topics: list[str] = field(default_factory=list)
+    project_refs: list[str] = field(default_factory=list)
+    recurrence: str = "unknown"
+    status: str = "active"
+
+
+@dataclass(frozen=True)
 class OpenQuestion:
     id: str
     question: str
@@ -141,7 +156,7 @@ class ProviderResponse:
     action_items: list[ActionItem] = field(default_factory=list)
     stakeholder_asks: list[StakeholderAsk] = field(default_factory=list)
     dependencies_risks: list[DependencyRisk] = field(default_factory=list)
-    communication_signals: list[SignalSummary] = field(default_factory=list)
+    communication_signals: list[ProviderSignal | SignalRecord] = field(default_factory=list)
     open_questions: list[OpenQuestion] = field(default_factory=list)
     cross_references: list[str] = field(default_factory=list)
 
