@@ -8,6 +8,7 @@ import re
 from meeting_ingest.archive import archive_and_reconcile, reconcile_duplicate_source
 from meeting_ingest.clock import Clock
 from meeting_ingest.config import MeetingIngestConfig
+from meeting_ingest.doctor import find_issues, project_status
 from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingIngestError, PipelineNotImplementedError
 from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
@@ -175,11 +176,29 @@ def ingest(
 
 
 def doctor(start: Path) -> RunSummary:
-    raise PipelineNotImplementedError("doctor")
+    _, paths = load_project(start)
+    issues = find_issues(paths)
+    return RunSummary(
+        status="success" if not issues else "issues_found",
+        exit_code=0 if not issues else 1,
+        details={
+            "command": "doctor",
+            "project": project_status(paths),
+            "issues": [issue.to_dict() for issue in issues],
+        },
+    )
 
 
 def status(start: Path) -> RunSummary:
-    raise PipelineNotImplementedError("status")
+    _, paths = load_project(start)
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        details={
+            "command": "status",
+            "project": project_status(paths),
+        },
+    )
 
 
 def reconcile(start: Path) -> RunSummary:

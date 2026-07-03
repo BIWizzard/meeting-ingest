@@ -66,6 +66,12 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
         print(f"{command} completed")
         if "meetings_root" in data:
             print(f"meetings_root: {data['meetings_root']}")
+        if "project" in data:
+            print(json.dumps(data["project"], indent=2, sort_keys=True))
+        return
+
+    if summary.status == "issues_found":
+        print("doctor found issues", file=sys.stderr)
         return
 
     print(f"{summary.status}: exit {summary.exit_code}", file=sys.stderr)

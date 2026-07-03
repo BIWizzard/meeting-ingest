@@ -1,0 +1,75 @@
+from datetime import UTC, datetime
+from pathlib import Path
+
+from meeting_ingest.clock import FrozenClock
+from meeting_ingest.ledger import read_records
+from meeting_ingest.paths import init_project
+from meeting_ingest.pipeline import doctor, ingest, status
+
+
+def test_status_reports_project_counts(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+
+    summary = status(tmp_path)
+
+    assert summary.status == "success"
+    assert summary.exit_code == 0
+    assert summary.details["project"] == {
+        "meetings_root": str(paths.meetings_root),
+        "ledger_records": 0,
+        "known_sources": 0,
+        "inbox_files": 0,
+    }
+
+
+def test_doctor_reports_clean_project_after_ingest(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    summary = doctor(tmp_path)
+
+    assert summary.status == "success"
+    assert summary.exit_code == 0
+    assert summary.details["issues"] == []
+    assert summary.details["project"]["ledger_records"] == 2
+    assert summary.details["project"]["known_sources"] == 1
+
+
+def test_doctor_reports_inbox_residue(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "unprocessed.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    summary = doctor(tmp_path)
+
+    assert summary.status == "issues_found"
+    assert summary.exit_code == 1
+    assert summary.details["issues"] == [
+        {
+            "code": "inbox_residue",
+            "message": "Source file remains in inbox.",
+            "path": "_inbox/unprocessed.txt",
+        }
+    ]
+
+
+def test_doctor_reports_missing_ledger_artifact(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    result = ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    artifact = paths.meetings_root / result.artifacts[0]["path"]
+    artifact.unlink()
+
+    summary = doctor(tmp_path)
+    records = read_records(paths.ledger)
+
+    assert len(records) == 2
+    assert summary.status == "issues_found"
+    assert {
+        "code": "missing_artifact",
+        "message": "Ledger references a missing path.",
+        "path": result.artifacts[0]["path"],
+    } in summary.details["issues"]
