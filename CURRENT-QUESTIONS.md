@@ -77,9 +77,16 @@ Need to decide:
 - runtime registry?
 - config-driven provider selection?
 - direct SDK adapters?
+- host/session-backed provider handoff for subscription-backed Claude Code, Codex, Supa Code, and T3 Code sessions?
 
 Why it matters:
 - determines portability across hosts and models
+- determines whether personal workflows can use existing subscriptions without separate API calls
+
+Resolved direction:
+- API-backed providers remain necessary for portability and marketability
+- host/session-backed providers are also required for personal harness workflows
+- both paths must return the same validated provider response shape and use the same renderer, signals, ledger, archive, and reconcile behavior
 
 ### 6. What should be user-global vs project-local identity state?
 
@@ -235,6 +242,7 @@ Need to decide:
 - what the sub-agent is allowed to decide
 - what must always be delegated to the engine
 - how Supa Code and T3 Code wrappers should invoke the same behavior
+- how a subscription-backed active session should return structured provider JSON without an API key
 - JSON run-summary shape
 - exit-code contract
 - quiet vs verbose output behavior

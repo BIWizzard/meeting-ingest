@@ -70,6 +70,7 @@ V1 implements:
 - deterministic cleaned-verbatim normalization rules
 - provider contract with mock provider
 - one real provider adapter
+- host/session-backed provider path design for subscription-backed agentic harness use
 - title/filename inference from provider output
 - `summary-plus-verbatim` markdown rendering
 - v1 signal JSONL output
@@ -92,6 +93,7 @@ V1 does not implement:
 - global/project-local roster storage and cross-project identity resolution
 - full regenerate command
 - OpenAI/Gemini provider adapters unless selected as the first real adapter
+- production-ready host/session-backed provider wrappers for every harness
 
 ## Package Layout
 
@@ -364,6 +366,13 @@ Must:
 
 Defines provider interface and structured response shape.
 
+Provider paths:
+
+- API-backed providers call external model APIs directly.
+- Host/session-backed providers let an active agentic harness produce the same structured provider response through the current subscription-backed session.
+
+The engine should treat both paths as providers only if they return the same validated response shape.
+
 Provider output should include:
 
 - title proposal
@@ -578,6 +587,22 @@ Lead review:
 - confirm provider data routing with user before sending real client transcript content
 - first real-provider test must use a synthetic fixture transcript, not Hearst/Spelman content
 
+### Milestone 7: Host/Session-Backed Provider Path
+
+Deliverables:
+
+- generic agent-facing extraction prompt that returns provider JSON only
+- handoff contract for a sub-agent to provide structured provider output back to the engine
+- CLI or wrapper mechanism for ingesting with externally supplied provider JSON
+- Supa Code / T3 Code / Claude Code / Codex usage notes
+- tests proving externally supplied provider JSON passes the same schema, renderer, signal, ledger, archive, and reconcile flow
+
+Lead review:
+
+- verify subscription-backed workflows do not require API keys
+- verify host/session-backed extraction does not fragment the artifact contract or done process
+- verify API-backed providers remain the canonical portable path
+
 ## Test Strategy
 
 Tests should start with mock provider fixtures.
@@ -614,6 +639,7 @@ Ask the user before deciding:
 - whether `ingest` should auto-init or require explicit `init`
 - which real provider should be first
 - whether remote provider use should default to disabled for privacy
+- which host/session-backed provider path should be implemented first
 - whether existing Hearst/Spelman corpora should be migrated, adopted read-only, or ignored for v1
 - exact deterministic cleanup rules if the first fixtures expose ambiguity
 - whether file modified date is acceptable as the v1 fallback effective date

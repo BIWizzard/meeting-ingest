@@ -47,11 +47,17 @@ Deduplication should be based on source content hash, not filename.
 
 The extraction step should not be hardwired to one host or one model provider.
 
-Likely provider targets:
+Provider targets include both API-backed and host/session-backed options.
+
+API-backed providers are required for portability, automation, and broader productization:
 - Anthropic
 - OpenAI
 - Gemini
 - mock/testing provider
+
+Host/session-backed providers are required for the maintainer's personal workflow, where Supa Code, T3 Code, Claude Code, or Codex may already be running in a subscription-backed active session. These should allow an agent/sub-agent to create structured provider output without requiring a separate paid API call when the active harness can perform the model judgment.
+
+Host/session-backed providers must still return the same validated structured response shape as API providers. They should not bypass deterministic engine behavior, artifact rendering, signal enrichment, ledger writes, archive, or reconcile.
 
 ### 8. `iQ Context` is separate but complementary
 
@@ -97,6 +103,8 @@ The current sub-agent interaction model is valuable and should be preserved thro
 The engine should remain a normal CLI/library, while Claude, Codex, Supa Code, and T3 Code wrappers can delegate ingestion work to a focused sub-agent that calls the same underlying engine.
 
 Normal use should work from inside the active agentic harness. The user should not need to exit Supa Code or T3 Code into a raw CLI session to ingest meeting documents.
+
+For subscription-backed harnesses, normal use should also support a path where the active agent or delegated sub-agent performs the model extraction step through the current session rather than requiring an Anthropic/OpenAI API key. This is separate from API-backed provider adapters, which remain important for portability and marketability.
 
 ### 12. Output filenames must be scannable
 
