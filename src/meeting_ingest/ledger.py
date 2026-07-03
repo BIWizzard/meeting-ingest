@@ -55,3 +55,11 @@ def read_records(ledger_path: Path) -> list[dict[str, Any]]:
         if line.strip():
             records.append(json.loads(line))
     return records
+
+
+def latest_record_for_source(ledger_path: Path, source_sha256: str) -> dict[str, Any] | None:
+    latest: dict[str, Any] | None = None
+    for record in read_records(ledger_path):
+        if record.get("source_sha256") == source_sha256:
+            latest = record
+    return latest

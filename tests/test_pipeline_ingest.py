@@ -112,6 +112,37 @@ def test_pipeline_ingest_archives_but_skips_reconcile_for_external_source(tmp_pa
     assert ledger_records[-1]["reconcile"]["status"] == "skipped"
 
 
+def test_pipeline_ingest_duplicate_source_returns_no_op_and_reconciles_inbox(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+    first = ingest(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    redrop = paths.inbox / "2026-07-03-kushali-sync.txt"
+    redrop.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    second = ingest(
+        redrop,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)),
+    )
+    ledger_records = read_records(paths.ledger)
+
+    assert second.status == "no_op"
+    assert second.exit_code == 0
+    assert second.meeting_id == first.meeting_id
+    assert second.ingest_run_id is None
+    assert second.details["existing_artifacts"] == {"summary-plus-verbatim": "2026-07-03-kushali-sync.md"}
+    assert second.details["reconcile"]["status"] == "completed"
+    assert second.details["reconcile"]["reason"] == "source_already_ingested"
+    assert not redrop.exists()
+    assert (paths.inbox_done / "2026-07-03-kushali-sync-2.txt").exists()
+    assert len(ledger_records) == 2
+
+
 def test_ingest_rejects_remote_provider_when_privacy_gate_disabled(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = paths.inbox / "2026-07-03-team-sync.txt"

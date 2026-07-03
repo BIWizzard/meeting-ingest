@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from meeting_ingest.archive import archive_and_reconcile
+from meeting_ingest.archive import archive_and_reconcile, reconcile_duplicate_source
 from meeting_ingest.clock import Clock
 from meeting_ingest.config import MeetingIngestConfig
 from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingIngestError, PipelineNotImplementedError
 from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id
-from meeting_ingest.ledger import LedgerSnapshot, append_snapshot
+from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record_for_source
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers.mock import MockProvider
@@ -52,6 +52,10 @@ def ingest(
 
     source = source.resolve()
     source_sha256 = sha256_file(source)
+    existing_record = latest_record_for_source(paths.ledger, source_sha256)
+    if existing_record is not None:
+        return _no_op_summary(source, paths, source_sha256, existing_record)
+
     extraction = extract_source(source)
     meeting_id = mint_meeting_id(extraction.effective_date.value, source_sha256)
     ingest_run_id = mint_ingest_run_id(extraction.effective_date.value, clock=clock)
@@ -220,6 +224,32 @@ def _write_artifact(path: Path, markdown: str) -> None:
             recoverable=True,
             details={"path": str(path)},
         ) from exc
+
+
+def _no_op_summary(source: Path, paths: ProjectPaths, source_sha256: str, record: dict[str, object]) -> RunSummary:
+    reconcile = reconcile_duplicate_source(source, paths)
+    artifacts = record.get("artifacts", {})
+    existing_artifacts = {}
+    if isinstance(artifacts, dict):
+        existing_artifacts = {
+            mode: artifact.get("path")
+            for mode, artifact in artifacts.items()
+            if isinstance(artifact, dict) and artifact.get("path")
+        }
+    return RunSummary(
+        status="no_op",
+        exit_code=0,
+        source_sha256=source_sha256,
+        meeting_id=str(record.get("meeting_id")) if record.get("meeting_id") else None,
+        ingest_run_id=None,
+        artifacts=[],
+        warnings=[f"source already ingested; reconcile {reconcile['status']}"],
+        details={
+            "reason": "source_already_ingested",
+            "existing_artifacts": existing_artifacts,
+            "reconcile": reconcile,
+        },
+    )
 
 
 def _append_ingest_snapshot(

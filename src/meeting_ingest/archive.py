@@ -34,6 +34,11 @@ def archive_and_reconcile(source: Path, source_sha256: str, paths: ProjectPaths)
     return ArchiveResult(processed_path=processed_path, reconcile=reconcile)
 
 
+def reconcile_duplicate_source(source: Path, paths: ProjectPaths) -> dict[str, str]:
+    reconcile = _reconcile_inbox_source(source, paths)
+    return {**reconcile, "reason": "source_already_ingested"}
+
+
 def _processed_path(source: Path, source_sha256: str, paths: ProjectPaths) -> Path:
     safe_name = source.name.replace("/", "-")
     candidate = paths.processed / f"{source_sha256[:8]}-{safe_name}"
