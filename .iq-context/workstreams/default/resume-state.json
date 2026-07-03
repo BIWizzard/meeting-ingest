@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Optional next step: consider host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically."
+    "Continue with optional host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically, or run another review over 5e6b15b if desired."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Optional next step: consider host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically.",
-  "updated_at": "2026-07-03T20:00:37.542Z"
+  "resume_from": "Resume with: Continue with optional host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically, or run another review over 5e6b15b if desired.",
+  "updated_at": "2026-07-03T20:02:35.202Z"
 }
