@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
+import os
 from pathlib import Path
+import time
 
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.ledger import read_records
@@ -106,3 +108,29 @@ def test_doctor_reports_malformed_ledger_line(tmp_path: Path) -> None:
             "path": "_ledger.jsonl:line:1",
         }
     ]
+
+
+def test_doctor_reports_stale_provider_handoff_cache(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    request = paths.cache / "provider-requests" / "old.request.json"
+    response = paths.cache / "provider-responses" / "old.response.json"
+    request.parent.mkdir(parents=True)
+    response.parent.mkdir(parents=True)
+    request.write_text("{}", encoding="utf-8")
+    response.write_text("{}", encoding="utf-8")
+    old_time = time.time() - (8 * 24 * 60 * 60)
+    os.utime(request, (old_time, old_time))
+    os.utime(response, (old_time, old_time))
+
+    summary = doctor(tmp_path)
+
+    assert {
+        "code": "stale_provider_request",
+        "message": "Provider handoff cache file is stale.",
+        "path": "_cache/provider-requests/old.request.json",
+    } in summary.details["issues"]
+    assert {
+        "code": "stale_provider_response",
+        "message": "Provider handoff cache file is stale.",
+        "path": "_cache/provider-responses/old.response.json",
+    } in summary.details["issues"]

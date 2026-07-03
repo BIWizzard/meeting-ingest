@@ -20,6 +20,7 @@ def test_init_project_creates_default_layout(tmp_path: Path) -> None:
     assert paths.derived.is_dir()
     assert paths.cache.is_dir()
     assert paths.ledger.read_text(encoding="utf-8") == ""
+    assert "/_local/project-context/meetings/_cache/" in (tmp_path / ".gitignore").read_text(encoding="utf-8")
 
 
 def test_load_project_discovers_config_from_nested_directory(tmp_path: Path) -> None:
@@ -32,6 +33,7 @@ def test_load_project_discovers_config_from_nested_directory(tmp_path: Path) -> 
     assert config.schema_version == "1.0"
     assert paths.project_root == tmp_path.resolve()
     assert paths.config_path == initialized.config_path
+    assert config.privacy.allow_session_provider is False
 
 
 def test_discover_config_fails_clearly_without_init(tmp_path: Path) -> None:

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from meeting_ingest.ledger import read_records, read_records_with_issues
 from meeting_ingest.locking import inspect_lock, lock_path
 from meeting_ingest.paths import ProjectPaths
+from meeting_ingest.provider_handoff import REQUEST_DIR, RESPONSE_DIR
+
+
+STALE_PROVIDER_CACHE_AGE = timedelta(days=7)
 
 
 @dataclass(frozen=True)
@@ -53,6 +58,8 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
             )
         )
 
+    issues.extend(_stale_provider_cache_issues(paths))
+
     for source in _inbox_files(paths):
         issues.append(
             DoctorIssue(
@@ -79,6 +86,30 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
             isinstance(source, dict) and source.get("processed_path")
         ):
             _append_missing_path_issue(paths, issues, "missing_processed_source", str(reconcile["processed_path"]))
+    return issues
+
+
+def _stale_provider_cache_issues(paths: ProjectPaths) -> list[DoctorIssue]:
+    issues: list[DoctorIssue] = []
+    now = datetime.now(UTC)
+    for directory_name, code in (
+        (REQUEST_DIR, "stale_provider_request"),
+        (RESPONSE_DIR, "stale_provider_response"),
+    ):
+        directory = paths.cache / directory_name
+        if not directory.exists():
+            continue
+        for path in directory.glob("*.json"):
+            modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+            if now - modified_at <= STALE_PROVIDER_CACHE_AGE:
+                continue
+            issues.append(
+                DoctorIssue(
+                    code=code,
+                    message="Provider handoff cache file is stale.",
+                    path=str(path.relative_to(paths.meetings_root)),
+                )
+            )
     return issues
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import re
 
@@ -14,7 +15,6 @@ from meeting_ingest.errors import (
     EXIT_ARTIFACT_WRITE,
     EXIT_GENERAL_FAILURE,
     MeetingIngestError,
-    PipelineNotImplementedError,
     ProviderError,
     SourceExtractionError,
     UnsupportedSourceFormatError,
@@ -26,6 +26,15 @@ from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
+from meeting_ingest.provider_handoff import (
+    PROVIDER_CONTRACT,
+    SessionProviderEnvelope,
+    cleanup_session_provider_files,
+    normalized_transcript_sha256,
+    read_session_provider_envelope,
+    request_for_missing_response,
+    write_provider_request,
+)
 from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
@@ -38,6 +47,36 @@ from meeting_ingest.schema import (
     validate_provider_response,
 )
 from meeting_ingest.signals import write_signal_jsonl
+
+
+class _PreparedNoOp(Exception):
+    def __init__(self, summary: RunSummary) -> None:
+        super().__init__("prepared ingest is a no-op")
+        self.summary = summary
+
+
+@dataclass(frozen=True)
+class _PreparedEffectiveDate:
+    value: str
+    confidence: str
+    source: str
+
+
+@dataclass(frozen=True)
+class _PreparedExtraction:
+    normalized_text: str
+    source_format: str
+    effective_date: _PreparedEffectiveDate
+    duration: str | None = None
+
+
+@dataclass(frozen=True)
+class _PreparedIngest:
+    source: Path
+    source_sha256: str
+    extraction: object
+    meeting_id: str
+    ingest_run_id: str
 
 
 def initialize(project_root: Path) -> RunSummary:
@@ -60,15 +99,33 @@ def ingest(
     mode: str | None = None,
     provider: str | None = None,
     quality: str | None = None,
+    provider_response: Path | None = None,
     clock: Clock | None = None,
 ) -> RunSummary:
     config, paths = load_project(start or source)
     selected_mode = mode or config.default_mode
-    selected_provider = provider or config.default_provider
+    selected_provider = provider or ("session" if provider_response else config.default_provider)
     selected_quality = quality or config.default_quality
     _validate_ingest_options(config, selected_mode, selected_provider)
+    if provider_response is not None and selected_provider != "session":
+        raise ConfigError(
+            "--provider-response is only valid with provider 'session'.",
+            code="invalid_provider_response_provider",
+        )
+    if selected_provider == "session" and provider_response is None:
+        raise ConfigError(
+            "Session ingest requires --provider-response; use provider-request for phase 1.",
+            code="missing_provider_response",
+        )
 
     with ProjectLock(lock_path(paths.cache), clock=clock):
+        if provider_response is not None:
+            return _complete_session_ingest_locked(
+                source,
+                provider_response=provider_response,
+                paths=paths,
+                clock=clock,
+            )
         return _ingest_locked(
             source,
             paths=paths,
@@ -77,6 +134,43 @@ def ingest(
             selected_quality=selected_quality,
             clock=clock,
         )
+
+
+def provider_request(
+    source: Path,
+    *,
+    start: Path | None = None,
+    mode: str | None = None,
+    provider: str | None = None,
+    quality: str | None = None,
+    clock: Clock | None = None,
+) -> RunSummary:
+    config, paths = load_project(start or source)
+    selected_mode = mode or config.default_mode
+    selected_provider = provider or "session"
+    selected_quality = quality or config.default_quality
+    _validate_ingest_options(config, selected_mode, selected_provider)
+    if selected_provider != "session":
+        raise ConfigError("provider-request only supports provider 'session'.", code="invalid_provider_request_provider")
+
+    with ProjectLock(lock_path(paths.cache), clock=clock):
+        return _provider_request_locked(
+            source,
+            paths=paths,
+            selected_mode=selected_mode,
+            selected_quality=selected_quality,
+            clock=clock,
+        )
+
+
+def complete_session_ingest(
+    source: Path,
+    *,
+    provider_response: Path,
+    start: Path | None = None,
+    clock: Clock | None = None,
+) -> RunSummary:
+    return ingest(source, start=start, provider="session", provider_response=provider_response, clock=clock)
 
 
 def ingest_inbox(
@@ -92,6 +186,8 @@ def ingest_inbox(
     selected_provider = provider or config.default_provider
     selected_quality = quality or config.default_quality
     _validate_ingest_options(config, selected_mode, selected_provider)
+    if selected_provider == "session":
+        raise ConfigError("ingest-inbox does not support provider 'session'.", code="session_provider_batch_unsupported")
 
     sources = _direct_inbox_sources(paths)
     results: list[dict[str, object]] = []
@@ -188,28 +284,19 @@ def _ingest_locked(
     selected_quality: str,
     clock: Clock | None,
 ) -> RunSummary:
-    source = source.resolve()
-    source_sha256 = sha256_file(source)
-    existing_record = latest_record_for_source(paths.ledger, source_sha256)
-    if _record_has_primary_artifacts(existing_record):
-        return _no_op_summary(source, paths, source_sha256, existing_record, clock=clock)
-
     try:
-        extraction = extract_source(source)
-    except (UnsupportedSourceFormatError, SourceExtractionError) as exc:
-        _record_source_failure(paths, source=source, source_sha256=source_sha256, error=exc, clock=clock)
-        raise
-    meeting_id = mint_meeting_id(extraction.effective_date.value, source_sha256)
-    ingest_run_id = mint_ingest_run_id(extraction.effective_date.value, clock=clock)
+        prepared = _prepare_ingest(source, paths=paths, clock=clock)
+    except _PreparedNoOp as no_op:
+        return no_op.summary
 
     provider_impl = get_provider(selected_provider)
     try:
         provider_response = provider_impl.extract(
             ProviderRequest(
-                transcript=extraction.normalized_text,
-                source_name=source.name,
-                meeting_id=meeting_id,
-                effective_date=extraction.effective_date.value,
+                transcript=prepared.extraction.normalized_text,
+                source_name=prepared.source.name,
+                meeting_id=prepared.meeting_id,
+                effective_date=prepared.extraction.effective_date.value,
                 quality=selected_quality,
             )
         )
@@ -217,37 +304,166 @@ def _ingest_locked(
     except ProviderValidationError as exc:
         _record_source_failure(
             paths,
-            source=source,
-            source_sha256=source_sha256,
+            source=prepared.source,
+            source_sha256=prepared.source_sha256,
             error=exc,
             clock=clock,
-            meeting_id=meeting_id,
-            ingest_run_id=ingest_run_id,
+            meeting_id=prepared.meeting_id,
+            ingest_run_id=prepared.ingest_run_id,
         )
         raise
     except MeetingIngestError as exc:
         _record_source_failure(
             paths,
-            source=source,
-            source_sha256=source_sha256,
+            source=prepared.source,
+            source_sha256=prepared.source_sha256,
             error=exc,
             clock=clock,
-            meeting_id=meeting_id,
-            ingest_run_id=ingest_run_id,
+            meeting_id=prepared.meeting_id,
+            ingest_run_id=prepared.ingest_run_id,
         )
         raise
     except Exception as exc:
         provider_error = ProviderError(selected_provider, str(exc))
         _record_source_failure(
             paths,
-            source=source,
-            source_sha256=source_sha256,
+            source=prepared.source,
+            source_sha256=prepared.source_sha256,
             error=provider_error,
             clock=clock,
-            meeting_id=meeting_id,
-            ingest_run_id=ingest_run_id,
+            meeting_id=prepared.meeting_id,
+            ingest_run_id=prepared.ingest_run_id,
         )
         raise provider_error from exc
+    return _finish_ingest(
+        prepared,
+        paths=paths,
+        selected_mode=selected_mode,
+        selected_provider=selected_provider,
+        selected_quality=selected_quality,
+        provider_response=provider_response,
+        model_id=provider_impl.model_id,
+        provider_host=None,
+        clock=clock,
+    )
+
+
+def _provider_request_locked(
+    source: Path,
+    *,
+    paths: ProjectPaths,
+    selected_mode: str,
+    selected_quality: str,
+    clock: Clock | None,
+) -> RunSummary:
+    try:
+        prepared = _prepare_ingest(source, paths=paths, clock=clock)
+    except _PreparedNoOp as no_op:
+        return no_op.summary
+    request_payload = {
+        "schema_version": "1.0",
+        "handoff_type": "provider_request",
+        "provider_contract": PROVIDER_CONTRACT,
+        "source_name": prepared.source.name,
+        "source_sha256": prepared.source_sha256,
+        "normalized_transcript_sha256": normalized_transcript_sha256(prepared.extraction.normalized_text),
+        "meeting_id": prepared.meeting_id,
+        "ingest_run_id": prepared.ingest_run_id,
+        "effective_date": prepared.extraction.effective_date.value,
+        "quality": selected_quality,
+        "output_mode": selected_mode,
+        "normalized_transcript": prepared.extraction.normalized_text,
+        "source_format": prepared.extraction.source_format,
+        "date_confidence": prepared.extraction.effective_date.confidence,
+        "date_source": prepared.extraction.effective_date.source,
+        "duration": prepared.extraction.duration,
+    }
+    request_path, response_path = write_provider_request(paths, request_payload)
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        source_sha256=prepared.source_sha256,
+        meeting_id=prepared.meeting_id,
+        ingest_run_id=prepared.ingest_run_id,
+        details={
+            "command": "provider-request",
+            "provider": "session",
+            "quality": selected_quality,
+            "output_mode": selected_mode,
+            "request_path": str(request_path.relative_to(paths.meetings_root)),
+            "expected_response_path": str(response_path.relative_to(paths.meetings_root)),
+        },
+    )
+
+
+def _complete_session_ingest_locked(
+    source: Path,
+    *,
+    provider_response: Path,
+    paths: ProjectPaths,
+    clock: Clock | None,
+) -> RunSummary:
+    source = source.resolve()
+    source_sha256 = sha256_file(source)
+    existing_record = latest_record_for_source(paths.ledger, source_sha256)
+    if _record_has_primary_artifacts(existing_record):
+        return _no_op_summary(source, paths, source_sha256, existing_record, clock=clock)
+
+    response_path = _resolve_provider_response_path(provider_response, paths)
+    try:
+        envelope = read_session_provider_envelope(response_path, paths=paths, current_source_sha256=source_sha256)
+        validate_provider_response(envelope.response)
+    except ProviderError as exc:
+        _record_session_failure_from_response_path(paths, source=source, source_sha256=source_sha256, response_path=response_path, error=exc, clock=clock)
+        raise
+    except ProviderValidationError as exc:
+        _record_session_failure_from_response_path(paths, source=source, source_sha256=source_sha256, response_path=response_path, error=exc, clock=clock)
+        raise
+    except Exception as exc:
+        provider_error = ProviderError("session", str(exc))
+        _record_session_failure_from_response_path(
+            paths,
+            source=source,
+            source_sha256=source_sha256,
+            response_path=response_path,
+            error=provider_error,
+            clock=clock,
+        )
+        raise provider_error from exc
+
+    prepared = _prepared_ingest_from_session_request(source, source_sha256=source_sha256, envelope=envelope)
+    summary = _finish_ingest(
+        prepared,
+        paths=paths,
+        selected_mode=str(envelope.request["output_mode"]),
+        selected_provider="session",
+        selected_quality=envelope.metadata.model_alias,
+        provider_response=envelope.response,
+        model_id=envelope.metadata.model_id,
+        provider_host=envelope.metadata.provider_host,
+        clock=clock,
+    )
+    cleanup_session_provider_files(envelope)
+    return summary
+
+
+def _finish_ingest(
+    prepared: _PreparedIngest,
+    *,
+    paths: ProjectPaths,
+    selected_mode: str,
+    selected_provider: str,
+    selected_quality: str,
+    provider_response: ProviderResponse,
+    model_id: str,
+    provider_host: str | None,
+    clock: Clock | None,
+) -> RunSummary:
+    source = prepared.source
+    source_sha256 = prepared.source_sha256
+    extraction = prepared.extraction
+    meeting_id = prepared.meeting_id
+    ingest_run_id = prepared.ingest_run_id
     artifact_path = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
     artifact_slug = _slug(provider_response.title)
     signal_path = paths.signals / f"{meeting_id}.jsonl"
@@ -276,7 +492,8 @@ def _ingest_locked(
             output_mode=selected_mode,
             provider=selected_provider,
             model_alias=selected_quality,
-            model_id=provider_impl.model_id,
+            model_id=model_id,
+            provider_host=provider_host,
         ),
         clock=clock,
     )
@@ -291,12 +508,14 @@ def _ingest_locked(
             "path": str(relative_artifact_path),
             "provider": selected_provider,
             "model_alias": selected_quality,
-            "model_id": provider_impl.model_id,
+            "model_id": model_id,
             "schema_version": "1.0",
             "title": provider_response.title,
             "slug": artifact_slug,
         }
     }
+    if provider_host:
+        artifact_state[selected_mode]["provider_host"] = provider_host
     signal_state = {
         "status": "ready",
         "path": str(relative_signal_path),
@@ -359,6 +578,7 @@ def _ingest_locked(
             "output_mode": selected_mode,
             "provider": selected_provider,
             "quality": selected_quality,
+            **({"provider_host": provider_host} if provider_host else {}),
             "title": {
                 "value": provider_response.title,
                 "slug": artifact_slug,
@@ -368,6 +588,94 @@ def _ingest_locked(
             "archive": {"processed_path": str(processed_path)},
             "reconcile": completed_reconcile,
         },
+    )
+
+
+def _prepare_ingest(source: Path, *, paths: ProjectPaths, clock: Clock | None) -> _PreparedIngest:
+    source = source.resolve()
+    source_sha256 = sha256_file(source)
+    existing_record = latest_record_for_source(paths.ledger, source_sha256)
+    if _record_has_primary_artifacts(existing_record):
+        raise _PreparedNoOp(_no_op_summary(source, paths, source_sha256, existing_record, clock=clock))
+
+    try:
+        extraction = extract_source(source)
+    except (UnsupportedSourceFormatError, SourceExtractionError) as exc:
+        _record_source_failure(paths, source=source, source_sha256=source_sha256, error=exc, clock=clock)
+        raise
+    meeting_id = mint_meeting_id(extraction.effective_date.value, source_sha256)
+    ingest_run_id = mint_ingest_run_id(extraction.effective_date.value, clock=clock)
+    return _PreparedIngest(
+        source=source,
+        source_sha256=source_sha256,
+        extraction=extraction,
+        meeting_id=meeting_id,
+        ingest_run_id=ingest_run_id,
+    )
+
+
+def _prepared_ingest_from_session_request(
+    source: Path,
+    *,
+    source_sha256: str,
+    envelope: SessionProviderEnvelope,
+) -> _PreparedIngest:
+    request = envelope.request
+    extraction = _PreparedExtraction(
+        normalized_text=str(request["normalized_transcript"]),
+        source_format=str(request.get("source_format") or source.suffix.lower().lstrip(".") or "unknown"),
+        effective_date=_PreparedEffectiveDate(
+            value=str(request["effective_date"]),
+            confidence=str(request.get("date_confidence") or "unknown"),
+            source=str(request.get("date_source") or "provider_request"),
+        ),
+        duration=request.get("duration") if isinstance(request.get("duration"), str) else None,
+    )
+    return _PreparedIngest(
+        source=source,
+        source_sha256=source_sha256,
+        extraction=extraction,
+        meeting_id=str(request["meeting_id"]),
+        ingest_run_id=str(request["ingest_run_id"]),
+    )
+
+
+def _resolve_provider_response_path(path: Path, paths: ProjectPaths) -> Path:
+    if path.is_absolute():
+        return path
+    cwd_candidate = (Path.cwd() / path).resolve()
+    if cwd_candidate.exists():
+        return cwd_candidate
+    meetings_candidate = (paths.meetings_root / path).resolve()
+    if meetings_candidate.exists():
+        return meetings_candidate
+    return cwd_candidate
+
+
+def _record_session_failure_from_response_path(
+    paths: ProjectPaths,
+    *,
+    source: Path,
+    source_sha256: str,
+    response_path: Path,
+    error: MeetingIngestError,
+    clock: Clock | None,
+) -> None:
+    request_data = request_for_missing_response(response_path, paths)
+    meeting_id = None
+    ingest_run_id = None
+    if request_data is not None:
+        request, _ = request_data
+        meeting_id = str(request.get("meeting_id")) if request.get("meeting_id") else None
+        ingest_run_id = str(request.get("ingest_run_id")) if request.get("ingest_run_id") else None
+    _record_source_failure(
+        paths,
+        source=source,
+        source_sha256=source_sha256,
+        error=error,
+        clock=clock,
+        meeting_id=meeting_id,
+        ingest_run_id=ingest_run_id,
     )
 
 
@@ -443,6 +751,10 @@ def _validate_ingest_options(config: MeetingIngestConfig, mode: str, provider: s
     if mode not in SUPPORTED_OUTPUT_MODES:
         raise ConfigError(f"Unsupported output mode: {mode}", code="unsupported_output_mode")
     if provider == "mock":
+        return
+    if provider == "session":
+        if not config.privacy.allow_session_provider:
+            raise ConfigError("Session provider use is disabled by config.", code="session_provider_disabled")
         return
     if provider == "anthropic":
         if not config.privacy.allow_remote_provider:
@@ -618,7 +930,7 @@ def _signal_records_from_provider(
                 )
             )
             continue
-        raise ConfigError(f"Unsupported provider signal shape: {type(signal).__name__}", code="invalid_provider_signal")
+        raise ProviderValidationError(f"Unsupported provider signal shape: {type(signal).__name__}")
     return records
 
 

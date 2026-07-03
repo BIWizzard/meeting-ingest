@@ -106,6 +106,21 @@ def init_project(project_root: Path) -> ProjectPaths:
     paths = ProjectPaths.from_config(project_root, config_path, config)
     for directory in paths.runtime_directories():
         directory.mkdir(parents=True, exist_ok=True)
+    _ensure_cache_gitignored(project_root, paths.cache)
     if not paths.ledger.exists():
         paths.ledger.write_text("", encoding="utf-8")
     return paths
+
+
+def _ensure_cache_gitignored(project_root: Path, cache_path: Path) -> None:
+    gitignore = project_root / ".gitignore"
+    try:
+        relative_cache = cache_path.relative_to(project_root).as_posix()
+        pattern = f"/{relative_cache}/"
+        existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+        if pattern in {line.strip() for line in existing.splitlines()}:
+            return
+        suffix = "" if not existing or existing.endswith("\n") else "\n"
+        gitignore.write_text(f"{existing}{suffix}\n# Meeting Ingest runtime cache\n{pattern}\n", encoding="utf-8")
+    except (OSError, ValueError):
+        return

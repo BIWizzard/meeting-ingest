@@ -9,7 +9,7 @@ from meeting_ingest.errors import MeetingIngestError
 
 SCHEMA_VERSION = "1.0"
 SUPPORTED_OUTPUT_MODES = ("summary-plus-verbatim",)
-SUPPORTED_PROVIDERS = ("mock", "anthropic")
+SUPPORTED_PROVIDERS = ("mock", "anthropic", "session")
 SUPPORTED_QUALITIES = ("fast", "balanced", "deep")
 SIGNAL_TYPES = ("explicit_ask", "stakeholder_priority", "decision_rationale", "commitment", "risk_or_concern")
 EVIDENCE_KINDS = ("quote", "paraphrase", "timestamp_only")

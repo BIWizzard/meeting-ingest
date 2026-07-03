@@ -27,6 +27,7 @@ class PathsConfig:
 @dataclass(frozen=True)
 class PrivacyConfig:
     allow_remote_provider: bool = False
+    allow_session_provider: bool = False
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ ledger = "_ledger.jsonl"
 
 [privacy]
 allow_remote_provider = false
+allow_session_provider = false
 """
 
 

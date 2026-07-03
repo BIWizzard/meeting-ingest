@@ -21,7 +21,7 @@ from meeting_ingest.errors import (
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
-from meeting_ingest.pipeline import ingest, ingest_inbox, reconcile
+from meeting_ingest.pipeline import ingest, ingest_inbox, provider_request, reconcile
 from meeting_ingest.schema import ProviderResponse
 
 
@@ -696,6 +696,393 @@ def test_ingest_allows_anthropic_when_privacy_gate_enabled(tmp_path: Path, monke
     assert "model_id: claude-sonnet-5" in artifact.read_text(encoding="utf-8")
 
 
+def test_session_provider_request_requires_privacy_gate(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError) as exc:
+        provider_request(source, start=paths.inbox)
+
+    assert exc.value.code == "session_provider_disabled"
+
+
+def test_provider_response_requires_session_provider(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError) as exc:
+        ingest(source, start=paths.inbox, provider="mock", provider_response=paths.cache / "response.json")
+
+    assert exc.value.code == "invalid_provider_response_provider"
+
+
+def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    summary = provider_request(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    request_path = paths.meetings_root / summary.details["request_path"]
+    response_path = paths.meetings_root / summary.details["expected_response_path"]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+
+    assert summary.status == "success"
+    assert summary.meeting_id.startswith("mtg-20260703-")
+    assert request_payload["handoff_type"] == "provider_request"
+    assert request_payload["provider_contract"] == "meeting-ingest-provider-response-v1"
+    assert request_payload["meeting_id"] == summary.meeting_id
+    assert request_payload["source_sha256"] == summary.source_sha256
+    assert request_payload["quality"] == "balanced"
+    assert request_payload["output_mode"] == "summary-plus-verbatim"
+    assert request_payload["normalized_transcript"] == "Ken: Hello\n"
+    assert response_path.parent.is_dir()
+    assert read_records(paths.ledger) == []
+
+
+def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path, title="Session Team Sync")
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        provider="session",
+        provider_response=response_path,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)),
+    )
+    artifact = paths.meetings_root / summary.artifacts[0]["path"]
+    markdown = artifact.read_text(encoding="utf-8")
+    records = read_records(paths.ledger)
+
+    assert summary.status == "success"
+    assert summary.meeting_id == request_summary.meeting_id
+    assert summary.ingest_run_id == request_summary.ingest_run_id
+    assert summary.details["provider"] == "session"
+    assert summary.details["provider_host"] == "codex"
+    assert "provider: session" in markdown
+    assert "provider_host: codex" in markdown
+    assert "model_id: codex-session" in markdown
+    assert records[-1]["artifacts"]["summary-plus-verbatim"]["provider"] == "session"
+    assert records[-1]["artifacts"]["summary-plus-verbatim"]["provider_host"] == "codex"
+    assert [record["event"] for record in records] == ["primary_artifacts_ready", "ingest_completed"]
+    assert not request_path.exists()
+    assert not response_path.exists()
+    assert not source.exists()
+    assert (paths.inbox_done / source.name).exists()
+
+
+def test_session_provider_response_identity_mismatch_records_failure_without_side_effects(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path, source_sha256="wrong")
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["meeting_id"] == request_summary.meeting_id
+    assert records[-1]["ingest_run_id"] == request_summary.ingest_run_id
+    assert source.exists()
+    assert request_path.exists()
+    assert response_path.exists()
+    assert list(paths.meetings_root.glob("*.md")) == []
+    assert list(paths.processed.iterdir()) == []
+
+
+def test_session_provider_malformed_payload_records_validation_failure(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(
+        request_path,
+        response_path,
+        response_overrides={
+            "topics": [{"id": 1, "topic": "Design", "summary": "Discussed design.", "evidence": "Ken: Hello"}]
+        },
+    )
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["meeting_id"] == request_summary.meeting_id
+    assert source.exists()
+    assert list(paths.meetings_root.glob("*.md")) == []
+    assert list(paths.processed.iterdir()) == []
+
+
+def test_session_provider_missing_response_records_provider_failure_with_request_identity(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider"
+    assert exc.value.exit_code == EXIT_PROVIDER_FAILURE
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["meeting_id"] == request_summary.meeting_id
+    assert records[-1]["ingest_run_id"] == request_summary.ingest_run_id
+    assert source.exists()
+
+
+def test_session_provider_response_directory_records_provider_failure(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    provider_request(source, start=paths.inbox)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=paths.cache)
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider"
+    assert exc.value.exit_code == EXIT_PROVIDER_FAILURE
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert source.exists()
+
+
+def test_session_provider_missing_persisted_request_records_validation_failure(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    request_path.unlink()
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert source.exists()
+
+
+def test_session_provider_rejects_path_traversal_ingest_run_id(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path, envelope_overrides={"ingest_run_id": "../../../outside"})
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert read_records(paths.ledger)[-1]["event"] == "ingest_failed"
+
+
+def test_session_provider_rejects_tampered_request_transcript_hash(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    request_payload["normalized_transcript"] = "Tampered"
+    request_path.write_text(json.dumps(request_payload), encoding="utf-8")
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert read_records(paths.ledger)[-1]["event"] == "ingest_failed"
+
+
+def test_session_provider_rejects_unsupported_request_output_mode(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    request_payload["output_mode"] = "summary"
+    request_path.write_text(json.dumps(request_payload), encoding="utf-8")
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+
+
+def test_session_provider_rejects_model_alias_mismatch(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path, provider_overrides={"model_alias": "deep"})
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+
+
+def test_session_provider_request_file_as_response_records_validation_failure(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=request_path)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert read_records(paths.ledger)[-1]["event"] == "ingest_failed"
+
+
+def test_session_provider_model_id_falls_back_to_host_session(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path, provider_overrides={"model_id": None})
+
+    summary = ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+    artifact = paths.meetings_root / summary.artifacts[0]["path"]
+
+    assert "model_id: codex-session" in artifact.read_text(encoding="utf-8")
+
+
+def test_provider_request_duplicate_source_returns_no_op_without_request_file(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    first = ingest(source, start=paths.inbox)
+    redrop = paths.inbox / "2026-07-03-team-sync.txt"
+    redrop.write_text("Ken: Hello\n", encoding="utf-8")
+
+    summary = provider_request(redrop, start=paths.inbox)
+
+    assert summary.status == "no_op"
+    assert summary.meeting_id == first.meeting_id
+    assert not list((paths.cache / "provider-requests").glob("*.json"))
+
+
+def test_ingest_inbox_rejects_session_provider_before_batch_loop(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError) as exc:
+        ingest_inbox(tmp_path, provider="session")
+
+    assert exc.value.code == "session_provider_batch_unsupported"
+    assert read_records(paths.ledger) == []
+
+
+def test_session_provider_stale_response_returns_no_op_without_consuming_response(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    first = ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    redrop = paths.inbox / "2026-07-03-team-sync.txt"
+    redrop.write_text("Ken: Hello\n", encoding="utf-8")
+    request_path = paths.cache / "provider-requests" / "stale.request.json"
+    response_path = paths.cache / "provider-responses" / "stale.response.json"
+    request_path.parent.mkdir(parents=True)
+    response_path.parent.mkdir(parents=True)
+    response_path.write_text("{not-json\n", encoding="utf-8")
+
+    summary = ingest(redrop, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert summary.status == "no_op"
+    assert summary.meeting_id == first.meeting_id
+    assert response_path.exists()
+    assert not redrop.exists()
+
+
+def test_cli_session_provider_response_returns_exit_6_for_validation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path, title="")
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(["ingest", str(source), "--provider", "session", "--provider-response", str(response_path), "--json"])
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+
+    assert exit_code == EXIT_PROVIDER_VALIDATION
+    assert summary["status"] == "failed"
+    assert summary["errors"][0]["phase"] == "provider_validation"
+    assert summary["errors"][0]["code"] == "invalid_provider_output"
+
+
 def test_ingest_quarantines_unsupported_inbox_source_and_records_failure(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = paths.inbox / "2026-07-03-meeting.pdf"
@@ -770,3 +1157,63 @@ def test_reconcile_skips_failed_record_without_repairing_as_duplicate(tmp_path: 
         }
     ]
     assert retry_source.exists()
+
+
+def _allow_session_provider(config_path: Path) -> None:
+    config_text = config_path.read_text(encoding="utf-8")
+    config_path.write_text(config_text.replace("allow_session_provider = false", "allow_session_provider = true"), encoding="utf-8")
+
+
+def _write_session_response(
+    request_path: Path,
+    response_path: Path,
+    *,
+    title: str = "Session Team Sync",
+    source_sha256: str | None = None,
+    envelope_overrides: dict[str, object] | None = None,
+    provider_overrides: dict[str, object] | None = None,
+    response_overrides: dict[str, object] | None = None,
+) -> None:
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    provider_payload = {
+        "name": "session",
+        "host": "codex",
+        "model_alias": request_payload["quality"],
+        "model_id": "codex-session",
+        "generated_at": "2026-07-03T12:01:00Z",
+    }
+    if provider_overrides:
+        provider_payload.update(provider_overrides)
+    response_payload = {
+        "title": title,
+        "tl_dr": "Session summary.",
+        "meeting_type": "team-sync",
+        "attendees": [],
+        "topics": [],
+        "decisions": [],
+        "action_items": [],
+        "stakeholder_asks": [],
+        "dependencies_risks": [],
+        "communication_signals": [],
+        "open_questions": [],
+        "cross_references": [],
+    }
+    if response_overrides:
+        response_payload.update(response_overrides)
+    envelope = {
+        "schema_version": "1.0",
+        "handoff_type": "provider_response",
+        "provider_contract": "meeting-ingest-provider-response-v1",
+        "meeting_id": request_payload["meeting_id"],
+        "ingest_run_id": request_payload["ingest_run_id"],
+        "source_sha256": source_sha256 or request_payload["source_sha256"],
+        "normalized_transcript_sha256": request_payload["normalized_transcript_sha256"],
+        "provider": provider_payload,
+        "response": response_payload,
+    }
+    if envelope_overrides:
+        envelope.update(envelope_overrides)
+    response_path.write_text(
+        json.dumps(envelope, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )

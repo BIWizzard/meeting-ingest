@@ -24,6 +24,7 @@ class RenderContext:
     provider: str = "mock"
     model_alias: str = "balanced"
     model_id: str = "none"
+    provider_host: str | None = None
     tool_version: str = "0.1.0"
 
 
@@ -75,6 +76,7 @@ def _front_matter(response: ProviderResponse, context: RenderContext, generated_
         f"provider: {context.provider}",
         f"model_alias: {context.model_alias}",
         f"model_id: {context.model_id}",
+        *([f"provider_host: {context.provider_host}"] if context.provider_host else []),
         f"generated_by: meeting-ingest {context.tool_version}",
         f"generated_at: {generated_at}",
         *([f"duration: {context.duration}"] if context.duration else []),

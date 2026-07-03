@@ -25,7 +25,15 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_parser.add_argument("--mode")
     ingest_parser.add_argument("--provider")
     ingest_parser.add_argument("--quality")
+    ingest_parser.add_argument("--provider-response")
     ingest_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+
+    provider_request_parser = subparsers.add_parser("provider-request")
+    provider_request_parser.add_argument("source")
+    provider_request_parser.add_argument("--mode")
+    provider_request_parser.add_argument("--provider", default="session")
+    provider_request_parser.add_argument("--quality")
+    provider_request_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
     ingest_inbox_parser = subparsers.add_parser("ingest-inbox")
     ingest_inbox_parser.add_argument("--root", default=".", help="Path used for project discovery.")
@@ -47,6 +55,15 @@ def run(args: argparse.Namespace) -> RunSummary:
         return pipeline.initialize(Path(args.root))
     if args.command == "ingest":
         return pipeline.ingest(
+            Path(args.source),
+            start=Path.cwd(),
+            mode=args.mode,
+            provider=args.provider,
+            quality=args.quality,
+            provider_response=Path(args.provider_response) if args.provider_response else None,
+        )
+    if args.command == "provider-request":
+        return pipeline.provider_request(
             Path(args.source),
             start=Path.cwd(),
             mode=args.mode,
