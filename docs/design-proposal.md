@@ -292,9 +292,16 @@ Design implication:
 - wrappers should call the same pipeline/orchestrator API
 - wrappers should not manually implement ledger/archive/reconcile behavior
 - wrappers may delegate to a focused sub-agent
+- near-term batch inbox ingest should be orchestrated by one focused sub-agent calling the engine sequentially
 - CLI output should include a machine-readable run summary with a stable JSON shape
 - JSON status should distinguish success, no-op, partial/derived-work issues, and failure states
 - exit codes should distinguish success-class outcomes from validation failure, provider failure, filesystem/reconcile failure, and lock/concurrency conflicts
+
+Future performance enhancement:
+
+- support controlled fan-out for multiple inbox documents so separate workers or sub-agents can process independent sources faster
+- keep the engine as the source of truth for locking, ledger writes, archive, reconcile, and provider rate-limit behavior
+- do not allow parallel workers to bypass the project ledger, source hash idempotency, or privacy gate
 
 ## Rolling Stakeholder Playbook
 

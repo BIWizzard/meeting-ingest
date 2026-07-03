@@ -44,6 +44,7 @@ Good answer characteristics:
 Candidate commands:
 - `meeting-ingest init`
 - `meeting-ingest ingest`
+- `meeting-ingest ingest-inbox`
 - `meeting-ingest reconcile`
 - `meeting-ingest doctor`
 - `meeting-ingest status`
@@ -54,6 +55,8 @@ Why it matters:
 
 Resolved direction:
 - v1 should include a narrow `reconcile` command or equivalent duplicate/no-op repair path for incomplete archive/reconcile state
+- v1 should include a batch inbox ingest command that processes `_inbox/` sequentially and returns per-file JSON results
+- fan-out to multiple sub-agents or parallel workers for faster multi-document ingestion is a future enhancement, not the first batch-ingest implementation
 
 ### 4. What should the extraction contract be?
 

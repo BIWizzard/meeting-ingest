@@ -27,6 +27,13 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_parser.add_argument("--quality")
     ingest_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
+    ingest_inbox_parser = subparsers.add_parser("ingest-inbox")
+    ingest_inbox_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    ingest_inbox_parser.add_argument("--mode")
+    ingest_inbox_parser.add_argument("--provider")
+    ingest_inbox_parser.add_argument("--quality")
+    ingest_inbox_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+
     for command in ("doctor", "status", "reconcile"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--root", default=".", help="Path used for project discovery.")
@@ -42,6 +49,13 @@ def run(args: argparse.Namespace) -> RunSummary:
         return pipeline.ingest(
             Path(args.source),
             start=Path.cwd(),
+            mode=args.mode,
+            provider=args.provider,
+            quality=args.quality,
+        )
+    if args.command == "ingest-inbox":
+        return pipeline.ingest_inbox(
+            Path(args.root),
             mode=args.mode,
             provider=args.provider,
             quality=args.quality,

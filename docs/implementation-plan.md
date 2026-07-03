@@ -159,6 +159,7 @@ V1 commands:
 ```text
 meeting-ingest init
 meeting-ingest ingest <source> [--mode summary-plus-verbatim] [--provider mock|anthropic] [--quality fast|balanced|deep] [--json]
+meeting-ingest ingest-inbox [--json]
 meeting-ingest doctor
 meeting-ingest status
 meeting-ingest reconcile
@@ -169,6 +170,10 @@ meeting-ingest reconcile
 This auto-init decision should be confirmed before implementation.
 
 `reconcile` is included in v1 as a narrow recovery command for sources whose primary artifacts are ready but archive/reconcile did not complete.
+
+`ingest-inbox` should process files directly under `_inbox/` one at a time and skip `_inbox/_done/`. Unsupported formats should be reported as per-file failures using normal ingest/quarantine behavior. It should return a batch JSON summary with per-source results and continue processing after recoverable per-file failures.
+
+Future enhancement: add controlled parallelism for inbox ingestion, such as `--jobs`, or harness-level fan-out to multiple focused sub-agents. This should wait until the engine has explicit coordination for shared ledger writes, lock behavior, provider rate limits, and per-file reporting.
 
 ## Project Layout
 

@@ -12,6 +12,7 @@ from meeting_ingest.doctor import find_issues, project_status
 from meeting_ingest.errors import (
     ConfigError,
     EXIT_ARTIFACT_WRITE,
+    EXIT_GENERAL_FAILURE,
     MeetingIngestError,
     PipelineNotImplementedError,
     ProviderError,
@@ -76,6 +77,106 @@ def ingest(
             selected_quality=selected_quality,
             clock=clock,
         )
+
+
+def ingest_inbox(
+    start: Path,
+    *,
+    mode: str | None = None,
+    provider: str | None = None,
+    quality: str | None = None,
+    clock: Clock | None = None,
+) -> RunSummary:
+    config, paths = load_project(start)
+    selected_mode = mode or config.default_mode
+    selected_provider = provider or config.default_provider
+    selected_quality = quality or config.default_quality
+    _validate_ingest_options(config, selected_mode, selected_provider)
+
+    sources = _direct_inbox_sources(paths)
+    results: list[dict[str, object]] = []
+    batch_errors: list[dict[str, object]] = []
+    for source in sources:
+        relative_source = str(source.relative_to(paths.meetings_root))
+        try:
+            summary = ingest(
+                source,
+                start=paths.meetings_root,
+                mode=selected_mode,
+                provider=selected_provider,
+                quality=selected_quality,
+                clock=clock,
+            )
+        except MeetingIngestError as exc:
+            error_block = exc.to_error_block()
+            batch_errors.append({"source": relative_source, **error_block})
+            results.append(
+                {
+                    "source": relative_source,
+                    "status": "failed",
+                    "exit_code": exc.exit_code,
+                    "errors": [error_block],
+                    "artifacts": [],
+                }
+            )
+            continue
+
+        summary_data = summary.to_dict()
+        results.append(
+            {
+                "source": relative_source,
+                "status": summary.status,
+                "exit_code": summary.exit_code,
+                "source_sha256": summary.source_sha256,
+                "meeting_id": summary.meeting_id,
+                "ingest_run_id": summary.ingest_run_id,
+                "artifacts": summary.artifacts,
+                "warnings": summary.warnings,
+                "errors": summary.errors,
+                "details": {
+                    key: value
+                    for key, value in summary_data.items()
+                    if key
+                    not in {
+                        "schema_version",
+                        "status",
+                        "exit_code",
+                        "source_sha256",
+                        "meeting_id",
+                        "ingest_run_id",
+                        "artifacts",
+                        "warnings",
+                        "errors",
+                    }
+                },
+            }
+        )
+
+    succeeded = sum(1 for result in results if result["status"] in {"success", "no_op"})
+    failed = sum(1 for result in results if result["status"] == "failed")
+    if not results:
+        status = "no_op"
+        exit_code = 0
+    elif failed:
+        status = "partial_success" if succeeded else "failed"
+        exit_code = EXIT_GENERAL_FAILURE
+    else:
+        status = "success"
+        exit_code = 0
+
+    return RunSummary(
+        status=status,
+        exit_code=exit_code,
+        errors=batch_errors,
+        details={
+            "command": "ingest-inbox",
+            "meetings_root": str(paths.meetings_root),
+            "processed": len(results),
+            "succeeded": succeeded,
+            "failed": failed,
+            "results": results,
+        },
+    )
 
 
 def _ingest_locked(
@@ -375,6 +476,12 @@ def _inbox_sources(paths: ProjectPaths) -> list[Path]:
             continue
         sources.append(path)
     return sources
+
+
+def _direct_inbox_sources(paths: ProjectPaths) -> list[Path]:
+    if not paths.inbox.exists():
+        return []
+    return sorted(path for path in paths.inbox.iterdir() if path.is_file())
 
 
 def _write_artifact(path: Path, markdown: str) -> None:

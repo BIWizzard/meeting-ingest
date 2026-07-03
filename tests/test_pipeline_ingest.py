@@ -21,7 +21,7 @@ from meeting_ingest.errors import (
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
-from meeting_ingest.pipeline import ingest, reconcile
+from meeting_ingest.pipeline import ingest, ingest_inbox, reconcile
 from meeting_ingest.schema import ProviderResponse
 
 
@@ -108,6 +108,80 @@ def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path
     assert signal_payload["signal_type"] == "explicit_ask"
     assert signal_payload["evidence"]["kind"] == "paraphrase"
     assert "| `sig-20260703-001` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown
+
+
+def test_ingest_inbox_processes_direct_inbox_sources_and_continues_after_failures(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    good = paths.inbox / "2026-07-03-kushali-sync.txt"
+    good.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+    bad = paths.inbox / "2026-07-03-unsupported.pdf"
+    bad.write_text("not supported", encoding="utf-8")
+    nested = paths.inbox / "nested"
+    nested.mkdir()
+    nested_source = nested / "2026-07-03-nested.txt"
+    nested_source.write_text("Ken: Nested\n", encoding="utf-8")
+    done_source = paths.inbox_done / "2026-07-03-done.txt"
+    done_source.write_text("Ken: Done\n", encoding="utf-8")
+
+    summary = ingest_inbox(
+        tmp_path,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    data = summary.to_dict()
+
+    assert summary.status == "partial_success"
+    assert summary.exit_code == 1
+    assert data["processed"] == 2
+    assert data["succeeded"] == 1
+    assert data["failed"] == 1
+    assert [result["source"] for result in data["results"]] == [
+        "_inbox/2026-07-03-kushali-sync.txt",
+        "_inbox/2026-07-03-unsupported.pdf",
+    ]
+    assert data["results"][0]["status"] == "success"
+    assert data["results"][0]["artifacts"][0]["path"] == "2026-07-03-kushali-sync.md"
+    assert data["results"][1]["status"] == "failed"
+    assert data["results"][1]["errors"][0]["code"] == "unsupported_source_format"
+    assert not good.exists()
+    assert not bad.exists()
+    assert nested_source.exists()
+    assert done_source.exists()
+    assert (paths.inbox_done / "2026-07-03-kushali-sync.txt").exists()
+    assert list(paths.quarantine.glob("*.pdf"))
+
+
+def test_ingest_inbox_empty_inbox_returns_no_op(tmp_path: Path) -> None:
+    init_project(tmp_path)
+
+    summary = ingest_inbox(tmp_path)
+    data = summary.to_dict()
+
+    assert summary.status == "no_op"
+    assert summary.exit_code == 0
+    assert data["processed"] == 0
+    assert data["results"] == []
+
+
+def test_ingest_inbox_reports_duplicate_sources_as_no_op(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+    ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    redrop = paths.inbox / "2026-07-03-kushali-sync.txt"
+    redrop.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    summary = ingest_inbox(
+        tmp_path,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)),
+    )
+    data = summary.to_dict()
+
+    assert summary.status == "success"
+    assert data["processed"] == 1
+    assert data["succeeded"] == 1
+    assert data["failed"] == 0
+    assert data["results"][0]["status"] == "no_op"
+    assert data["results"][0]["details"]["existing_artifacts"] == {"summary-plus-verbatim": "2026-07-03-kushali-sync.md"}
 
 
 def test_artifact_write_failure_stops_before_ledger_archive_and_reconcile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
