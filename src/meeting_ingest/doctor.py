@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from meeting_ingest.ledger import read_records
+from meeting_ingest.ledger import read_records, read_records_with_issues
 from meeting_ingest.locking import inspect_lock, lock_path
 from meeting_ingest.paths import ProjectPaths
 
@@ -33,6 +33,16 @@ def project_status(paths: ProjectPaths) -> dict[str, object]:
 
 def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
     issues: list[DoctorIssue] = []
+    records, ledger_issues = read_records_with_issues(paths.ledger)
+    for issue in ledger_issues:
+        issues.append(
+            DoctorIssue(
+                code=issue.code,
+                message=issue.message,
+                path=f"{paths.ledger.name}:line:{issue.line_number}",
+            )
+        )
+
     lock_info = inspect_lock(lock_path(paths.cache))
     if lock_info is not None and lock_info.stale:
         issues.append(
@@ -52,7 +62,7 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
             )
         )
 
-    for record in read_records(paths.ledger):
+    for record in records:
         artifacts = record.get("artifacts", {})
         if isinstance(artifacts, dict):
             for artifact in artifacts.values():

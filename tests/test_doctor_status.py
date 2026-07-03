@@ -73,3 +73,19 @@ def test_doctor_reports_missing_ledger_artifact(tmp_path: Path) -> None:
         "message": "Ledger references a missing path.",
         "path": result.artifacts[0]["path"],
     } in summary.details["issues"]
+
+
+def test_doctor_reports_malformed_ledger_line(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    paths.ledger.write_text("{not-json\n", encoding="utf-8")
+
+    summary = doctor(tmp_path)
+
+    assert summary.status == "issues_found"
+    assert summary.details["issues"] == [
+        {
+            "code": "malformed_ledger_json",
+            "message": "Ledger line is not valid JSON: Expecting property name enclosed in double quotes",
+            "path": "_ledger.jsonl:line:1",
+        }
+    ]

@@ -40,6 +40,13 @@ class LedgerSnapshot:
         }
 
 
+@dataclass(frozen=True)
+class LedgerReadIssue:
+    line_number: int
+    code: str
+    message: str
+
+
 def append_snapshot(ledger_path: Path, snapshot: LedgerSnapshot, *, clock: Clock | None = None) -> None:
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     with ledger_path.open("a", encoding="utf-8") as ledger:
@@ -48,13 +55,40 @@ def append_snapshot(ledger_path: Path, snapshot: LedgerSnapshot, *, clock: Clock
 
 
 def read_records(ledger_path: Path) -> list[dict[str, Any]]:
-    if not ledger_path.exists():
-        return []
-    records: list[dict[str, Any]] = []
-    for line in ledger_path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            records.append(json.loads(line))
+    records, _ = read_records_with_issues(ledger_path)
     return records
+
+
+def read_records_with_issues(ledger_path: Path) -> tuple[list[dict[str, Any]], list[LedgerReadIssue]]:
+    if not ledger_path.exists():
+        return [], []
+    records: list[dict[str, Any]] = []
+    issues: list[LedgerReadIssue] = []
+    for line_number, line in enumerate(ledger_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            issues.append(
+                LedgerReadIssue(
+                    line_number=line_number,
+                    code="malformed_ledger_json",
+                    message=f"Ledger line is not valid JSON: {exc.msg}",
+                )
+            )
+            continue
+        if not _is_valid_record(record):
+            issues.append(
+                LedgerReadIssue(
+                    line_number=line_number,
+                    code="invalid_ledger_record",
+                    message="Ledger line is missing required current-state fields.",
+                )
+            )
+            continue
+        records.append(record)
+    return records, issues
 
 
 def latest_record_for_source(ledger_path: Path, source_sha256: str) -> dict[str, Any] | None:
@@ -63,3 +97,9 @@ def latest_record_for_source(ledger_path: Path, source_sha256: str) -> dict[str,
         if record.get("source_sha256") == source_sha256:
             latest = record
     return latest
+
+
+def _is_valid_record(record: object) -> bool:
+    if not isinstance(record, dict):
+        return False
+    return all(record.get(key) for key in ("schema_version", "event", "source_sha256", "meeting_id"))
