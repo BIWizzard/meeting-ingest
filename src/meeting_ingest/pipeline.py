@@ -27,7 +27,7 @@ from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, ProviderResponse, ProviderSignal, SignalRecord
+from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, ProviderResponse, ProviderSignal, SignalRecord, validate_provider_response
 from meeting_ingest.signals import write_signal_jsonl
 
 
@@ -103,6 +103,7 @@ def _ingest_locked(
             quality=selected_quality,
         )
     )
+    validate_provider_response(provider_response)
     artifact_path = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
     artifact_slug = _slug(provider_response.title)
     signal_path = paths.signals / f"{meeting_id}.jsonl"
@@ -439,8 +440,10 @@ def _signal_records_from_provider(
     records: list[SignalRecord] = []
     for index, signal in enumerate(signals, start=1):
         if isinstance(signal, SignalRecord):
-            records.append(signal)
-            continue
+            raise ConfigError(
+                "Provider returned enriched SignalRecord; providers must return ProviderSignal candidates.",
+                code="invalid_provider_signal",
+            )
         if isinstance(signal, ProviderSignal):
             records.append(
                 SignalRecord(

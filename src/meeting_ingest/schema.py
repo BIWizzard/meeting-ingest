@@ -173,6 +173,25 @@ class ProviderValidationError(MeetingIngestError):
 
 
 def validate_provider_response(response: ProviderResponse) -> None:
+    _validate_response_base(response)
+    for signal in response.communication_signals:
+        if not isinstance(signal, ProviderSignal):
+            raise ProviderValidationError("Provider communication_signals must contain ProviderSignal records.")
+        validate_provider_signal(signal)
+
+
+def validate_render_response(response: ProviderResponse) -> None:
+    _validate_response_base(response)
+    signal_ids: list[str] = []
+    for signal in response.communication_signals:
+        if not isinstance(signal, SignalRecord):
+            raise ProviderValidationError("Rendered communication_signals must contain SignalRecord records.")
+        validate_signal_record(signal)
+        signal_ids.append(signal.signal_id)
+    _validate_ids("communication_signals", signal_ids)
+
+
+def _validate_response_base(response: ProviderResponse) -> None:
     if not response.title.strip():
         raise ProviderValidationError("Provider response title is required.")
     if not response.tl_dr.strip():
@@ -182,8 +201,18 @@ def validate_provider_response(response: ProviderResponse) -> None:
     _validate_ids("action_items", [item.id for item in response.action_items])
     _validate_ids("stakeholder_asks", [ask.id for ask in response.stakeholder_asks])
     _validate_ids("dependencies_risks", [item.id for item in response.dependencies_risks])
-    _validate_ids("communication_signals", [signal.signal_id for signal in response.communication_signals])
     _validate_ids("open_questions", [question.id for question in response.open_questions])
+
+
+def validate_provider_signal(signal: ProviderSignal) -> None:
+    _require(signal.signal_type in SIGNAL_TYPES, f"Unsupported signal_type {signal.signal_type!r}.")
+    _require(bool(signal.stakeholder_name.strip()), "stakeholder_name is required.")
+    _require(bool(signal.summary.strip()), "summary is required.")
+    _require(signal.evidence.kind in EVIDENCE_KINDS, f"Unsupported evidence.kind {signal.evidence.kind!r}.")
+    _require(bool(signal.evidence.text.strip()), "evidence.text is required.")
+    _require(signal.inference_level in INFERENCE_LEVELS, f"Unsupported inference_level {signal.inference_level!r}.")
+    _require(signal.confidence in CONFIDENCE_VALUES, f"Unsupported confidence {signal.confidence!r}.")
+    _require(signal.recurrence in RECURRENCE_VALUES, f"Unsupported recurrence {signal.recurrence!r}.")
 
 
 def validate_signal_record(signal: SignalRecord) -> None:

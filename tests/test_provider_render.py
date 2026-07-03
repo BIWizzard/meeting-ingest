@@ -9,6 +9,7 @@ from meeting_ingest.providers.mock import MockProvider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.schema import (
     ProviderResponse,
+    ProviderSignal,
     ProviderValidationError,
     SignalEvidence,
     SignalRecord,
@@ -36,6 +37,26 @@ def test_mock_provider_returns_valid_deterministic_response() -> None:
 def test_validate_provider_response_rejects_missing_title() -> None:
     with pytest.raises(ProviderValidationError):
         validate_provider_response(ProviderResponse(title="", tl_dr="Summary"))
+
+
+def test_validate_provider_response_accepts_lightweight_provider_signals() -> None:
+    response = ProviderResponse(
+        title="Signals",
+        tl_dr="Summary",
+        communication_signals=[
+            ProviderSignal(
+                signal_type="explicit_ask",
+                stakeholder_id="person-kushali",
+                stakeholder_name="Kushali",
+                summary="Asked for source clarity.",
+                evidence=SignalEvidence(kind="paraphrase", text="Asked for source clarity."),
+                inference_level="explicit",
+                confidence="high",
+            )
+        ],
+    )
+
+    validate_provider_response(response)
 
 
 def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcript() -> None:
@@ -170,3 +191,37 @@ def test_render_summary_plus_verbatim_derives_signal_table_from_record() -> None
     )
 
     assert "| `sig-20260703-001` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown
+
+
+def test_render_summary_plus_verbatim_rejects_unenriched_provider_signals() -> None:
+    response = ProviderResponse(
+        title="Signals",
+        tl_dr="Summary",
+        communication_signals=[
+            ProviderSignal(
+                signal_type="explicit_ask",
+                stakeholder_id="person-kushali",
+                stakeholder_name="Kushali",
+                summary="Asked for source clarity.",
+                evidence=SignalEvidence(kind="paraphrase", text="Asked for source clarity."),
+                inference_level="explicit",
+                confidence="high",
+            )
+        ],
+    )
+    context = RenderContext(
+        meeting_id="mtg-20260703-f953bbd2",
+        ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
+        source_name="source.txt",
+        source_sha256="f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8",
+        slug="signals",
+        effective_date="2026-07-03",
+    )
+
+    with pytest.raises(ProviderValidationError, match="SignalRecord"):
+        render_summary_plus_verbatim(
+            response,
+            "Ken: Hello\n",
+            context,
+            clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+        )
