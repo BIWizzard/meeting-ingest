@@ -13,11 +13,14 @@ class RenderContext:
     meeting_id: str
     ingest_run_id: str
     source_name: str
+    source_sha256: str
+    slug: str
     effective_date: str
     output_mode: str = "summary-plus-verbatim"
     transcript_policy: str = "cleaned-verbatim"
-    model_alias: str = "mock"
-    model_id: str = "mock"
+    provider: str = "mock"
+    model_alias: str = "balanced"
+    model_id: str = "none"
     tool_version: str = "0.1.0"
 
 
@@ -53,18 +56,22 @@ def _front_matter(response: ProviderResponse, context: RenderContext, generated_
     return [
         "---",
         'schema_version: "1.0"',
+        "artifact_type: meeting",
         f"meeting_id: {context.meeting_id}",
         f"ingest_run_id: {context.ingest_run_id}",
-        f"generated_at: {generated_at}",
-        f"date: {context.effective_date}",
-        f"title: {_quote(response.title)}",
-        f"meeting_type: {response.meeting_type}",
         f"output_mode: {context.output_mode}",
+        f"title: {_quote(response.title)}",
+        f"slug: {context.slug}",
+        f"date: {context.effective_date}",
+        f"meeting_type: {response.meeting_type}",
+        f"source_file: {_quote(context.source_name)}",
+        f"source_sha256: {context.source_sha256}",
         f"transcript_policy: {context.transcript_policy}",
-        f"source: {_quote(context.source_name)}",
+        f"provider: {context.provider}",
         f"model_alias: {context.model_alias}",
         f"model_id: {context.model_id}",
-        f"generated_by: meeting-ingest/{context.tool_version}",
+        f"generated_by: meeting-ingest {context.tool_version}",
+        f"generated_at: {generated_at}",
         "---",
         "",
     ]

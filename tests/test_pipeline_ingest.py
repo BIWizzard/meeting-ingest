@@ -91,6 +91,26 @@ def test_cli_ingest_json_from_nested_project_directory(tmp_path: Path, monkeypat
     assert (paths.inbox_done / source.name).exists()
 
 
+def test_cli_ingest_uses_config_defaults_when_flags_are_omitted(tmp_path: Path, monkeypatch, capsys) -> None:
+    paths = init_project(tmp_path)
+    config_text = paths.config_path.read_text(encoding="utf-8")
+    paths.config_path.write_text(config_text.replace('default_quality = "balanced"', 'default_quality = "fast"'), encoding="utf-8")
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(["ingest", str(source), "--json"])
+
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert summary["provider"] == "mock"
+    assert summary["quality"] == "fast"
+    artifact = paths.meetings_root / summary["artifacts"][0]["path"]
+    assert "model_alias: fast" in artifact.read_text(encoding="utf-8")
+
+
 def test_pipeline_ingest_archives_but_skips_reconcile_for_external_source(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = tmp_path / "2026-07-03-external-sync.txt"

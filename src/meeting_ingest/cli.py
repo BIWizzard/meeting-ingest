@@ -22,9 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     ingest_parser = subparsers.add_parser("ingest")
     ingest_parser.add_argument("source")
-    ingest_parser.add_argument("--mode", default="summary-plus-verbatim")
-    ingest_parser.add_argument("--provider", default="mock")
-    ingest_parser.add_argument("--quality", default="balanced")
+    ingest_parser.add_argument("--mode")
+    ingest_parser.add_argument("--provider")
+    ingest_parser.add_argument("--quality")
     ingest_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
     for command in ("doctor", "status", "reconcile"):

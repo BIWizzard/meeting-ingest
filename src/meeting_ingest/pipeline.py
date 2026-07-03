@@ -92,6 +92,7 @@ def _ingest_locked(
         )
     )
     artifact_path = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
+    artifact_slug = _slug(provider_response.title)
     markdown = render_summary_plus_verbatim(
         provider_response,
         extraction.normalized_text,
@@ -99,10 +100,13 @@ def _ingest_locked(
             meeting_id=meeting_id,
             ingest_run_id=ingest_run_id,
             source_name=source.name,
+            source_sha256=source_sha256,
+            slug=artifact_slug,
             effective_date=extraction.effective_date.value,
             output_mode=selected_mode,
+            provider=selected_provider,
             model_alias=selected_quality,
-            model_id=selected_provider,
+            model_id="none" if selected_provider == "mock" else selected_provider,
         ),
         clock=clock,
     )
@@ -186,7 +190,7 @@ def _ingest_locked(
             "quality": selected_quality,
             "title": {
                 "value": provider_response.title,
-                "slug": _slug(provider_response.title),
+                "slug": artifact_slug,
                 "confidence": "medium",
                 "rename_suggestion": None,
             },

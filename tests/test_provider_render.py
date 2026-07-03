@@ -36,6 +36,8 @@ def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcri
         meeting_id="mtg-20260703-f953bbd2",
         ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
         source_name="2026-07-03-kushali-sync.txt",
+        source_sha256="f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8",
+        slug="kushali-sync",
         effective_date="2026-07-03",
     )
 
@@ -63,6 +65,12 @@ def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcri
     for heading in required_headings:
         assert heading in markdown
     assert 'schema_version: "1.0"' in markdown
+    assert "artifact_type: meeting" in markdown
+    assert "slug: kushali-sync" in markdown
+    assert "source_file: \"2026-07-03-kushali-sync.txt\"" in markdown
+    assert "source_sha256: f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8" in markdown
+    assert "provider: mock" in markdown
+    assert "model_id: none" in markdown
     assert "generated_at: 20260703T120000Z" in markdown
     assert "<!-- transcript:begin policy=cleaned-verbatim -->" in markdown
     assert markdown.endswith("<!-- transcript:end -->")
@@ -79,6 +87,8 @@ def test_render_summary_plus_verbatim_escapes_table_cells() -> None:
         meeting_id="mtg-20260703-f953bbd2",
         ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
         source_name="source.txt",
+        source_sha256="f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8",
+        slug="escaping",
         effective_date="2026-07-03",
     )
 
