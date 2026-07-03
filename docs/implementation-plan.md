@@ -597,6 +597,8 @@ Deliverables:
 - Supa Code / T3 Code / Claude Code / Codex usage notes
 - tests proving externally supplied provider JSON passes the same schema, renderer, signal, ledger, archive, and reconcile flow
 
+The handoff contract is now specified in `docs/provider-handoff-contract.md`. Implementation should add shared JSON parsing for the existing API-backed provider payload and the host/session response envelope, then route externally supplied provider output into the pipeline immediately before `validate_provider_response`.
+
 Lead review:
 
 - verify subscription-backed workflows do not require API keys

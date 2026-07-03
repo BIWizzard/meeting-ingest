@@ -59,6 +59,8 @@ Host/session-backed providers are required for the maintainer's personal workflo
 
 Host/session-backed providers should keep large transcript/model-extraction context out of the main session when practical. They must still return the same validated structured response shape as API providers. They should not bypass deterministic engine behavior, artifact rendering, signal enrichment, ledger writes, archive, or reconcile.
 
+The host/session-backed handoff should use engine-created request JSON and sub-agent-created response JSON. The response envelope carries identity metadata, while the nested `response` payload maps directly to `ProviderResponse`; the engine verifies identity fields and routes that payload through the same validation and ingest path as API-backed provider output.
+
 ### 8. `iQ Context` is separate but complementary
 
 Relationship:
@@ -105,6 +107,8 @@ The engine should remain a normal CLI/library, while Claude, Codex, Supa Code, a
 Normal use should work from inside the active agentic harness. The user should not need to exit Supa Code or T3 Code into a raw CLI session to ingest meeting documents.
 
 For subscription-backed harnesses, normal use should also support a path where a delegated extraction sub-agent performs the model extraction step through the current session rather than requiring an Anthropic/OpenAI API key. This keeps transcript-heavy context out of the main session. This is separate from API-backed provider adapters, which remain important for portability and marketability.
+
+The dedicated extraction sub-agent should return provider-level JSON only. It must not produce markdown artifacts, enriched signal records, ledger snapshots, archive copies, or reconcile moves.
 
 ### 12. Output filenames must be scannable
 

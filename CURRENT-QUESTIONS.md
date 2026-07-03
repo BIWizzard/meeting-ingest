@@ -255,6 +255,8 @@ Why it matters:
 Resolved direction:
 - CLI should be a thin adapter over a reusable pipeline/orchestrator API
 - `schema.py`, shared errors, shared fixtures, and docs should be lead-owned unless explicitly delegated
+- host/session-backed provider extraction uses a request/response JSON handoff documented in `docs/provider-handoff-contract.md`
+- the dedicated extraction sub-agent returns only provider-level JSON; the engine still validates output, enriches signals, renders markdown, writes the ledger, archives, reconciles, and emits the run summary
 
 ### 14. How should stakeholder communication signals be modeled?
 

@@ -264,6 +264,8 @@ Provider types:
 
 Both provider types must produce the same structured provider response and pass the same validation. Host/session-backed providers should delegate transcript-heavy extraction to dedicated sub-agents when practical, so the main session stays focused on orchestration, review, and user interaction. Host/session-backed providers may change how the model judgment is obtained, but they must not change artifact rendering, signal enrichment, ledger semantics, archive, reconcile, or run-summary behavior.
 
+The host/session handoff contract is defined in `docs/provider-handoff-contract.md`. In short: the engine writes a transcript-bearing provider request file, a dedicated extraction sub-agent writes a provider response envelope whose `response` payload maps directly to `ProviderResponse`, and the engine ingests that external response through the same validation, signal enrichment, renderer, ledger, archive, reconcile, and run-summary path as API-backed providers.
+
 ## Model Right-Sizing
 
 Proposed quality modes:
@@ -300,6 +302,7 @@ Design implication:
 - wrappers should not manually implement ledger/archive/reconcile behavior
 - wrappers may delegate to a focused sub-agent
 - wrappers may support a host/session-backed provider mode where a dedicated sub-agent in the active subscription-backed model session returns structured extraction JSON for the engine to validate and render
+- host/session-backed provider JSON must enter the engine as provider output before signal enrichment and rendering, not as markdown or enriched signal records
 - near-term batch inbox ingest should be orchestrated by one focused sub-agent calling the engine sequentially
 - CLI output should include a machine-readable run summary with a stable JSON shape
 - JSON status should distinguish success, no-op, partial/derived-work issues, and failure states

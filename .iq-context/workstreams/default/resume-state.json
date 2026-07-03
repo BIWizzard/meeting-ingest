@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Resume with host/session-backed provider design: define the sub-agent JSON handoff contract and how the engine ingests externally supplied provider output."
+    "Implement host/session-backed provider path: factor shared ProviderResponse JSON parsing out of anthropic provider, add request/response envelope dataclasses or helpers, add --provider session/--provider-response handling, and test that externally supplied provider JSON uses the same validation, signal enrichment, renderer, ledger, archive, and reconcile flow."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Resume with host/session-backed provider design: define the sub-agent JSON handoff contract and how the engine ingests externally supplied provider output.",
-  "updated_at": "2026-07-03T18:47:13.076Z"
+  "resume_from": "Resume with: Implement host/session-backed provider path: factor shared ProviderResponse JSON parsing out of anthropic provider, add request/response envelope dataclasses or helpers, add --provider session/--provider-response handling, and test that externally supplied provider JSON uses the same validation, signal enrichment, renderer, ledger, archive, and reconcile flow.",
+  "updated_at": "2026-07-03T18:53:27.197Z"
 }
