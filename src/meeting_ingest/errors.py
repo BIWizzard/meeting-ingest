@@ -1,0 +1,69 @@
+"""Shared error taxonomy for CLI, pipeline, and tests."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+EXIT_SUCCESS = 0
+EXIT_GENERAL_FAILURE = 1
+EXIT_USAGE_OR_CONFIG = 2
+EXIT_UNSUPPORTED_SOURCE = 3
+EXIT_EXTRACTION_FAILURE = 4
+EXIT_PROVIDER_FAILURE = 5
+EXIT_PROVIDER_VALIDATION = 6
+EXIT_ARTIFACT_WRITE = 7
+EXIT_LEDGER_WRITE = 8
+EXIT_ARCHIVE_RECONCILE = 9
+EXIT_LOCK_CONFLICT = 10
+EXIT_BLOCKING_DERIVED_FAILURE = 11
+
+
+@dataclass
+class MeetingIngestError(Exception):
+    """Base typed error that can be rendered into run-summary JSON."""
+
+    phase: str
+    code: str
+    message: str
+    exit_code: int = EXIT_GENERAL_FAILURE
+    recoverable: bool = False
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        Exception.__init__(self, self.message)
+
+    def to_error_block(self) -> dict[str, Any]:
+        block: dict[str, Any] = {
+            "phase": self.phase,
+            "code": self.code,
+            "message": self.message,
+            "recoverable": self.recoverable,
+        }
+        if self.details:
+            block["details"] = self.details
+        return block
+
+
+class ConfigError(MeetingIngestError):
+    def __init__(self, message: str, *, code: str = "invalid_config", recoverable: bool = True) -> None:
+        super().__init__(
+            phase="config",
+            code=code,
+            message=message,
+            exit_code=EXIT_USAGE_OR_CONFIG,
+            recoverable=recoverable,
+        )
+
+
+class PipelineNotImplementedError(MeetingIngestError):
+    def __init__(self, command: str) -> None:
+        super().__init__(
+            phase="pipeline",
+            code="not_implemented",
+            message=f"`{command}` is not implemented yet.",
+            exit_code=EXIT_GENERAL_FAILURE,
+            recoverable=False,
+            details={"command": command},
+        )

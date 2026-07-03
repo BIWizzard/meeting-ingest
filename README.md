@@ -79,7 +79,7 @@ It should stay focused on:
 
 ## Current Status
 
-Early scaffold with a clear direction.
+Early Python scaffold with a clear direction.
 
 The immediate exploration areas are:
 
@@ -89,6 +89,20 @@ The immediate exploration areas are:
 - provider abstraction
 - roster storage design
 - migration path from the current Claude-first implementation
+
+## Development
+
+Run the current scaffold tests with:
+
+```bash
+python3 -m pytest
+```
+
+Initialize a project-local meetings layout with:
+
+```bash
+python3 -m meeting_ingest.cli init --root . --json
+```
 
 ## Start Here
 
