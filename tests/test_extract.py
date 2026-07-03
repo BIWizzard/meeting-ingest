@@ -46,6 +46,21 @@ def test_extract_vtt_converts_voice_tags_to_speaker_lines(tmp_path: Path) -> Non
     assert result.normalized_text == "Ken Graham: Hello there\n"
 
 
+def test_extract_vtt_strips_teams_cue_ids_and_joins_multiline_voice_tags(tmp_path: Path) -> None:
+    source = tmp_path / "meeting.vtt"
+    source.write_text(
+        "WEBVTT\n\n953680fb-6edd-433a-8b2f-f229ee593292/59-0\n"
+        "00:05:05.847 --> 00:05:08.647\n"
+        "<v Ken Graham>Hang out with the kids on Father's Day,\n"
+        "and that's awesome.</v>\n",
+        encoding="utf-8",
+    )
+
+    result = extract_source(source)
+
+    assert result.normalized_text == "Ken Graham: Hang out with the kids on Father's Day, and that's awesome.\n"
+
+
 def test_extract_docx_reads_document_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "20260703-meeting.docx"
     document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -64,6 +79,24 @@ def test_extract_docx_reads_document_paragraphs(tmp_path: Path) -> None:
     assert result.source_format == "docx"
     assert result.normalized_text == "First paragraph.\nSecond paragraph.\n"
     assert result.effective_date.value == "2026-07-03"
+
+
+def test_extract_docx_normalizes_teams_speaker_timestamps(tmp_path: Path) -> None:
+    source = tmp_path / "20260703-meeting.docx"
+    document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Chandra McCrary 0:05Is anybody else coming?</w:t></w:r></w:p>
+    <w:p><w:r><w:t>John Wilson 12:31That works.</w:t></w:r></w:p>
+  </w:body>
+</w:document>
+"""
+    with ZipFile(source, "w") as docx:
+        docx.writestr("word/document.xml", document_xml)
+
+    result = extract_source(source)
+
+    assert result.normalized_text == "Chandra McCrary (0:05): Is anybody else coming?\nJohn Wilson (12:31): That works.\n"
 
 
 def test_infer_effective_date_falls_back_to_file_mtime(tmp_path: Path) -> None:

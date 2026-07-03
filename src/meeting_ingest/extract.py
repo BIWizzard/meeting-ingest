@@ -10,7 +10,7 @@ from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
 from meeting_ingest.errors import SourceExtractionError, UnsupportedSourceFormatError
-from meeting_ingest.transcript import normalize_text, strip_vtt_markup
+from meeting_ingest.transcript import normalize_teams_docx_text, normalize_text, strip_vtt_markup
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,7 @@ def extract_source(path: Path) -> SourceExtraction:
         source_format = "vtt"
     elif suffix == ".docx":
         raw_text = _read_docx(path)
-        normalized = normalize_text(raw_text)
+        normalized = normalize_teams_docx_text(raw_text)
         source_format = "docx"
     else:
         raise UnsupportedSourceFormatError(str(path))
