@@ -52,10 +52,10 @@ Proposed phases:
 6. run provider-backed structured extraction when required by mode
 7. render deterministic markdown artifact
 8. write structured signals
-9. write ledger entry/update with primary artifact and signal status
+9. write `primary_artifacts_ready` ledger snapshot with primary artifact and signal status
 10. archive canonical processed copy
 11. reconcile inbox source only after confirmed primary success
-12. emit run summary and report primary artifacts ready
+12. write `ingest_completed` ledger snapshot, emit run summary, and report primary artifacts ready
 13. update rolling stakeholder playbook inputs or derived playbook as separately-statused post-output work
 
 The provider should not own final markdown shape. The provider should return structured content; the renderer should produce stable markdown.
@@ -86,11 +86,12 @@ Structure:
 4. key topics
 5. decisions
 6. commitments and action items
-7. dependencies and risks
-8. stakeholder asks
+7. stakeholder asks
+8. dependencies and risks
 9. communication signals
 10. open questions
-11. verbatim transcript
+11. cross-references
+12. verbatim transcript
 
 The markdown should be optimized for agent consumption as well as human reading. Stable headings, predictable metadata, explicit identifiers, and structured tables/lists are preferred over prose-only summaries.
 
@@ -229,6 +230,8 @@ Source-level ledger is easier for user-facing idempotency: if the same transcrip
 
 The append-only ledger should define a current-state rule, such as "last valid record wins per source hash." This allows state repair, regeneration, and derived-work status updates without rewriting history.
 
+Ledger records should be complete current-state snapshots, not deltas. Event values should include `primary_artifacts_ready`, `ingest_completed`, `ingest_failed`, `source_quarantined`, `artifact_regenerated`, `title_repaired`, and `derived_updated`.
+
 The ledger should support regeneration from the processed archive copy, because a source may be reconciled out of `_inbox` before a later artifact mode or renderer repair is requested.
 
 ## Provider Contract
@@ -290,7 +293,8 @@ Design implication:
 - wrappers should not manually implement ledger/archive/reconcile behavior
 - wrappers may delegate to a focused sub-agent
 - CLI output should include a machine-readable run summary with a stable JSON shape
-- exit codes should distinguish success, partial success, duplicate/no-op, validation failure, provider failure, and filesystem/reconcile failure
+- JSON status should distinguish success, no-op, partial/derived-work issues, and failure states
+- exit codes should distinguish success-class outcomes from validation failure, provider failure, filesystem/reconcile failure, and lock/concurrency conflicts
 
 ## Rolling Stakeholder Playbook
 
@@ -330,7 +334,7 @@ Suggested fields:
   "schema_version": "1.0",
   "signal_id": "sig-20260612-001",
   "meeting_id": "mtg-20260612-71e6b28b",
-  "ingest_run_id": "ingest-20260612-71e6b28b",
+  "ingest_run_id": "ingest-20260612-20260703T120000Z-a1b2",
   "effective_at": "2026-06-12",
   "recorded_at": "2026-06-12T13:36:54Z",
   "signal_type": "explicit_ask",
@@ -420,7 +424,7 @@ Requirements:
 Recommended front matter:
 
 ```yaml
-schema_version: 1.0
+schema_version: "1.0"
 meeting_id: mtg-20260612-71e6b28b
 title: Kushali x Ken - AdBook fact_revenue detail design
 slug: kushali-adbook-fact-revenue-detail
@@ -428,7 +432,7 @@ date: 2026-06-12
 output_mode: summary-plus-verbatim
 source_file: Call with G, Kushali (5).docx
 source_sha256: 2d17...
-ingest_run_id: ingest-20260612-71e6b28b
+ingest_run_id: ingest-20260612-20260703T120000Z-a1b2
 transcript_policy: cleaned-verbatim
 provider: anthropic
 model_alias: balanced

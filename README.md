@@ -96,5 +96,6 @@ The immediate exploration areas are:
 - [Personal Workflow Scope](docs/personal-workflow-scope.md)
 - [Current Output Evaluation](docs/current-output-evaluation.md)
 - [Design Proposal](docs/design-proposal.md)
+- [Artifact Contract](docs/artifact-contract.md)
 
-The context primer is the agent-optimized starting point for architecture and roadmap exploration. The personal workflow scope captures the initial product requirements that should guide near-term design. The current output evaluation summarizes what to preserve and improve from real Claude skill outputs. The design proposal turns those findings into an initial implementation shape.
+The context primer is the agent-optimized starting point for architecture and roadmap exploration. The personal workflow scope captures the initial product requirements that should guide near-term design. The current output evaluation summarizes what to preserve and improve from real Claude skill outputs. The design proposal turns those findings into an initial implementation shape. The artifact contract defines the markdown, signal, ledger, and run-summary surfaces for implementation.

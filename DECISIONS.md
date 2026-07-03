@@ -110,6 +110,10 @@ Filename/title repair after ingest is acceptable when transcript-derived context
 
 Meeting identity must remain separate from title, slug, and filename. `meeting_id` should be immutable and content/date-derived so rename repair does not break ledger records, signals, cross-references, or derived playbook entries.
 
+Signal files should be keyed by immutable `meeting_id`, not mutable slug or filename.
+
+If inferred filenames collide, append a numeric suffix and surface a warning in the run summary.
+
 ### 13. Stakeholder communication should accumulate into a rolling playbook
 
 Per-meeting communication signals should feed a durable stakeholder playbook over time.
@@ -148,6 +152,8 @@ Ledger entries should track per-artifact status, provider/model/schema metadata,
 
 The append-only ledger should define a current-state rule such as "last valid record wins per source hash."
 
+Ledger records should be complete current-state snapshots, not partial deltas. V1 ledger events should distinguish primary artifact readiness, completed ingest, failed ingest, quarantine, regeneration, title repair, and derived updates.
+
 ### 18. V1 signal extraction should stay factual and minimal
 
 V1 per-meeting signals should use a small taxonomy:
@@ -161,6 +167,10 @@ V1 per-meeting signals should use a small taxonomy:
 Every signal should include evidence, inference level, and confidence.
 
 Communication guidance should be generated during playbook derivation rather than extracted directly into per-meeting signal records.
+
+Duplicate/no-op ingest is a success-class outcome: JSON should use `status: "no_op"` and exit code `0`.
+
+Derived playbook failure should default to exit code `0` after primary artifact success unless the caller explicitly asks derived work to be blocking.
 
 ### 19. Communication artifact ingest is a valuable future extension, not the first build target
 

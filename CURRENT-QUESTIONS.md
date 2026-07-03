@@ -106,6 +106,7 @@ Need to decide:
 - ledger-written-but-render-failed recovery
 - regeneration from `_processed/`
 - per-artifact status transitions
+- reserved concurrency exit code behavior
 
 Why it matters:
 - agentic harnesses may run overlapping commands
@@ -166,6 +167,9 @@ Initial modes:
 Need to decide:
 - mode names
 - whether summary-plus-verbatim should also emit optional split derivatives
+- duplicate/no-op source disposition in `_inbox`
+- filename collision policy details
+- date-correction-after-meeting-id-mint policy confirmation
 
 Why it matters:
 - this directly addresses current inconsistent output
@@ -177,6 +181,9 @@ Resolved direction:
 - generated markdown should live in the meetings root
 - filenames should be inferred from date, meeting identity, topic, and one-on-one counterpart when applicable
 - ledger records should be source-level with mode-specific artifacts
+- signal files should be keyed by immutable `meeting_id`
+- duplicate/no-op uses exit code `0` with `status: "no_op"`
+- filename collisions use numeric suffixes with run-summary warnings
 
 ### 12. How should performance and model right-sizing work?
 
@@ -286,6 +293,9 @@ Current stance:
 - markdown should be optimized for agent consumption
 - ledger records are source-level with mode-specific artifacts
 - meeting identity is immutable and separate from mutable title/slug/filename
+- signal files are keyed by immutable `meeting_id`
+- ledger records are full snapshots with explicit event vocabulary
+- duplicate/no-op ingest uses exit code `0`
 - v1 signal extraction should stay factual and minimal
 - communication artifact ingest is a future extension, not the first build target
 
