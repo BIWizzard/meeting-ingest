@@ -71,7 +71,7 @@ def read_session_provider_envelope(
     _require(payload.get("provider_contract") == PROVIDER_CONTRACT, "Unsupported provider response contract.")
 
     ingest_run_id = _required_string(payload, "ingest_run_id")
-    request_path = provider_request_path(paths, ingest_run_id)
+    request_path = _safe_provider_request_path(paths, ingest_run_id)
     request_payload = _read_request_json(request_path)
     _validate_request(request_payload)
     _verify_identity(payload, request_payload, current_source_sha256)
@@ -101,8 +101,8 @@ def request_for_missing_response(response_path: Path, paths: ProjectPaths) -> tu
     ingest_run_id = _ingest_run_id_from_response_path(response_path)
     if ingest_run_id is None:
         return None
-    request_path = _safe_provider_request_path(paths, ingest_run_id)
     try:
+        request_path = _safe_provider_request_path(paths, ingest_run_id)
         request_payload = _read_request_json(request_path)
     except ProviderValidationError:
         return None

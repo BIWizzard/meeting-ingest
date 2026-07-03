@@ -919,6 +919,31 @@ def test_session_provider_rejects_path_traversal_ingest_run_id(tmp_path: Path) -
     assert read_records(paths.ledger)[-1]["event"] == "ingest_failed"
 
 
+def test_session_provider_rejects_path_traversal_ingest_run_id_even_when_target_exists(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    escaped_run_id = "../../outside/escaped"
+    escaped_request = paths.cache / "provider-requests" / f"{escaped_run_id}.request.json"
+    escaped_request.parent.mkdir(parents=True)
+    escaped_request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    escaped_request_payload["ingest_run_id"] = escaped_run_id
+    escaped_request.write_text(json.dumps(escaped_request_payload), encoding="utf-8")
+    _write_session_response(request_path, response_path, envelope_overrides={"ingest_run_id": escaped_run_id})
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert escaped_request.exists()
+    assert read_records(paths.ledger)[-1]["event"] == "ingest_failed"
+
+
 def test_session_provider_rejects_tampered_request_transcript_hash(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     _allow_session_provider(paths.config_path)
@@ -1027,6 +1052,27 @@ def test_session_provider_phase2_warns_on_cli_quality_mismatch(tmp_path: Path) -
         "phase 2 ignored CLI quality 'fast'; using persisted provider request quality 'balanced'"
     ]
     assert "model_alias: balanced" in artifact.read_text(encoding="utf-8")
+
+
+def test_session_provider_malformed_arbitrary_response_path_preserves_provider_failure(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    provider_request(source, start=paths.inbox)
+    response_path = tmp_path / "my response.response.json"
+    response_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider"
+    assert exc.value.exit_code == EXIT_PROVIDER_FAILURE
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["meeting_id"] is None
+    assert records[-1]["ingest_run_id"] is None
+    assert source.exists()
 
 
 def test_provider_request_duplicate_source_returns_no_op_without_request_file(tmp_path: Path) -> None:

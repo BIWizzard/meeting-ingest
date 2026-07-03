@@ -318,6 +318,7 @@ meeting-ingest ingest SOURCE --provider session --provider-response PATH --json
 `ingest --provider-response` is phase 2 of this flow and hard-requires the matching persisted request file. It must not accept an arbitrary provider response envelope without the corresponding request file.
 
 `PATH` may be absolute or relative. Relative paths are resolved first from the current working directory and then from the meetings root when needed. Wrappers should prefer the engine-returned `expected_response_path` under `_cache/provider-responses/`, but alternate response locations are valid as long as the envelope and persisted request verify.
+If a relative path exists in neither location, the provider failure reports the current-working-directory candidate.
 
 For fully managed host/session operation, a wrapper may hide the two commands from the user:
 
