@@ -71,8 +71,13 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
         signals = record.get("signals", {})
         if isinstance(signals, dict) and signals.get("path"):
             _append_missing_path_issue(paths, issues, "missing_signal_file", str(signals["path"]))
+        source = record.get("source", {})
+        if isinstance(source, dict) and source.get("processed_path"):
+            _append_missing_path_issue(paths, issues, "missing_processed_source", str(source["processed_path"]))
         reconcile = record.get("reconcile", {})
-        if isinstance(reconcile, dict) and reconcile.get("processed_path"):
+        if isinstance(reconcile, dict) and reconcile.get("processed_path") and not (
+            isinstance(source, dict) and source.get("processed_path")
+        ):
             _append_missing_path_issue(paths, issues, "missing_processed_source", str(reconcile["processed_path"]))
     return issues
 

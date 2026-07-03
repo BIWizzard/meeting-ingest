@@ -136,8 +136,10 @@ def _ingest_locked(
             "path": str(relative_artifact_path),
             "provider": selected_provider,
             "model_alias": selected_quality,
-            "model_id": selected_provider,
+            "model_id": "none" if selected_provider == "mock" else selected_provider,
             "schema_version": "1.0",
+            "title": provider_response.title,
+            "slug": artifact_slug,
         }
     }
     signal_state = {
@@ -146,14 +148,14 @@ def _ingest_locked(
         "count": signal_result.count,
         "schema_version": "1.0",
     }
-    source_path = str(source)
+    source_state = _source_state(paths, source, extraction.source_format)
     _append_ingest_snapshot(
         paths,
         event="primary_artifacts_ready",
         source_sha256=source_sha256,
         meeting_id=meeting_id,
         ingest_run_id=ingest_run_id,
-        source_path=source_path,
+        source=source_state,
         artifacts=artifact_state,
         signals=signal_state,
         reconcile={"status": "pending"},
@@ -162,6 +164,7 @@ def _ingest_locked(
     archive_result = archive_and_reconcile(source, source_sha256, paths)
     processed_path = archive_result.processed_path.relative_to(paths.meetings_root)
     completed_reconcile = {**archive_result.reconcile, "processed_path": str(processed_path)}
+    completed_source_state = {**source_state, "processed_path": str(processed_path)}
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
@@ -169,7 +172,7 @@ def _ingest_locked(
             source_sha256=source_sha256,
             meeting_id=meeting_id,
             ingest_run_id=ingest_run_id,
-            source_path=source_path,
+            source=completed_source_state,
             artifacts=artifact_state,
             signals=signal_state,
             reconcile=completed_reconcile,
@@ -373,6 +376,10 @@ def _repair_duplicate_source(
     repair = repair_duplicate_source(source, source_sha256, paths)
     processed_path = str(repair.processed_path.relative_to(paths.meetings_root))
     reconcile = {**repair.reconcile, "processed_path": processed_path}
+    source_state = _dict_value(record.get("source"))
+    if not source_state:
+        source_state = _source_state(paths, source, source.suffix.lower().lstrip(".") or "unknown")
+    source_state = {**source_state, "processed_path": processed_path}
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
@@ -380,7 +387,7 @@ def _repair_duplicate_source(
             source_sha256=source_sha256,
             meeting_id=str(record.get("meeting_id")),
             ingest_run_id=str(record.get("ingest_run_id") or "repair"),
-            source_path=str(source),
+            source=source_state,
             artifacts=_dict_value(record.get("artifacts")),
             signals=_dict_value(record.get("signals")),
             reconcile=reconcile,
@@ -416,7 +423,7 @@ def _append_ingest_snapshot(
     source_sha256: str,
     meeting_id: str,
     ingest_run_id: str,
-    source_path: str,
+    source: dict[str, str | None],
     artifacts: dict[str, dict[str, str]],
     signals: dict[str, str | int],
     reconcile: dict[str, str],
@@ -429,10 +436,25 @@ def _append_ingest_snapshot(
             source_sha256=source_sha256,
             meeting_id=meeting_id,
             ingest_run_id=ingest_run_id,
-            source_path=source_path,
+            source=source,
             artifacts=artifacts,
             signals=signals,
             reconcile=reconcile,
         ),
         clock=clock,
     )
+
+
+def _source_state(paths: ProjectPaths, source: Path, source_type: str) -> dict[str, str | None]:
+    return {
+        "original_path": _relative_to_meetings(paths, source),
+        "processed_path": None,
+        "source_type": source_type,
+    }
+
+
+def _relative_to_meetings(paths: ProjectPaths, path: Path) -> str:
+    try:
+        return str(path.relative_to(paths.meetings_root))
+    except ValueError:
+        return str(path)

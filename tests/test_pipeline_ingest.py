@@ -58,7 +58,15 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     assert markdown.endswith("<!-- transcript:end -->")
     assert [record["event"] for record in ledger_records] == ["primary_artifacts_ready", "ingest_completed"]
     assert ledger_records[0]["reconcile"]["status"] == "pending"
+    assert ledger_records[-1]["source"] == {
+        "original_path": "_inbox/2026-07-03-kushali-sync.txt",
+        "processed_path": "_processed/bf3b2898-2026-07-03-kushali-sync.txt",
+        "source_type": "txt",
+    }
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["path"] == "2026-07-03-kushali-sync.md"
+    assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["title"] == "Kushali Sync"
+    assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["slug"] == "kushali-sync"
+    assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["model_id"] == "none"
     assert ledger_records[-1]["signals"]["path"] == "_signals/mtg-20260703-bf3b2898.jsonl"
     assert ledger_records[-1]["reconcile"]["status"] == "completed"
     assert ledger_records[-1]["reconcile"]["path"] == "_inbox/_done/2026-07-03-kushali-sync.txt"
@@ -215,7 +223,11 @@ def test_reingest_after_primary_snapshot_repairs_archive_and_reconcile(tmp_path:
             source_sha256=source_sha256,
             meeting_id=meeting_id,
             ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
-            source_path=str(source),
+            source={
+                "original_path": "_inbox/2026-07-03-kushali-sync.txt",
+                "processed_path": None,
+                "source_type": "txt",
+            },
             artifacts={
                 "summary-plus-verbatim": {
                     "kind": "markdown",
