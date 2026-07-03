@@ -435,6 +435,76 @@ def test_cli_ingest_uses_config_defaults_when_flags_are_omitted(tmp_path: Path, 
     assert "model_alias: fast" in artifact.read_text(encoding="utf-8")
 
 
+def test_cli_provider_failure_returns_exit_5_and_records_ingest_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    class FailingProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            raise RuntimeError("network timeout")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: FailingProvider())
+
+    exit_code = main(["ingest", str(source), "--json"])
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+    records = read_records(paths.ledger)
+
+    assert exit_code == EXIT_PROVIDER_FAILURE
+    assert summary["status"] == "failed"
+    assert summary["exit_code"] == EXIT_PROVIDER_FAILURE
+    assert summary["errors"][0]["phase"] == "provider"
+    assert summary["errors"][0]["code"] == "provider_failed"
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["error"]["code"] == "provider_failed"
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert list(paths.processed.iterdir()) == []
+    assert list(paths.meetings_root.glob("*.md")) == []
+
+
+def test_cli_provider_validation_failure_returns_exit_6_and_records_ingest_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    class InvalidProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            return ProviderResponse(title="", tl_dr="Summary")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: InvalidProvider())
+
+    exit_code = main(["ingest", str(source), "--json"])
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+    records = read_records(paths.ledger)
+
+    assert exit_code == EXIT_PROVIDER_VALIDATION
+    assert summary["status"] == "failed"
+    assert summary["exit_code"] == EXIT_PROVIDER_VALIDATION
+    assert summary["errors"][0]["phase"] == "provider_validation"
+    assert summary["errors"][0]["code"] == "invalid_provider_output"
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["error"]["code"] == "invalid_provider_output"
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert list(paths.processed.iterdir()) == []
+    assert list(paths.meetings_root.glob("*.md")) == []
+
+
 def test_pipeline_ingest_archives_but_skips_reconcile_for_external_source(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = tmp_path / "2026-07-03-external-sync.txt"

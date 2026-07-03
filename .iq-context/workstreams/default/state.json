@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Addressed Claude review findings on provider handoff contract. Tightened two-phase mechanics: phase 2 verifies response against persisted request, adopts request-side identity, reacquires lock, rechecks duplicate/no-op state, and cannot run standalone. Added session privacy gate direction, advisory person ID handling, provider_host provenance, failure-semantics dependency, and request/response file lifecycle rules.",
+  "status_summary": "Completed provider failure semantics prerequisite check. Existing implementation already maps unexpected provider exceptions to ProviderError exit 5, provider validation to exit 6, and records ingest_failed before artifacts. Added CLI regression tests proving provider failure and provider validation return exit 5/6, emit JSON errors, write ingest_failed ledger records, and leave source/artifacts/archive untouched.",
   "active_plan": null,
   "active_task": null,
   "active_files": [],
@@ -15,16 +15,16 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Before implementing session provider path, land provider failure semantics: typed provider failure exit 5, provider-validation exit 6, and ingest_failed ledger recording before primary artifacts. Then implement session provider request/response helpers, privacy.allow_session_provider, --provider session two-phase CLI, request-bound identity verification, and tests for stale response/no-op behavior."
+    "Implement session provider path: shared ProviderResponse JSON parser, privacy.allow_session_provider, provider request/response envelope helpers, two-phase CLI, persisted-request identity verification, and stale response/no-op tests."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Before implementing session provider path, land provider failure semantics: typed provider failure exit 5, provider-validation exit 6, and ingest_failed ledger recording before primary artifacts. Then implement session provider request/response helpers, privacy.allow_session_provider, --provider session two-phase CLI, request-bound identity verification, and tests for stale response/no-op behavior.",
+  "continuation_hint": "Next: Implement session provider path: shared ProviderResponse JSON parser, privacy.allow_session_provider, provider request/response envelope helpers, two-phase CLI, persisted-request identity verification, and stale response/no-op tests.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-03T19:04:55.361Z",
+  "last_saved_at": "2026-07-03T19:09:05.289Z",
   "last_wrapped_at": "2026-07-03T18:47:13.076Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-03T19:04:55.361Z"
+  "updated_at": "2026-07-03T19:09:05.289Z"
 }

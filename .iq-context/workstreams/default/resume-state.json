@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Before implementing session provider path, land provider failure semantics: typed provider failure exit 5, provider-validation exit 6, and ingest_failed ledger recording before primary artifacts. Then implement session provider request/response helpers, privacy.allow_session_provider, --provider session two-phase CLI, request-bound identity verification, and tests for stale response/no-op behavior."
+    "Implement session provider path: shared ProviderResponse JSON parser, privacy.allow_session_provider, provider request/response envelope helpers, two-phase CLI, persisted-request identity verification, and stale response/no-op tests."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Before implementing session provider path, land provider failure semantics: typed provider failure exit 5, provider-validation exit 6, and ingest_failed ledger recording before primary artifacts. Then implement session provider request/response helpers, privacy.allow_session_provider, --provider session two-phase CLI, request-bound identity verification, and tests for stale response/no-op behavior.",
-  "updated_at": "2026-07-03T19:04:55.361Z"
+  "resume_from": "Resume with: Implement session provider path: shared ProviderResponse JSON parser, privacy.allow_session_provider, provider request/response envelope helpers, two-phase CLI, persisted-request identity verification, and stale response/no-op tests.",
+  "updated_at": "2026-07-03T19:09:05.289Z"
 }
