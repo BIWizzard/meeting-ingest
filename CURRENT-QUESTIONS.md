@@ -21,6 +21,7 @@ Likely concerns:
 - `_cache/`
 - ledger
 - project config
+- path discovery from arbitrary current working directory
 
 Why it matters:
 - this defines the operating model
@@ -50,6 +51,9 @@ Candidate commands:
 Why it matters:
 - this becomes the canonical interface
 - hosts should wrap this, not invent different semantics
+
+Resolved direction:
+- v1 should include a narrow `reconcile` command or equivalent duplicate/no-op repair path for incomplete archive/reconcile state
 
 ### 4. What should the extraction contract be?
 
@@ -86,6 +90,11 @@ Why it matters:
 - affects cross-project portability
 - affects operational clarity
 
+Resolved direction:
+- v1 uses deterministic display-name slugification into person IDs
+- v1 preserves raw speaker labels and confidence
+- global/project-local roster storage is deferred
+
 ### 7. How should failure handling and quarantine work?
 
 Need to decide:
@@ -107,6 +116,7 @@ Need to decide:
 - regeneration from `_processed/`
 - per-artifact status transitions
 - reserved concurrency exit code behavior
+- stale lockfile handling
 
 Why it matters:
 - agentic harnesses may run overlapping commands
@@ -184,6 +194,7 @@ Resolved direction:
 - signal files should be keyed by immutable `meeting_id`
 - duplicate/no-op uses exit code `0` with `status: "no_op"`
 - filename collisions use numeric suffixes with run-summary warnings
+- duplicate/no-op may complete unfinished archive/reconcile work when ledger state shows it is incomplete
 
 ### 12. How should performance and model right-sizing work?
 
@@ -208,6 +219,7 @@ Need to decide:
 - how obvious ASR junk is identified
 - how uncertain cleanup is marked
 - when transcript repair requires a provider call
+- whether file modified date is acceptable as fallback effective date when no meeting date is detectable
 
 Why it matters:
 - "cleaned verbatim" must preserve substantive content
@@ -228,6 +240,10 @@ Why it matters:
 - the user likes sub-agent operation
 - host-specific wrappers should not fragment the product behavior
 - wrappers need a stable machine interface to know what happened
+
+Resolved direction:
+- CLI should be a thin adapter over a reusable pipeline/orchestrator API
+- `schema.py`, shared errors, shared fixtures, and docs should be lead-owned unless explicitly delegated
 
 ### 14. How should stakeholder communication signals be modeled?
 
@@ -296,6 +312,9 @@ Current stance:
 - signal files are keyed by immutable `meeting_id`
 - ledger records are full snapshots with explicit event vocabulary
 - duplicate/no-op ingest uses exit code `0`
+- v1 uses lightweight deterministic identity normalization, not roster storage
+- CLI is a thin adapter over a reusable pipeline API
+- duplicate/no-op may repair incomplete reconcile state
 - v1 signal extraction should stay factual and minimal
 - communication artifact ingest is a future extension, not the first build target
 

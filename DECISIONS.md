@@ -178,6 +178,26 @@ Emails, memos, Teams messages/threads, screenshots of communications, and relate
 
 The first implementation should stay focused on meeting/transcript ingestion. However, the architecture should avoid assuming that all future sources are meetings with transcripts. The signal schema, source ledger, and rolling stakeholder playbook should be general enough to later support other communication artifact types.
 
+### 20. V1 uses lightweight deterministic identity normalization, not roster storage
+
+V1 should not implement global or project-local roster storage.
+
+Provider-proposed display names should be deterministically slugified into person IDs, raw speaker labels should be preserved, and uncertain identities should be marked rather than silently collapsed.
+
+Full roster-based identity resolution remains a later feature.
+
+### 21. The CLI is a thin adapter over a reusable pipeline API
+
+The ingest workflow should live in a library-level orchestrator such as `pipeline.py`.
+
+`cli.py` should parse commands, call the pipeline, print summaries, and map exit codes. It should not own the done-process sequencing.
+
+### 22. Duplicate/no-op may repair incomplete reconcile state
+
+If a duplicate source is detected but the ledger shows incomplete archive or reconcile work, v1 may complete the missing archive/reconcile work instead of returning a passive no-op.
+
+This is intended to prevent inbox residue from becoming permanent workflow debt.
+
 ## Working Assumptions
 
 - The deterministic parts of the current engine are worth preserving.
@@ -187,6 +207,7 @@ The first implementation should stay focused on meeting/transcript ingestion. Ho
 - Model/provider use should be right-sized by task, output mode, and quality requirements.
 - The default transcript record should be cleaned verbatim: speaker-attributed and lightly cleaned for readability while preserving substantive content.
 - Python is the preferred implementation language unless later technical constraints argue otherwise.
+- V1 should use injectable clock/ID hooks so renderer and run-summary tests remain deterministic.
 
 ## Decision Hygiene
 

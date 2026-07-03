@@ -730,6 +730,8 @@ Duplicate/no-op summary:
 }
 ```
 
+A duplicate/no-op run may still perform repair work when the ledger shows an otherwise-ingested source has incomplete archive or reconcile state. In that case, keep `status: "no_op"` and exit `0`, include the repair action in `warnings` or a future explicit `repairs` field, and append a complete ledger snapshot reflecting the repaired archive/reconcile state.
+
 Failure summary:
 
 ```json

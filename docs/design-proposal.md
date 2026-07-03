@@ -289,7 +289,7 @@ Design implication:
 
 - provide generic agent instructions
 - optionally provide harness-specific wrapper instructions later
-- wrappers should call the same engine
+- wrappers should call the same pipeline/orchestrator API
 - wrappers should not manually implement ledger/archive/reconcile behavior
 - wrappers may delegate to a focused sub-agent
 - CLI output should include a machine-readable run summary with a stable JSON shape
@@ -492,7 +492,7 @@ Recommended first build slice:
 5. deterministic markdown renderer from fixtures for `summary-plus-verbatim`
 6. provider contract, mock provider, and one real adapter returning title proposal, summary sections, and minimal v1 signals
 7. filename/title inference from provider output, with fallback and rename-suggestion rules
-8. processed archive, reconcile behavior, and regenerate-from-processed path
+8. processed archive, reconcile behavior, and duplicate/no-op repair for incomplete archive or reconcile state
 9. basic `doctor` command for inbox residue, orphan artifacts, ledger/artifact mismatches, and stale derived work
 
 After that:
@@ -503,4 +503,5 @@ After that:
 4. additional provider adapters
 5. agent harness instructions
 6. split-file derivatives
-7. mode auto-selection
+7. full regenerate-from-processed command
+8. mode auto-selection
