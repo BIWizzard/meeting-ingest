@@ -6,6 +6,7 @@ import re
 
 
 _WEBVTT_TIMING = re.compile(r"^\d{2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}")
+_VOICE_TAG = re.compile(r"^<v\s+([^>]+)>(.*?)</v>$")
 
 
 def normalize_text(text: str) -> str:
@@ -37,5 +38,8 @@ def strip_vtt_markup(text: str) -> str:
             continue
         if _WEBVTT_TIMING.match(line):
             continue
+        voice_match = _VOICE_TAG.match(line)
+        if voice_match:
+            line = f"{voice_match.group(1).strip()}: {voice_match.group(2).strip()}"
         kept.append(line)
     return normalize_text("\n".join(kept))

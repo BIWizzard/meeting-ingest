@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from meeting_ingest.clock import FrozenClock, mint_ingest_run_id
 from meeting_ingest.errors import ConfigError, EXIT_USAGE_OR_CONFIG
+from meeting_ingest.run_summary import RunSummary
 
 
 def test_config_error_renders_error_block() -> None:
@@ -22,3 +23,14 @@ def test_mint_ingest_run_id_uses_injected_clock_and_suffix() -> None:
     run_id = mint_ingest_run_id("20260703", clock=clock, suffix_factory=lambda: "abcd1234")
 
     assert run_id == "ingest-20260703-20260703T120000Z-abcd1234"
+
+
+def test_run_summary_rejects_reserved_detail_keys() -> None:
+    summary = RunSummary(details={"status": "overridden"})
+
+    try:
+        summary.to_dict()
+    except ValueError as exc:
+        assert "status" in str(exc)
+    else:
+        raise AssertionError("Expected reserved-key collision to fail")

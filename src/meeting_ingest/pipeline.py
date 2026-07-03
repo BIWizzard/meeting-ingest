@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from meeting_ingest.archive import archive_and_reconcile, repair_duplicate_source
-from meeting_ingest.clock import Clock, SystemClock, format_timestamp
+from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
 from meeting_ingest.config import MeetingIngestConfig
 from meeting_ingest.doctor import find_issues, project_status
 from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingIngestError, PipelineNotImplementedError
@@ -117,7 +117,7 @@ def _ingest_locked(
         meeting_id=meeting_id,
         ingest_run_id=ingest_run_id,
         effective_at=extraction.effective_date.value,
-        recorded_at=format_timestamp((clock or SystemClock()).now_utc()),
+        recorded_at=format_iso_timestamp((clock or SystemClock()).now_utc()),
     )
     signal_result = write_signal_jsonl(signal_path, signal_records)
     provider_response = provider_response.__class__(

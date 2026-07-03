@@ -34,6 +34,18 @@ def test_extract_vtt_strips_headers_cues_and_timing(tmp_path: Path) -> None:
     assert result.normalized_text == "Ken: Hello\n\nKushali: Hi\n"
 
 
+def test_extract_vtt_converts_voice_tags_to_speaker_lines(tmp_path: Path) -> None:
+    source = tmp_path / "meeting.vtt"
+    source.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v Ken Graham>Hello there</v>\n",
+        encoding="utf-8",
+    )
+
+    result = extract_source(source)
+
+    assert result.normalized_text == "Ken Graham: Hello there\n"
+
+
 def test_extract_docx_reads_document_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "20260703-meeting.docx"
     document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

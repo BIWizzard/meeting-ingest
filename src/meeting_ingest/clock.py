@@ -33,6 +33,11 @@ def format_timestamp(value: datetime) -> str:
     return utc_value.strftime("%Y%m%dT%H%M%SZ")
 
 
+def format_iso_timestamp(value: datetime) -> str:
+    utc_value = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    return utc_value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def default_suffix() -> str:
     return uuid4().hex[:8]
 

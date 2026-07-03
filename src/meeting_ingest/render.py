@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from meeting_ingest.clock import Clock, SystemClock, format_timestamp
+from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
 from meeting_ingest.schema import ProviderResponse, SignalRecord, validate_provider_response
 
 
@@ -33,7 +33,7 @@ def render_summary_plus_verbatim(
 ) -> str:
     validate_provider_response(response)
     active_clock = clock or SystemClock()
-    generated_at = format_timestamp(active_clock.now_utc())
+    generated_at = format_iso_timestamp(active_clock.now_utc())
     lines: list[str] = []
     lines.extend(_front_matter(response, context, generated_at))
     lines.append(f"# {response.title}")

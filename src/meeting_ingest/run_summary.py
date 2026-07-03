@@ -6,6 +6,19 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+RESERVED_KEYS = {
+    "schema_version",
+    "status",
+    "exit_code",
+    "source_sha256",
+    "meeting_id",
+    "ingest_run_id",
+    "artifacts",
+    "warnings",
+    "errors",
+}
+
+
 @dataclass
 class RunSummary:
     schema_version: str = "1.0"
@@ -31,5 +44,8 @@ class RunSummary:
             "warnings": self.warnings,
             "errors": self.errors,
         }
+        collisions = RESERVED_KEYS.intersection(self.details)
+        if collisions:
+            raise ValueError(f"RunSummary details cannot override reserved keys: {', '.join(sorted(collisions))}")
         data.update(self.details)
         return data

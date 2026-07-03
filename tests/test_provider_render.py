@@ -78,7 +78,7 @@ def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcri
     assert "source_sha256: f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8" in markdown
     assert "provider: mock" in markdown
     assert "model_id: none" in markdown
-    assert "generated_at: 20260703T120000Z" in markdown
+    assert "generated_at: 2026-07-03T12:00:00Z" in markdown
     assert "<!-- transcript:begin policy=cleaned-verbatim -->" in markdown
     assert markdown.endswith("<!-- transcript:end -->")
     assert markdown.rfind("## Verbatim Transcript") > markdown.rfind("## Cross-References")
@@ -119,7 +119,7 @@ def test_render_summary_plus_verbatim_derives_signal_table_from_record() -> None
                 meeting_id="mtg-20260703-f953bbd2",
                 ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
                 effective_at="2026-07-03",
-                recorded_at="20260703T120000Z",
+                recorded_at="2026-07-03T12:00:00Z",
                 signal_type="explicit_ask",
                 stakeholder_id="person-kushali",
                 stakeholder_name="Kushali",

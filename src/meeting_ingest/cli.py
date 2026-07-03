@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 
 from meeting_ingest import pipeline
-from meeting_ingest.errors import EXIT_USAGE_OR_CONFIG, MeetingIngestError
+from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
 
 
@@ -61,9 +61,9 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
         print(json.dumps(data, indent=2, sort_keys=True))
         return
 
-    if summary.status == "success":
+    if summary.status in {"success", "no_op"}:
         command = data.get("command", "command")
-        print(f"{command} completed")
+        print(f"{command} {summary.status}")
         if "meetings_root" in data:
             print(f"meetings_root: {data['meetings_root']}")
         if "project" in data:
@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         summary = RunSummary(
             status="failed",
-            exit_code=EXIT_USAGE_OR_CONFIG,
+            exit_code=EXIT_GENERAL_FAILURE,
             warnings=[],
             errors=[
                 {
