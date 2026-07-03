@@ -81,6 +81,18 @@ class SourceExtractionError(MeetingIngestError):
         )
 
 
+class LockConflictError(MeetingIngestError):
+    def __init__(self, lock_path: str) -> None:
+        super().__init__(
+            phase="lock",
+            code="lock_conflict",
+            message=f"Another meeting-ingest process holds the project lock: {lock_path}",
+            exit_code=EXIT_LOCK_CONFLICT,
+            recoverable=True,
+            details={"lock_path": lock_path},
+        )
+
+
 class PipelineNotImplementedError(MeetingIngestError):
     def __init__(self, command: str) -> None:
         super().__init__(

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from meeting_ingest.ledger import read_records
+from meeting_ingest.locking import inspect_lock, lock_path
 from meeting_ingest.paths import ProjectPaths
 
 
@@ -32,6 +33,16 @@ def project_status(paths: ProjectPaths) -> dict[str, object]:
 
 def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
     issues: list[DoctorIssue] = []
+    lock_info = inspect_lock(lock_path(paths.cache))
+    if lock_info is not None and lock_info.stale:
+        issues.append(
+            DoctorIssue(
+                code="stale_lock",
+                message="Project lock appears stale.",
+                path=str(lock_info.path.relative_to(paths.meetings_root)),
+            )
+        )
+
     for source in _inbox_files(paths):
         issues.append(
             DoctorIssue(

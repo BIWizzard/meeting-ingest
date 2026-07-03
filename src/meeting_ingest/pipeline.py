@@ -14,6 +14,7 @@ from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record_for_source
+from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers.mock import MockProvider
@@ -51,6 +52,26 @@ def ingest(
     selected_quality = quality or config.default_quality
     _validate_ingest_options(config, selected_mode, selected_provider)
 
+    with ProjectLock(lock_path(paths.cache), clock=clock):
+        return _ingest_locked(
+            source,
+            paths=paths,
+            selected_mode=selected_mode,
+            selected_provider=selected_provider,
+            selected_quality=selected_quality,
+            clock=clock,
+        )
+
+
+def _ingest_locked(
+    source: Path,
+    *,
+    paths: ProjectPaths,
+    selected_mode: str,
+    selected_provider: str,
+    selected_quality: str,
+    clock: Clock | None,
+) -> RunSummary:
     source = source.resolve()
     source_sha256 = sha256_file(source)
     existing_record = latest_record_for_source(paths.ledger, source_sha256)
