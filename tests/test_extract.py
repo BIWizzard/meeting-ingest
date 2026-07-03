@@ -61,6 +61,22 @@ def test_extract_vtt_strips_teams_cue_ids_and_joins_multiline_voice_tags(tmp_pat
     assert result.normalized_text == "**Ken Graham** (05:05): Hang out with the kids on Father's Day, and that's awesome.\n"
 
 
+def test_extract_vtt_closes_unclosed_voice_tags_on_next_timing_and_eof(tmp_path: Path) -> None:
+    source = tmp_path / "meeting.vtt"
+    source.write_text(
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:02.000\n"
+        "<v Ken Graham>Hello there\n\n"
+        "00:00:03.000 --> 00:00:04.000\n"
+        "<v Kushali G>Hi back\n",
+        encoding="utf-8",
+    )
+
+    result = extract_source(source)
+
+    assert result.normalized_text == "**Ken Graham** (00:01): Hello there\n**Kushali G** (00:03): Hi back\n"
+
+
 def test_extract_docx_reads_document_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "20260703-meeting.docx"
     document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -121,6 +137,23 @@ def test_extract_docx_attaches_paragraphs_after_split_teams_speaker_lines(tmp_pa
         "**Chandra McCrary** (0:05): Is anybody else coming?\n"
         "**John Wilson** (0:07): I don't think so. Another sentence.\n"
     )
+
+
+def test_extract_docx_preserves_hour_long_teams_speaker_timestamps(tmp_path: Path) -> None:
+    source = tmp_path / "20260703-meeting.docx"
+    document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>John Wilson 1:02:15That works.</w:t></w:r></w:p>
+  </w:body>
+</w:document>
+"""
+    with ZipFile(source, "w") as docx:
+        docx.writestr("word/document.xml", document_xml)
+
+    result = extract_source(source)
+
+    assert result.normalized_text == "**John Wilson** (1:02:15): That works.\n"
 
 
 def test_extract_docx_uses_content_date_duration_and_removes_export_chrome(tmp_path: Path) -> None:

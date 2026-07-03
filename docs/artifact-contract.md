@@ -585,7 +585,7 @@ Example:
   "ingest_run_id": "ingest-20260612-20260703T120000Z-a1b2",
   "source": {
     "original_path": "_inbox/Call with G, Kushali (5).docx",
-    "processed_path": "_processed/2d17d59a2301-ingest-20260612-20260703T120000Z-a1b2-Call with G, Kushali (5).docx",
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx",
     "source_type": "docx"
   },
   "artifacts": {
@@ -612,7 +612,8 @@ Example:
   "quarantine": null,
   "reconcile": {
     "status": "completed",
-    "done_path": "_inbox/_done/Call with G, Kushali (5).docx"
+    "path": "_inbox/_done/Call with G, Kushali (5).docx",
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx"
   },
   "recorded_at": "2026-07-03T12:00:00Z"
 }

@@ -14,6 +14,7 @@ from meeting_ingest.errors import (
     EXIT_ARTIFACT_WRITE,
     MeetingIngestError,
     PipelineNotImplementedError,
+    ProviderError,
     SourceExtractionError,
     UnsupportedSourceFormatError,
 )
@@ -27,7 +28,14 @@ from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, ProviderResponse, ProviderSignal, SignalRecord, validate_provider_response
+from meeting_ingest.schema import (
+    SUPPORTED_OUTPUT_MODES,
+    ProviderResponse,
+    ProviderSignal,
+    ProviderValidationError,
+    SignalRecord,
+    validate_provider_response,
+)
 from meeting_ingest.signals import write_signal_jsonl
 
 
@@ -94,16 +102,51 @@ def _ingest_locked(
     ingest_run_id = mint_ingest_run_id(extraction.effective_date.value, clock=clock)
 
     provider_impl = get_provider(selected_provider)
-    provider_response = provider_impl.extract(
-        ProviderRequest(
-            transcript=extraction.normalized_text,
-            source_name=source.name,
-            meeting_id=meeting_id,
-            effective_date=extraction.effective_date.value,
-            quality=selected_quality,
+    try:
+        provider_response = provider_impl.extract(
+            ProviderRequest(
+                transcript=extraction.normalized_text,
+                source_name=source.name,
+                meeting_id=meeting_id,
+                effective_date=extraction.effective_date.value,
+                quality=selected_quality,
+            )
         )
-    )
-    validate_provider_response(provider_response)
+        validate_provider_response(provider_response)
+    except ProviderValidationError as exc:
+        _record_source_failure(
+            paths,
+            source=source,
+            source_sha256=source_sha256,
+            error=exc,
+            clock=clock,
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
+        )
+        raise
+    except MeetingIngestError as exc:
+        _record_source_failure(
+            paths,
+            source=source,
+            source_sha256=source_sha256,
+            error=exc,
+            clock=clock,
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
+        )
+        raise
+    except Exception as exc:
+        provider_error = ProviderError(selected_provider, str(exc))
+        _record_source_failure(
+            paths,
+            source=source,
+            source_sha256=source_sha256,
+            error=provider_error,
+            clock=clock,
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
+        )
+        raise provider_error from exc
     artifact_path = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
     artifact_slug = _slug(provider_response.title)
     signal_path = paths.signals / f"{meeting_id}.jsonl"
@@ -440,9 +483,8 @@ def _signal_records_from_provider(
     records: list[SignalRecord] = []
     for index, signal in enumerate(signals, start=1):
         if isinstance(signal, SignalRecord):
-            raise ConfigError(
+            raise ProviderValidationError(
                 "Provider returned enriched SignalRecord; providers must return ProviderSignal candidates.",
-                code="invalid_provider_signal",
             )
         if isinstance(signal, ProviderSignal):
             records.append(
@@ -523,6 +565,8 @@ def _record_source_failure(
     source_sha256: str,
     error: MeetingIngestError,
     clock: Clock | None,
+    meeting_id: str | None = None,
+    ingest_run_id: str | None = None,
 ) -> None:
     source_state = _source_state(paths, source, source.suffix.lower().lstrip(".") or "unknown")
     quarantine_block = None
@@ -540,8 +584,8 @@ def _record_source_failure(
         LedgerSnapshot(
             event=event,
             source_sha256=source_sha256,
-            meeting_id=None,
-            ingest_run_id=None,
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
             source=source_state,
             artifacts={},
             signals={"status": "skipped", "path": None, "count": 0},

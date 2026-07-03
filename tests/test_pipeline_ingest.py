@@ -8,11 +8,21 @@ import meeting_ingest.archive as archive_module
 import meeting_ingest.pipeline as pipeline_module
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.cli import main
-from meeting_ingest.errors import EXIT_ARCHIVE_RECONCILE, EXIT_ARTIFACT_WRITE, EXIT_LEDGER_WRITE, ConfigError, MeetingIngestError, UnsupportedSourceFormatError
+from meeting_ingest.errors import (
+    EXIT_ARCHIVE_RECONCILE,
+    EXIT_ARTIFACT_WRITE,
+    EXIT_LEDGER_WRITE,
+    EXIT_PROVIDER_FAILURE,
+    EXIT_PROVIDER_VALIDATION,
+    ConfigError,
+    MeetingIngestError,
+    UnsupportedSourceFormatError,
+)
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
 from meeting_ingest.pipeline import ingest, reconcile
+from meeting_ingest.schema import ProviderResponse
 
 
 def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
@@ -156,6 +166,71 @@ def test_signal_write_failure_stops_before_artifact_ledger_archive_and_reconcile
     assert read_records(paths.ledger) == []
     assert list(paths.processed.iterdir()) == []
     assert list(paths.meetings_root.glob("*.md")) == []
+
+
+def test_provider_failure_records_ingest_failed_and_leaves_source_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    class FailingProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            raise RuntimeError("network timeout")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: FailingProvider())
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider"
+    assert exc.value.code == "provider_failed"
+    assert exc.value.exit_code == EXIT_PROVIDER_FAILURE
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert list(paths.processed.iterdir()) == []
+    assert list(paths.meetings_root.glob("*.md")) == []
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["meeting_id"] == "mtg-20260703-bf3b2898"
+    assert records[-1]["ingest_run_id"].startswith("ingest-20260703-20260703T120000Z-")
+    assert records[-1]["error"]["code"] == "provider_failed"
+
+
+def test_provider_validation_failure_records_ingest_failed_and_leaves_source_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    class InvalidProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            return ProviderResponse(title="", tl_dr="Summary")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: InvalidProvider())
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+    records = read_records(paths.ledger)
+
+    assert exc.value.phase == "provider_validation"
+    assert exc.value.code == "invalid_provider_output"
+    assert exc.value.exit_code == EXIT_PROVIDER_VALIDATION
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert list(paths.processed.iterdir()) == []
+    assert list(paths.meetings_root.glob("*.md")) == []
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["meeting_id"] == "mtg-20260703-bf3b2898"
+    assert records[-1]["error"]["code"] == "invalid_provider_output"
 
 
 def test_primary_ledger_write_failure_leaves_source_unreconciled_with_orphan_outputs(

@@ -81,6 +81,18 @@ class SourceExtractionError(MeetingIngestError):
         )
 
 
+class ProviderError(MeetingIngestError):
+    def __init__(self, provider: str, message: str) -> None:
+        super().__init__(
+            phase="provider",
+            code="provider_failed",
+            message=f"Provider {provider!r} failed: {message}",
+            exit_code=EXIT_PROVIDER_FAILURE,
+            recoverable=True,
+            details={"provider": provider},
+        )
+
+
 class LockConflictError(MeetingIngestError):
     def __init__(self, lock_path: str) -> None:
         super().__init__(

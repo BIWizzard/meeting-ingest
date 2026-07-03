@@ -9,7 +9,7 @@ import re
 _WEBVTT_TIMING = re.compile(r"^(?P<start>\d{2}:\d{2}:\d{2})\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}")
 _WEBVTT_CUE_ID = re.compile(r"^[0-9A-Za-z_-]+/\d+-\d+$")
 _VOICE_TAG_START = re.compile(r"^<v(?:\.[^ >]+)*\s+([^>]+)>(.*)$")
-_TEAMS_DOCX_SPEAKER = re.compile(r"^([A-Z][A-Za-z'.-]*(?:\s+[A-Z][A-Za-z'.-]*){1,5})\s+(\d{1,2}:\d{2})(.*)$")
+_TEAMS_DOCX_SPEAKER = re.compile(r"^([A-Z][A-Za-z'.-]*(?:\s+[A-Z][A-Za-z'.-]*){1,5})\s+(\d{1,2}:\d{2}(?::\d{2})?)(.*)$")
 _TEAMS_DOCX_SPEAKER_NORMALIZED = re.compile(r"^(.+?) \((\d{1,2}:\d{2}(?::\d{2})?)\):\s*(.*)$")
 _DOCX_EXPORT_STAMP = re.compile(r".*-20\d{6}_\d{6}-Meeting Transcript$")
 _DOCX_DATE_LINE = re.compile(r"^[A-Z][a-z]+ \d{1,2}, 20\d{2}, \d{1,2}:\d{2}(?:AM|PM)$")
@@ -50,6 +50,14 @@ def strip_vtt_markup(text: str) -> str:
     for raw_line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         line = raw_line.strip()
         if pending_speaker is not None:
+            timing_match = _WEBVTT_TIMING.match(line)
+            if timing_match:
+                turns.append(TranscriptTurn(pending_speaker, pending_timestamp, " ".join(pending_text).strip()))
+                pending_speaker = None
+                pending_timestamp = None
+                pending_text = []
+                current_timestamp = _compact_timestamp(timing_match.group("start"))
+                continue
             if "</v>" in line:
                 before_end = line.split("</v>", 1)[0].strip()
                 if before_end:
@@ -90,6 +98,8 @@ def strip_vtt_markup(text: str) -> str:
                 current_timestamp = None
                 continue
         kept.append(line)
+    if pending_speaker is not None:
+        turns.append(TranscriptTurn(pending_speaker, pending_timestamp, " ".join(pending_text).strip()))
     rendered_turns = [_render_turn(turn) for turn in _merge_turns(turns)]
     return normalize_text("\n".join([*kept, *rendered_turns]))
 
