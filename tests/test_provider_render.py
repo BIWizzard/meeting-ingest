@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -82,6 +83,28 @@ def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcri
     assert "<!-- transcript:begin policy=cleaned-verbatim -->" in markdown
     assert markdown.endswith("<!-- transcript:end -->")
     assert markdown.rfind("## Verbatim Transcript") > markdown.rfind("## Cross-References")
+
+
+def test_render_summary_plus_verbatim_matches_golden_fixture() -> None:
+    response = ProviderResponse(title="Kushali Sync", tl_dr="Discussed project status.")
+    context = RenderContext(
+        meeting_id="mtg-20260703-f953bbd2",
+        ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
+        source_name="2026-07-03-kushali-sync.txt",
+        source_sha256="f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8",
+        slug="kushali-sync",
+        effective_date="2026-07-03",
+    )
+    expected = Path("tests/fixtures/expected_markdown/summary_plus_verbatim_basic.md").read_text(encoding="utf-8").rstrip("\n")
+
+    markdown = render_summary_plus_verbatim(
+        response,
+        "Ken: Hello\nKushali: Hi\n",
+        context,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    assert markdown == expected
 
 
 def test_render_summary_plus_verbatim_escapes_table_cells() -> None:
