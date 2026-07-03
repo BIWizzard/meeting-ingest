@@ -39,7 +39,13 @@ def run(args: argparse.Namespace) -> RunSummary:
     if args.command == "init":
         return pipeline.initialize(Path(args.root))
     if args.command == "ingest":
-        return pipeline.ingest(Path(args.source))
+        return pipeline.ingest(
+            Path(args.source),
+            start=Path.cwd(),
+            mode=args.mode,
+            provider=args.provider,
+            quality=args.quality,
+        )
     if args.command == "doctor":
         return pipeline.doctor(Path(args.root))
     if args.command == "status":

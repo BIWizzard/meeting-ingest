@@ -21,7 +21,7 @@ def test_mock_provider_returns_valid_deterministic_response() -> None:
     response = provider.extract(request)
 
     validate_provider_response(response)
-    assert response.title == "2026 07 03 Kushali Sync"
+    assert response.title == "Kushali Sync"
     assert [attendee.person_id for attendee in response.attendees] == ["person-ken", "person-kushali"]
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from meeting_ingest.identity import normalize_person
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.schema import Attendee, ProviderResponse, Topic
@@ -30,6 +32,7 @@ class MockProvider:
 
 def _title_from_source(source_name: str) -> str:
     stem = source_name.rsplit(".", 1)[0]
+    stem = re.sub(r"^20\d{2}[-_ ]?\d{2}[-_ ]?\d{2}[-_ ]*", "", stem)
     title = stem.replace("_", " ").replace("-", " ").strip()
     return " ".join(word.capitalize() for word in title.split()) or "Untitled Meeting"
 

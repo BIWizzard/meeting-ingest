@@ -1,16 +1,22 @@
-"""Reusable pipeline entry points.
-
-Milestone 1 owns initialization and clear stubs. Later milestones fill in the
-actual ingest, status, doctor, and reconcile behavior behind this API.
-"""
+"""Reusable pipeline entry points."""
 
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
-from meeting_ingest.errors import PipelineNotImplementedError
-from meeting_ingest.paths import init_project
+from meeting_ingest.clock import Clock
+from meeting_ingest.config import MeetingIngestConfig
+from meeting_ingest.errors import ConfigError, EXIT_ARTIFACT_WRITE, MeetingIngestError, PipelineNotImplementedError
+from meeting_ingest.extract import extract_source
+from meeting_ingest.hashing import sha256_file
+from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id
+from meeting_ingest.paths import ProjectPaths, init_project, load_project
+from meeting_ingest.provider import ProviderRequest
+from meeting_ingest.providers.mock import MockProvider
+from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES
 
 
 def initialize(project_root: Path) -> RunSummary:
@@ -26,8 +32,82 @@ def initialize(project_root: Path) -> RunSummary:
     )
 
 
-def ingest(source: Path) -> RunSummary:
-    raise PipelineNotImplementedError("ingest")
+def ingest(
+    source: Path,
+    *,
+    start: Path | None = None,
+    mode: str | None = None,
+    provider: str | None = None,
+    quality: str | None = None,
+    clock: Clock | None = None,
+) -> RunSummary:
+    config, paths = load_project(start or source)
+    selected_mode = mode or config.default_mode
+    selected_provider = provider or config.default_provider
+    selected_quality = quality or config.default_quality
+    _validate_ingest_options(config, selected_mode, selected_provider)
+
+    source = source.resolve()
+    source_sha256 = sha256_file(source)
+    extraction = extract_source(source)
+    meeting_id = mint_meeting_id(extraction.effective_date.value, source_sha256)
+    ingest_run_id = mint_ingest_run_id(extraction.effective_date.value, clock=clock)
+
+    provider_response = MockProvider().extract(
+        ProviderRequest(
+            transcript=extraction.normalized_text,
+            source_name=source.name,
+            meeting_id=meeting_id,
+            effective_date=extraction.effective_date.value,
+            quality=selected_quality,
+        )
+    )
+    artifact_path = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
+    markdown = render_summary_plus_verbatim(
+        provider_response,
+        extraction.normalized_text,
+        RenderContext(
+            meeting_id=meeting_id,
+            ingest_run_id=ingest_run_id,
+            source_name=source.name,
+            effective_date=extraction.effective_date.value,
+            output_mode=selected_mode,
+            model_alias=selected_quality,
+            model_id=selected_provider,
+        ),
+        clock=clock,
+    )
+    _write_artifact(artifact_path, markdown)
+
+    relative_artifact_path = artifact_path.relative_to(paths.meetings_root)
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        source_sha256=source_sha256,
+        meeting_id=meeting_id,
+        ingest_run_id=ingest_run_id,
+        artifacts=[
+            {
+                "kind": "markdown",
+                "mode": selected_mode,
+                "status": "ready",
+                "path": str(relative_artifact_path),
+            }
+        ],
+        details={
+            "command": "ingest",
+            "output_mode": selected_mode,
+            "provider": selected_provider,
+            "quality": selected_quality,
+            "title": {
+                "value": provider_response.title,
+                "slug": _slug(provider_response.title),
+                "confidence": "medium",
+                "rename_suggestion": None,
+            },
+            "reconcile": {"status": "skipped"},
+        },
+    )
 
 
 def doctor(start: Path) -> RunSummary:
@@ -40,3 +120,43 @@ def status(start: Path) -> RunSummary:
 
 def reconcile(start: Path) -> RunSummary:
     raise PipelineNotImplementedError("reconcile")
+
+
+def _validate_ingest_options(config: MeetingIngestConfig, mode: str, provider: str) -> None:
+    if mode not in SUPPORTED_OUTPUT_MODES:
+        raise ConfigError(f"Unsupported output mode: {mode}", code="unsupported_output_mode")
+    if provider != "mock":
+        if provider == "anthropic" and not config.privacy.allow_remote_provider:
+            raise ConfigError("Remote provider use is disabled by config.", code="remote_provider_disabled")
+        raise ConfigError(f"Provider is not implemented yet: {provider}", code="provider_not_implemented")
+
+
+def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> Path:
+    slug = _slug(title) or "untitled-meeting"
+    base = f"{effective_date}-{slug}"
+    candidate = paths.meetings_root / f"{base}.md"
+    counter = 2
+    while candidate.exists():
+        candidate = paths.meetings_root / f"{base}-{counter}.md"
+        counter += 1
+    return candidate
+
+
+def _slug(value: str, *, max_length: int = 80) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    slug = re.sub(r"-{2,}", "-", slug)
+    return slug[:max_length].strip("-")
+
+
+def _write_artifact(path: Path, markdown: str) -> None:
+    try:
+        path.write_text(markdown, encoding="utf-8")
+    except OSError as exc:
+        raise MeetingIngestError(
+            phase="artifact_write",
+            code="artifact_write_failed",
+            message=f"Could not write artifact: {path}",
+            exit_code=EXIT_ARTIFACT_WRITE,
+            recoverable=True,
+            details={"path": str(path)},
+        ) from exc
