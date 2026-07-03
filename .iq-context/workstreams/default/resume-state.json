@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Continue with optional host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically, or run another review over 5e6b15b if desired."
+    "Next workstream can either push main, address the deferred prompt-extraction nit with explicit markers, or move on to the next Meeting Ingest feature."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Continue with optional host-specific wrapper snippets for Codex/Claude Code/Supa Code that fill REQUEST_PATH, RESPONSE_PATH, HOST_NAME, and MODEL_ID automatically, or run another review over 5e6b15b if desired.",
-  "updated_at": "2026-07-03T20:02:35.202Z"
+  "resume_from": "Resume with: Next workstream can either push main, address the deferred prompt-extraction nit with explicit markers, or move on to the next Meeting Ingest feature.",
+  "updated_at": "2026-07-03T20:31:14.792Z"
 }

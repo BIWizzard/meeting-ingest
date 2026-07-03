@@ -333,7 +333,7 @@ The exact command names may change during implementation, but the contract shoul
 - model extraction is sub-agent-owned
 - response validation and all ingest side effects are engine-owned
 
-For a generic extraction sub-agent prompt template, see `docs/session-provider-subagent-prompt.md`.
+For a generic extraction sub-agent prompt template, see `docs/session-provider-subagent-prompt.md`. For Claude Code, Supa Code, and T3 Code wrapper snippets that fill the request path, response path, host name, and model ID placeholders, see `docs/session-provider-host-wrappers.md`.
 
 ## Failure Behavior
 

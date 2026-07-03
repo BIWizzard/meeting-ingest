@@ -41,6 +41,12 @@ iq-context find "..."
 
 Use `save` for checkpoints, `capture` for useful facts or artifacts, `wrap` when ending a session, and `find` when looking for prior project memory.
 
+## Claude Code Review
+
+Use [docs/claude-code-review-prompt.md](docs/claude-code-review-prompt.md) when asking Claude Code to review the working tree.
+
+Claude Code review is read-only by default. It may inspect the current working tree and report findings, but it must not edit files, stage changes, commit changes, or update `.iq-context/` state unless the human explicitly hands off writer ownership.
+
 ## Source Control
 
 See [docs/decisions/iq-context-source-control-policy.md](docs/decisions/iq-context-source-control-policy.md) for the durable iQ Context source-control policy.
