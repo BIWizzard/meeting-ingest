@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Next slice options: host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available, or a cleanup/repair command for stale handoff cache records."
+    "Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Next slice options: host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available, or a cleanup/repair command for stale handoff cache records.",
-  "updated_at": "2026-07-09T01:26:06.488Z"
+  "resume_from": "Resume with: Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation.",
+  "updated_at": "2026-07-09T01:47:54.834Z"
 }

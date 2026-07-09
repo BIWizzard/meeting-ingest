@@ -648,6 +648,8 @@ Required v1 test types:
 
 This roadmap starts from the working V1 engine and sequences the next product layers. Each layer should be independently shippable: the engine should remain useful after every layer, and unfinished future layers should not weaken the ingest/archive/ledger/reconcile contract.
 
+For the current audited product accounting, use `docs/product-status.md`. This roadmap is directional; the product status document is the first place to check whether a roadmap item has already landed.
+
 Roadmap priorities, with the layer headings below as the canonical order:
 
 1. finish V1 completion polish
@@ -665,15 +667,24 @@ Goal:
 
 - make the current meeting-ingest path trustworthy enough for daily personal use.
 
-Ready now:
+Status:
 
-- tighten title and filename inference so `generic-<hash>` is rare
+- mostly complete
+
+Done:
+
 - expose rename suggestions in the JSON run summary when fallback naming is used
 - ensure every successful run reports primary markdown, signal JSONL, processed archive path, reconcile path, provider, mode, and ledger event
 - expand `doctor` checks for inbox residue, malformed ledger entries, orphan signals, missing processed copies, and stale runtime cache
-- document the `doctor --json` shape before adding JSON doctor output
+- document the `doctor --json` and `status --json` shapes
 - add focused regression fixtures for real observed transcript edge cases
 - document the exact done state for `ingest`, `provider-request`, manual session phase 2, `reconcile`, `status`, and `doctor`
+- enrich duplicate/no-op summaries with current source, existing artifact, archive/reconcile, and repair state
+
+Remaining:
+
+- tighten title and filename inference so `generic-<hash>` is rare on a broader real-transcript set
+- add more real observed transcript fixtures as new edge cases appear
 
 Needs design decision:
 
@@ -693,6 +704,11 @@ Acceptance criteria:
 Goal:
 
 - support deliberate artifact variants from the same source without re-ingesting raw input or corrupting ledger state.
+
+Status:
+
+- next major product capability
+- not implemented beyond the current `summary-plus-verbatim` default
 
 Preconditions before implementation:
 
@@ -730,7 +746,12 @@ Goal:
 
 - let the user ask an active agent to process the inbox once, while the engine handles the session-provider two-phase workflow predictably.
 
-Ready now:
+Status:
+
+- engine/planner side mostly complete
+- host adapter productization remains
+
+Done:
 
 - use `meeting_ingest.session_inbox.process_session_inbox` for active-agent wrappers that consume `ingest-inbox --provider session --json` results and complete each pending provider response
 - reuse the existing per-file provider response handoff contract for batch orchestration
@@ -738,6 +759,11 @@ Ready now:
 - expose the shared pending/stale/invalid session handoff planner through `status --json` and `doctor --json`
 - report per-file success, failure, skipped duplicate, provider-response-needed, and incomplete-reconcile states
 - keep archive, ledger, signal, markdown rendering, and reconcile behavior inside the engine
+
+Remaining:
+
+- productize host-specific extractor adapters
+- add stale handoff cleanup/repair command if needed
 
 Needs design decision:
 
@@ -760,13 +786,24 @@ Goal:
 
 - make provider behavior portable, auditable, and consistent across API-backed and subscription-backed workflows.
 
-Ready now:
+Status:
+
+- core provider boundary is substantially implemented
+- wrapper and provider productization remain
+
+Done:
 
 - verify and close remaining gaps in typed provider failure semantics, including provider failure exit `5`, provider validation exit `6`, and `ingest_failed` ledger records before primary artifacts are ready
 - centralize provider response parsing and validation for API-backed responses and session response envelopes
 - add provider metadata to artifacts and ledger snapshots, including provider host when session-backed
 - keep privacy gates explicit for `allow_remote_provider` and `allow_session_provider`
 - keep Codex and Claude Code skills in sync with repo-maintained sources when CLI behavior changes
+
+Remaining:
+
+- productize host wrappers beyond docs/skills
+- improve prompt strategy and provider model provenance
+- add additional provider adapters only when selected
 
 Needs design decision:
 
@@ -787,6 +824,11 @@ Acceptance criteria:
 Goal:
 
 - turn per-meeting communication signals into a durable, useful stakeholder communication memory without blocking primary meeting artifacts.
+
+Status:
+
+- signal foundation exists
+- playbook not built
 
 Preconditions before implementation:
 
@@ -821,7 +863,11 @@ Goal:
 
 - bring existing meeting artifacts into the new engine's world without pretending old outputs have the same guarantees as new outputs.
 
-Ready now:
+Status:
+
+- not started
+
+Ready when selected:
 
 - add read-only corpus scan for existing markdown, signal JSONL, processed copies, inbox done files, and legacy ledger entries
 - produce an adoption report that classifies files as adoptable, needs repair, ignored, or conflicting
@@ -847,6 +893,10 @@ Acceptance criteria:
 Goal:
 
 - extend stakeholder memory beyond meeting transcripts while preserving the meeting engine as the source of truth for meeting artifacts.
+
+Status:
+
+- not started
 
 Ready after artifact-contract updates:
 
@@ -874,6 +924,11 @@ Acceptance criteria:
 Goal:
 
 - make durable meeting outputs and communication signals available to project continuity without turning iQ Context into the ingest engine.
+
+Status:
+
+- iQ Context is used operationally for repo continuity
+- product integration is not built
 
 Ready after V1 done-process stabilization:
 

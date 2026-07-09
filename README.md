@@ -215,6 +215,7 @@ For a reusable extraction sub-agent prompt, see [Session Provider Sub-Agent Prom
 
 ## Start Here
 
+- [Product Status](docs/product-status.md)
 - [Context Primer](docs/context-primer.md)
 - [Claude Code Review Prompt](docs/claude-code-review-prompt.md)
 - [Personal Workflow Scope](docs/personal-workflow-scope.md)
@@ -223,4 +224,4 @@ For a reusable extraction sub-agent prompt, see [Session Provider Sub-Agent Prom
 - [Artifact Contract](docs/artifact-contract.md)
 - [Implementation Plan](docs/implementation-plan.md)
 
-The context primer is the agent-optimized starting point for architecture and roadmap exploration. The personal workflow scope captures the initial product requirements that should guide near-term design. The current output evaluation summarizes what to preserve and improve from real Claude skill outputs. The design proposal turns those findings into an initial implementation shape. The artifact contract defines the markdown, signal, ledger, and run-summary surfaces for implementation. The implementation plan translates those contracts into build milestones and agent work lanes.
+The product status is the current audited accounting of what is built, partial, and not started. The context primer is the agent-optimized starting point for architecture and roadmap exploration. The personal workflow scope captures the initial product requirements that should guide near-term design. The current output evaluation summarizes what to preserve and improve from real Claude skill outputs. The design proposal turns those findings into an initial implementation shape. The artifact contract defines the markdown, signal, ledger, and run-summary surfaces for implementation. The implementation plan translates those contracts into build milestones and agent work lanes.
