@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Next slice: expose the pending session handoff planner through status or doctor so stale/pending handoffs are visible outside session-inbox, or begin host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available."
+    "Next slice options: host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available, or a cleanup/repair command for stale handoff cache records."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Next slice: expose the pending session handoff planner through status or doctor so stale/pending handoffs are visible outside session-inbox, or begin host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available.",
-  "updated_at": "2026-07-09T01:20:22.264Z"
+  "resume_from": "Resume with: Next slice options: host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available, or a cleanup/repair command for stale handoff cache records.",
+  "updated_at": "2026-07-09T01:26:06.488Z"
 }
