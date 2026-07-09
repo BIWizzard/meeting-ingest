@@ -6,7 +6,7 @@ import time
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
-from meeting_ingest.pipeline import doctor, ingest, status
+from meeting_ingest.pipeline import doctor, ingest, provider_request, status
 
 
 def test_status_reports_project_counts(tmp_path: Path) -> None:
@@ -21,6 +21,21 @@ def test_status_reports_project_counts(tmp_path: Path) -> None:
         "ledger_records": 0,
         "known_sources": 0,
         "inbox_files": 0,
+        "session_handoffs": {
+            "total": 0,
+            "pending": 0,
+            "stale": 0,
+            "failed": 0,
+        },
+    }
+    assert summary.details["session_handoffs"] == {
+        "counts": {
+            "total": 0,
+            "pending": 0,
+            "stale": 0,
+            "failed": 0,
+        },
+        "results": [],
     }
 
 
@@ -172,3 +187,82 @@ def test_doctor_reports_stale_provider_handoff_cache(tmp_path: Path) -> None:
         "message": "Provider handoff cache file is stale.",
         "path": "_cache/provider-responses/old.response.json",
     } in summary.details["issues"]
+
+
+def test_status_reports_pending_session_handoff(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+
+    summary = status(tmp_path)
+    handoff_status = summary.details["session_handoffs"]
+    result = handoff_status["results"][0]
+
+    assert handoff_status["counts"] == {
+        "total": 1,
+        "pending": 1,
+        "stale": 0,
+        "failed": 0,
+    }
+    assert summary.details["project"]["session_handoffs"] == handoff_status["counts"]
+    assert result["status"] == "pending_provider_response"
+    assert result["ingest_run_id"] == request_summary.ingest_run_id
+    assert result["details"]["request_path"] == request_summary.details["request_path"]
+
+
+def test_doctor_reports_pending_session_handoff(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+
+    summary = doctor(tmp_path)
+
+    assert {
+        "code": "session_handoff_pending",
+        "message": "Session provider handoff is waiting for provider response or phase-2 completion.",
+        "path": request_summary.details["request_path"],
+    } in summary.details["issues"]
+
+
+def test_doctor_reports_stale_session_handoff(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    source.unlink()
+
+    summary = doctor(tmp_path)
+
+    assert {
+        "code": "session_handoff_stale",
+        "message": "Session provider handoff is stale or outside the inbox wrapper scope.",
+        "path": request_summary.details["request_path"],
+    } in summary.details["issues"]
+
+
+def test_doctor_reports_invalid_session_handoff(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    request = paths.cache / "provider-requests" / "broken.request.json"
+    request.parent.mkdir(parents=True)
+    request.write_text("{not-json\n", encoding="utf-8")
+
+    summary = doctor(tmp_path)
+
+    assert {
+        "code": "session_handoff_invalid",
+        "message": "Session provider handoff request could not be parsed or planned.",
+        "path": "_cache/provider-requests/broken.request.json",
+    } in summary.details["issues"]
+
+
+def _allow_session_provider(config_path: Path) -> None:
+    config_text = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config_text.replace("allow_session_provider = false", "allow_session_provider = true"),
+        encoding="utf-8",
+    )

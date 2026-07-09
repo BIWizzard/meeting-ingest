@@ -852,7 +852,13 @@ Example clean doctor summary:
     "meetings_root": "_local/project-context/meetings",
     "ledger_records": 2,
     "known_sources": 1,
-    "inbox_files": 0
+    "inbox_files": 0,
+    "session_handoffs": {
+      "total": 0,
+      "pending": 0,
+      "stale": 0,
+      "failed": 0
+    }
   },
   "issues": []
 }
@@ -876,7 +882,13 @@ Example doctor summary with issues:
     "meetings_root": "_local/project-context/meetings",
     "ledger_records": 1,
     "known_sources": 1,
-    "inbox_files": 1
+    "inbox_files": 1,
+    "session_handoffs": {
+      "total": 0,
+      "pending": 0,
+      "stale": 0,
+      "failed": 0
+    }
   },
   "issues": [
     {
@@ -901,6 +913,9 @@ Current issue codes:
 - `stale_lock`
 - `stale_provider_request`
 - `stale_provider_response`
+- `session_handoff_pending`
+- `session_handoff_stale`
+- `session_handoff_invalid`
 - `inbox_residue`
 - `missing_artifact`
 - `missing_signal_file`
@@ -908,6 +923,24 @@ Current issue codes:
 - `incomplete_reconcile`
 
 `status --json` uses the same shared summary keys and `project` object, but does not include `issues` and exits `0` when it can read project state.
+
+For session-backed workflows, `status --json` also includes:
+
+```json
+{
+  "session_handoffs": {
+    "counts": {
+      "total": 1,
+      "pending": 1,
+      "stale": 0,
+      "failed": 0
+    },
+    "results": []
+  }
+}
+```
+
+`session_handoffs.results` uses the same per-handoff records described in `docs/provider-handoff-contract.md`. It may contain `pending_provider_response`, `stale_handoff`, or `failed` records. `doctor --json` maps those records into the `session_handoff_pending`, `session_handoff_stale`, and `session_handoff_invalid` issue codes.
 
 ## Exit Codes
 

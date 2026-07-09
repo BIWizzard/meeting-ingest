@@ -735,6 +735,7 @@ Ready now:
 - use `meeting_ingest.session_inbox.process_session_inbox` for active-agent wrappers that consume `ingest-inbox --provider session --json` results and complete each pending provider response
 - reuse the existing per-file provider response handoff contract for batch orchestration
 - avoid reminting requests after interruptions by completing existing ready responses first and skipping fresh phase 1 while unresolved handoffs remain
+- expose the shared pending/stale/invalid session handoff planner through `status --json` and `doctor --json`
 - report per-file success, failure, skipped duplicate, provider-response-needed, and incomplete-reconcile states
 - keep archive, ledger, signal, markdown rendering, and reconcile behavior inside the engine
 
@@ -743,7 +744,6 @@ Needs design decision:
 - whether later work should keep all orchestration under `meeting-ingest ingest-inbox --provider session` or add host-specific wrappers above the engine command
 - how much of the active agent extraction step can be automated in Codex, Claude Code, Supa Code, and T3 Code without fragmenting behavior
 - whether the command should stop on first session extraction failure or continue to later files
-- whether `status --json` and `doctor` should expose the same pending handoff planner used by the wrapper
 - whether to propose a provider-handoff contract change to the current runtime file lifecycle: delete request/response files on success, retain them on failure, and let `doctor` warn on stale files
 
 Acceptance criteria:

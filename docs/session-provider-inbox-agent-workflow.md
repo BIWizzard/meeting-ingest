@@ -78,6 +78,10 @@ inbox files, or hash mismatches. Complete those manually with the lower-level ph
 command when appropriate, or remove stale request/response files after confirming they
 are no longer needed.
 
+Use `uv run meeting-ingest status --json` to inspect pending, stale, and invalid
+session handoffs without running the wrapper. Use `uv run meeting-ingest doctor --json`
+to surface those handoffs as hygiene issues.
+
 Lower-level phase 1:
 
 ```bash

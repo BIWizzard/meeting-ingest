@@ -421,6 +421,12 @@ The wrapper is inbox-scoped because current provider request files carry `source
 
 The wrapper may complete a persisted request/response pair until that pair is superseded by a successful ingest and cache cleanup. If phase 2 failed and retained the pair, a corrected response at the same expected path is treated as completing the same attempt. A new attempt for the same source should still start from a fresh phase-1 request when the prior pair should no longer be reused.
 
+`status --json` exposes the same pending-handoff planner under `session_handoffs`, with `counts` and `results`. `doctor --json` maps planner records to hygiene issues:
+
+- `session_handoff_pending` for actionable handoffs waiting for provider response or phase-2 completion
+- `session_handoff_stale` for non-failing stale or out-of-scope handoffs
+- `session_handoff_invalid` for malformed request files that cannot be planned
+
 `ingest --provider-response` is phase 2 of this flow and hard-requires the matching persisted request file. It must not accept an arbitrary provider response envelope without the corresponding request file.
 
 `PATH` may be absolute or relative. Relative paths are resolved first from the current working directory and then from the meetings root when needed. Wrappers should prefer the engine-returned `expected_response_path` under `_cache/provider-responses/`, but alternate response locations are valid as long as the envelope and persisted request verify.

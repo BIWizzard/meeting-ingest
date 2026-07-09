@@ -10,6 +10,7 @@ from meeting_ingest.ledger import read_records, read_records_with_issues
 from meeting_ingest.locking import inspect_lock, lock_path
 from meeting_ingest.paths import ProjectPaths
 from meeting_ingest.provider_handoff import REQUEST_DIR, RESPONSE_DIR
+from meeting_ingest.session_handoffs import pending_session_handoffs, session_handoff_counts
 
 
 STALE_PROVIDER_CACHE_AGE = timedelta(days=7)
@@ -28,11 +29,13 @@ class DoctorIssue:
 def project_status(paths: ProjectPaths) -> dict[str, object]:
     records = read_records(paths.ledger)
     current_sources = {record.get("source_sha256") for record in records if record.get("source_sha256")}
+    handoffs = pending_session_handoffs(paths)
     return {
         "meetings_root": str(paths.meetings_root),
         "ledger_records": len(records),
         "known_sources": len(current_sources),
         "inbox_files": len(_inbox_files(paths)),
+        "session_handoffs": session_handoff_counts(handoffs),
     }
 
 
@@ -59,6 +62,7 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
         )
 
     issues.extend(_stale_provider_cache_issues(paths))
+    issues.extend(_session_handoff_issues(paths))
 
     for source in _inbox_files(paths):
         issues.append(
@@ -94,6 +98,49 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
             isinstance(source, dict) and source.get("processed_path")
         ):
             _append_missing_path_issue(paths, issues, "missing_processed_source", str(reconcile["processed_path"]))
+    return issues
+
+
+def session_handoff_status(paths: ProjectPaths) -> dict[str, object]:
+    handoffs = pending_session_handoffs(paths)
+    return {
+        "counts": session_handoff_counts(handoffs),
+        "results": handoffs,
+    }
+
+
+def _session_handoff_issues(paths: ProjectPaths) -> list[DoctorIssue]:
+    issues: list[DoctorIssue] = []
+    for handoff in pending_session_handoffs(paths):
+        status = handoff.get("status")
+        details = handoff.get("details")
+        request_path = None
+        if isinstance(details, dict) and details.get("request_path"):
+            request_path = str(details["request_path"])
+        if status == "pending_provider_response":
+            issues.append(
+                DoctorIssue(
+                    code="session_handoff_pending",
+                    message="Session provider handoff is waiting for provider response or phase-2 completion.",
+                    path=request_path,
+                )
+            )
+        elif status == "stale_handoff":
+            issues.append(
+                DoctorIssue(
+                    code="session_handoff_stale",
+                    message="Session provider handoff is stale or outside the inbox wrapper scope.",
+                    path=request_path,
+                )
+            )
+        elif status == "failed":
+            issues.append(
+                DoctorIssue(
+                    code="session_handoff_invalid",
+                    message="Session provider handoff request could not be parsed or planned.",
+                    path=request_path,
+                )
+            )
     return issues
 
 

@@ -9,7 +9,7 @@ import re
 from meeting_ingest.archive import archive_and_reconcile, quarantine_source, repair_duplicate_source
 from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
 from meeting_ingest.config import MeetingIngestConfig
-from meeting_ingest.doctor import find_issues, project_status
+from meeting_ingest.doctor import find_issues, project_status, session_handoff_status
 from meeting_ingest.errors import (
     ConfigError,
     EXIT_ARTIFACT_WRITE,
@@ -853,6 +853,7 @@ def status(start: Path) -> RunSummary:
         details={
             "command": "status",
             "project": project_status(paths),
+            "session_handoffs": session_handoff_status(paths),
         },
     )
 
