@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation."
+    "Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation. Start from docs/product-status.md and docs/artifact-contract.md; update contracts before code."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation.",
-  "updated_at": "2026-07-09T01:47:54.834Z"
+  "resume_from": "Resume with: Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation. Start from docs/product-status.md and docs/artifact-contract.md; update contracts before code.",
+  "updated_at": "2026-07-09T03:35:53.327Z"
 }
