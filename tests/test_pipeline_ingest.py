@@ -110,6 +110,85 @@ def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path
     assert "| `sig-20260703-001` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown
 
 
+def test_ingest_reports_rename_suggestion_for_low_signal_title(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-adbook-validation-explainer.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    class GenericTitleProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            return ProviderResponse(title="Generic", tl_dr="Summary.")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: GenericTitleProvider())
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    records = read_records(paths.ledger)
+
+    assert summary.artifacts[0]["path"] == "2026-07-03-generic.md"
+    assert summary.details["title"] == {
+        "value": "Generic",
+        "slug": "generic",
+        "confidence": "low",
+        "rename_suggestion": "2026-07-03-kushali-adbook-validation-explainer.md",
+    }
+    assert records[-1]["artifacts"]["summary-plus-verbatim"]["title_confidence"] == "low"
+    assert records[-1]["artifacts"]["summary-plus-verbatim"]["filename_confidence"] == "low"
+
+
+def test_ingest_uses_null_rename_suggestion_when_no_filename_suggestion_is_possible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-generic.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    class GenericTitleProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            return ProviderResponse(title="Generic", tl_dr="Summary.")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: GenericTitleProvider())
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    assert summary.details["title"]["confidence"] == "low"
+    assert summary.details["title"]["rename_suggestion"] is None
+
+
+def test_ingest_warns_when_artifact_filename_collides(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    existing = paths.meetings_root / "2026-07-03-kushali-sync.md"
+    existing.write_text("# Existing\n", encoding="utf-8")
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    assert summary.artifacts[0]["path"] == "2026-07-03-kushali-sync-2.md"
+    assert summary.warnings == ["artifact filename collision; wrote 2026-07-03-kushali-sync-2.md"]
+    assert existing.read_text(encoding="utf-8") == "# Existing\n"
+    assert (paths.meetings_root / "2026-07-03-kushali-sync-2.md").exists()
+
+
 def test_ingest_inbox_processes_direct_inbox_sources_and_continues_after_failures(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     good = paths.inbox / "2026-07-03-kushali-sync.txt"

@@ -79,6 +79,20 @@ class _PreparedIngest:
     ingest_run_id: str
 
 
+@dataclass(frozen=True)
+class _ArtifactPath:
+    path: Path
+    collision: bool
+
+
+@dataclass(frozen=True)
+class _TitleMetadata:
+    value: str
+    slug: str
+    confidence: str
+    rename_suggestion: str | None
+
+
 def initialize(project_root: Path) -> RunSummary:
     paths = init_project(project_root)
     return RunSummary(
@@ -471,8 +485,15 @@ def _finish_ingest(
     extraction = prepared.extraction
     meeting_id = prepared.meeting_id
     ingest_run_id = prepared.ingest_run_id
-    artifact_path = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
     artifact_slug = _slug(provider_response.title)
+    title_metadata = _title_metadata(
+        provider_response.title,
+        artifact_slug=artifact_slug,
+        source_name=source.name,
+        effective_date=extraction.effective_date.value,
+    )
+    artifact_destination = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
+    artifact_path = artifact_destination.path
     signal_path = paths.signals / f"{meeting_id}.jsonl"
     signal_records = _signal_records_from_provider(
         provider_response.communication_signals,
@@ -519,6 +540,8 @@ def _finish_ingest(
             "schema_version": "1.0",
             "title": provider_response.title,
             "slug": artifact_slug,
+            "title_confidence": title_metadata.confidence,
+            "filename_confidence": title_metadata.confidence,
         }
     }
     if provider_host:
@@ -560,6 +583,9 @@ def _finish_ingest(
         ),
         clock=clock,
     )
+    warnings: list[str] = []
+    if artifact_destination.collision:
+        warnings.append(f"artifact filename collision; wrote {relative_artifact_path}")
     return RunSummary(
         status="success",
         exit_code=0,
@@ -580,6 +606,7 @@ def _finish_ingest(
                 "count": signal_result.count,
             },
         ],
+        warnings=warnings,
         details={
             "command": "ingest",
             "output_mode": selected_mode,
@@ -587,10 +614,10 @@ def _finish_ingest(
             "quality": selected_quality,
             **({"provider_host": provider_host} if provider_host else {}),
             "title": {
-                "value": provider_response.title,
-                "slug": artifact_slug,
-                "confidence": "medium",
-                "rename_suggestion": None,
+                "value": title_metadata.value,
+                "slug": title_metadata.slug,
+                "confidence": title_metadata.confidence,
+                "rename_suggestion": title_metadata.rename_suggestion,
             },
             "archive": {"processed_path": str(processed_path)},
             "reconcile": completed_reconcile,
@@ -788,21 +815,44 @@ def _validate_ingest_options(config: MeetingIngestConfig, mode: str, provider: s
     raise ConfigError(f"Provider is not implemented yet: {provider}", code="provider_not_implemented")
 
 
-def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> Path:
+def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> _ArtifactPath:
     slug = _slug(title) or "untitled-meeting"
     base = f"{effective_date}-{slug}"
     candidate = paths.meetings_root / f"{base}.md"
+    collision = False
     counter = 2
     while candidate.exists():
+        collision = True
         candidate = paths.meetings_root / f"{base}-{counter}.md"
         counter += 1
-    return candidate
+    return _ArtifactPath(path=candidate, collision=collision)
 
 
 def _slug(value: str, *, max_length: int = 80) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     slug = re.sub(r"-{2,}", "-", slug)
     return slug[:max_length].strip("-")
+
+
+def _title_metadata(title: str, *, artifact_slug: str, source_name: str, effective_date: str) -> _TitleMetadata:
+    if not _is_low_signal_slug(artifact_slug):
+        return _TitleMetadata(value=title, slug=artifact_slug, confidence="medium", rename_suggestion=None)
+    source_slug = _source_slug_candidate(source_name)
+    rename_suggestion = f"{effective_date}-{source_slug}.md" if source_slug else None
+    return _TitleMetadata(value=title, slug=artifact_slug, confidence="low", rename_suggestion=rename_suggestion)
+
+
+def _source_slug_candidate(source_name: str) -> str | None:
+    stem = Path(source_name).stem
+    stem = re.sub(r"^20\d{2}[-_ ]?\d{2}[-_ ]?\d{2}[-_ ]*", "", stem)
+    slug = _slug(stem)
+    return None if _is_low_signal_slug(slug) else slug
+
+
+def _is_low_signal_slug(slug: str) -> bool:
+    if slug in {"", "generic", "untitled", "untitled-meeting", "meeting", "call"}:
+        return True
+    return bool(re.fullmatch(r"generic(?:-[0-9a-f]{6,})?", slug))
 
 
 def _inbox_sources(paths: ProjectPaths) -> list[Path]:

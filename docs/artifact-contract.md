@@ -597,6 +597,8 @@ Example:
       "schema_version": "1.0",
       "title": "Kushali x Ken - AdBook fact_revenue detail design",
       "slug": "kushali-adbook-fact-revenue-detail",
+      "title_confidence": "high",
+      "filename_confidence": "high",
       "provider": "anthropic",
       "model_alias": "balanced",
       "model_id": "claude-sonnet-placeholder",
@@ -633,6 +635,7 @@ Artifact status values:
 
 Reconcile status values:
 
+- `pending`
 - `completed`
 - `skipped`
 - `failed`
@@ -780,6 +783,85 @@ Required shared keys for all JSON summaries:
 - `errors`
 
 Optional fields may be `null` when not applicable, but the shared keys should remain present for agent parsing.
+
+### Doctor And Status JSON
+
+`doctor --json` reports project hygiene without mutating project files. It exits `0` when no issues are found and `1` when issues are found.
+
+Example clean doctor summary:
+
+```json
+{
+  "schema_version": "1.0",
+  "status": "success",
+  "exit_code": 0,
+  "source_sha256": null,
+  "meeting_id": null,
+  "ingest_run_id": null,
+  "artifacts": [],
+  "warnings": [],
+  "errors": [],
+  "command": "doctor",
+  "project": {
+    "meetings_root": "_local/project-context/meetings",
+    "ledger_records": 2,
+    "known_sources": 1,
+    "inbox_files": 0
+  },
+  "issues": []
+}
+```
+
+Example doctor summary with issues:
+
+```json
+{
+  "schema_version": "1.0",
+  "status": "issues_found",
+  "exit_code": 1,
+  "source_sha256": null,
+  "meeting_id": null,
+  "ingest_run_id": null,
+  "artifacts": [],
+  "warnings": [],
+  "errors": [],
+  "command": "doctor",
+  "project": {
+    "meetings_root": "_local/project-context/meetings",
+    "ledger_records": 1,
+    "known_sources": 1,
+    "inbox_files": 1
+  },
+  "issues": [
+    {
+      "code": "incomplete_reconcile",
+      "message": "Primary artifacts are ready but archive/reconcile did not complete.",
+      "path": "_inbox/2026-07-03-team-sync.txt"
+    }
+  ]
+}
+```
+
+Doctor issue records use:
+
+- `code`: stable machine-readable issue code.
+- `message`: concise human-readable issue description.
+- `path`: project-meetings-root-relative path when applicable, otherwise `null`.
+
+Current issue codes:
+
+- `malformed_ledger_json`
+- `invalid_ledger_record`
+- `stale_lock`
+- `stale_provider_request`
+- `stale_provider_response`
+- `inbox_residue`
+- `missing_artifact`
+- `missing_signal_file`
+- `missing_processed_source`
+- `incomplete_reconcile`
+
+`status --json` uses the same shared summary keys and `project` object, but does not include `issues` and exits `0` when it can read project state.
 
 ## Exit Codes
 

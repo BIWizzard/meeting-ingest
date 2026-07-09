@@ -643,14 +643,275 @@ Required v1 test types:
 - lock conflict
 - stale lock reporting
 
+## Roadmap Implementation Plan
+
+This roadmap starts from the working V1 engine and sequences the next product layers. Each layer should be independently shippable: the engine should remain useful after every layer, and unfinished future layers should not weaken the ingest/archive/ledger/reconcile contract.
+
+Roadmap priorities, with the layer headings below as the canonical order:
+
+1. finish V1 completion polish
+2. add output modes and repair/regenerate workflows
+3. make session inbox processing first-class
+4. harden providers and host wrappers
+5. ship stakeholder playbook V1
+6. support migration and existing corpus adoption
+7. ingest broader communication artifacts
+8. integrate with iQ Context
+
+### Layer 1: V1 Completion Polish
+
+Goal:
+
+- make the current meeting-ingest path trustworthy enough for daily personal use.
+
+Ready now:
+
+- tighten title and filename inference so `generic-<hash>` is rare
+- expose rename suggestions in the JSON run summary when fallback naming is used
+- ensure every successful run reports primary markdown, signal JSONL, processed archive path, reconcile path, provider, mode, and ledger event
+- expand `doctor` checks for inbox residue, malformed ledger entries, orphan signals, missing processed copies, and stale runtime cache
+- document the `doctor --json` shape before adding JSON doctor output
+- add focused regression fixtures for real observed transcript edge cases
+- document the exact done state for `ingest`, `provider-request`, manual session phase 2, `reconcile`, `status`, and `doctor`
+
+Needs design decision:
+
+- exact confidence threshold for accepting provider-suggested titles and slugs
+- whether fallback filenames should include meeting type, counterpart, topic, or only source hash when confidence is low
+- whether `doctor` should offer machine-readable repair suggestions only, or also implement interactive repair later
+
+Acceptance criteria:
+
+- a real inbox transcript can be processed with `provider=session` through the documented two-phase loop and produces a high-signal filename without manual renaming when the transcript contains enough title evidence
+- `uv run pytest` passes with regression coverage for filename fallback, run-summary paths, doctor warnings, and duplicate/no-op behavior
+- `doctor --json` identifies incomplete archive/reconcile state without mutating project files
+- docs clearly state what counts as complete, incomplete, duplicate, failed, and quarantined ingest state
+
+### Layer 2: Output Modes And Repair/Regenerate Workflows
+
+Goal:
+
+- support deliberate artifact variants from the same source without re-ingesting raw input or corrupting ledger state.
+
+Preconditions before implementation:
+
+- extend `docs/artifact-contract.md` with `summary` and `verbatim` section contracts
+- define rename-repair and regeneration semantics, including `title_repaired` and `artifact_regenerated` ledger snapshot shapes
+
+Ready after prerequisites:
+
+- complete `summary` mode using the same structured provider response and deterministic renderer without transcript output
+- complete `verbatim` mode using deterministic transcript normalization and minimal provider use
+- store mode-specific artifact entries under one source-level ledger snapshot
+- add `repair-title` or equivalent controlled rename command that updates artifact paths and ledger references without changing `meeting_id`
+- add `regenerate` for already-processed sources using `_processed/` as the durable source of truth and `_cache/` only as an optimization
+- add renderer golden tests for all supported modes
+
+Needs design decision:
+
+- final command names and UX: `repair title`, `rename`, `regenerate`, or subcommands under a broader `repair`
+- whether regeneration should overwrite the current artifact, create a timestamped replacement, or retain superseded files under `_derived/` or `_archive`
+- whether repaired filenames should preserve old links through a redirect/stub file or rely only on ledger history
+- whether `verbatim` mode is strictly deterministic or can optionally ask a provider to repair speaker attribution
+- whether regeneration uses only `_processed/` as the durable source of truth, with `_cache/` as an optimization, or allows another documented source
+- how `regenerate --provider session` starts a fresh phase-1 request with a new `ingest_run_id` instead of reusing prior request/response pairs
+
+Acceptance criteria:
+
+- one source hash can have `summary`, `summary-plus-verbatim`, and `verbatim` artifacts recorded in the same current ledger snapshot
+- regenerating one mode does not delete or rewrite unrelated mode artifacts
+- title repair changes filenames and ledger references while preserving `meeting_id`, signal IDs, processed archive path, and source hash identity
+- duplicate/no-op ingest reports existing modes and missing modes clearly in JSON
+
+### Layer 3: First-Class Session Inbox Automation
+
+Goal:
+
+- let the user ask an active agent to process the inbox once, while the engine handles the session-provider two-phase workflow predictably.
+
+Ready now:
+
+- add a session-aware inbox command or wrapper that enumerates direct files in `_inbox/` and runs `provider-request` for each file
+- reuse the existing per-file provider response handoff contract for batch orchestration
+- make batch processing resume-safe through engine-owned state reporting, such as `status --json`, no-op `provider-request` output, or the batch command's own per-source planner
+- report per-file success, failure, skipped duplicate, provider-response-needed, and incomplete-reconcile states
+- keep archive, ledger, signal, markdown rendering, and reconcile behavior inside the engine
+
+Needs design decision:
+
+- whether this belongs in `meeting-ingest ingest-inbox --provider session`, a separate `session-inbox` command, or host-specific wrappers that call existing engine commands
+- how much of the active agent extraction step can be automated in Codex, Claude Code, Supa Code, and T3 Code without fragmenting behavior
+- whether the command should stop on first session extraction failure or continue to later files
+- whether to propose a provider-handoff contract change to the current runtime file lifecycle: delete request/response files on success, retain them on failure, and let `doctor` warn on stale files
+
+Acceptance criteria:
+
+- a direct `_inbox/` file can be processed through a single documented agent command using `provider=session`
+- batch JSON output includes one record per source with paths for request, response, markdown, signals, archive, and reconcile when applicable
+- rerunning after interruption does not duplicate artifacts or lose the existing request/response binding
+- `ingest-inbox` or its session wrapper never falls back to `mock` or a remote API provider when the user intended session extraction
+- host wrappers do not read `_ledger.jsonl` directly to implement duplicate/no-op or completion logic; they consume engine-reported per-source state
+
+### Layer 4: Provider And Wrapper Hardening
+
+Goal:
+
+- make provider behavior portable, auditable, and consistent across API-backed and subscription-backed workflows.
+
+Ready now:
+
+- verify and close remaining gaps in typed provider failure semantics, including provider failure exit `5`, provider validation exit `6`, and `ingest_failed` ledger records before primary artifacts are ready
+- centralize provider response parsing and validation for API-backed responses and session response envelopes
+- add provider metadata to artifacts and ledger snapshots, including provider host when session-backed
+- keep privacy gates explicit for `allow_remote_provider` and `allow_session_provider`
+- keep Codex and Claude Code skills in sync with repo-maintained sources when CLI behavior changes
+
+Needs design decision:
+
+- which API-backed provider should become the first production-quality remote adapter
+- which host wrapper gets productized first after the local Codex/Claude Code workflow
+- whether provider prompts should have separate fast/balanced/deep variants or one prompt with quality instructions
+- how strict provenance should be for model name/version in subscription-backed host sessions where exact model metadata may not be available
+
+Acceptance criteria:
+
+- the same provider response payload shape can drive rendering, signals, ledger, archive, and reconcile regardless of provider path
+- provider failures never move the source into `_inbox/_done/` and never emit successful primary artifacts
+- privacy-denied provider use fails with a clear typed error and no transcript leaves the local workflow
+- wrapper docs and installed skills match the repo source for normal inbox processing behavior
+
+### Layer 5: Stakeholder Playbook V1
+
+Goal:
+
+- turn per-meeting communication signals into a durable, useful stakeholder communication memory without blocking primary meeting artifacts.
+
+Preconditions before implementation:
+
+- define the rolling playbook document/index schema in `docs/artifact-contract.md`
+- decide whether playbook V1 uses v1 person IDs or introduces a project-local roster
+
+Ready after prerequisites:
+
+- define a `_derived/` playbook artifact location and ledger-derived update status
+- add a per-stakeholder aggregation pass over validated signal JSONL files
+- support explicit asks, priorities, commitments, concerns, communication cues, and follow-up expectations
+- record provenance back to `meeting_id`, artifact path, and supporting quote/paraphrase
+- treat playbook update failure as derived-work failure, not primary ingest failure
+
+Needs design decision:
+
+- exact playbook output shape: one markdown file, one JSONL/JSON index, or both
+- whether stakeholder identity remains v1 person-ID based or introduces a project-local roster before playbook V1
+- how to handle sensitive or low-confidence inferred communication guidance
+- whether playbook updates happen during every ingest, only on demand, or both
+
+Acceptance criteria:
+
+- ingesting a meeting with stakeholder signals can update a derived playbook without changing the primary artifact success criteria
+- every playbook entry has provenance and confidence
+- low-confidence or inferred guidance is marked clearly and does not overwrite explicit stakeholder asks
+- `doctor` and `status` can report stale or failed playbook derivation separately from meeting ingest health
+
+### Layer 6: Migration And Existing Corpus Adoption
+
+Goal:
+
+- bring existing meeting artifacts into the new engine's world without pretending old outputs have the same guarantees as new outputs.
+
+Ready now:
+
+- add read-only corpus scan for existing markdown, signal JSONL, processed copies, inbox done files, and legacy ledger entries
+- produce an adoption report that classifies files as adoptable, needs repair, ignored, or conflicting
+- support ledger adoption records for existing source hashes only when enough provenance exists
+- add migration docs for Hearst/Spelman-style corpora and dry-run-first workflows
+
+Needs design decision:
+
+- whether to mutate existing corpora in place, create a new clean meetings root, or maintain an adoption map
+- how much legacy metadata is trusted when source hash or processed source copy is missing
+- whether old generated summaries should be copied as legacy artifacts, regenerated from source, or left read-only
+- whether migration should support project-specific one-off cleanup scripts
+
+Acceptance criteria:
+
+- migration dry run can inspect an existing corpus and produce a deterministic report without changing files
+- adoption never marks legacy artifacts as V1-generated unless they pass the current artifact and ledger contract
+- conflicting or missing provenance is surfaced as repair work, not silently normalized
+- adopted records remain distinguishable from newly ingested records in ledger and status output
+
+### Layer 7: Broader Communication Artifact Ingest
+
+Goal:
+
+- extend stakeholder memory beyond meeting transcripts while preserving the meeting engine as the source of truth for meeting artifacts.
+
+Ready after artifact-contract updates:
+
+- define artifact-type routing for emails, memos, Teams messages, screenshots, and attachments
+- add source extractors only after the artifact contract distinguishes meeting artifacts from communication artifacts
+- reuse signal validation and playbook aggregation where the signal contract fits
+- keep non-meeting outputs out of the top-level generated meeting markdown namespace unless explicitly configured
+
+Needs design decision:
+
+- artifact taxonomy and directory layout for non-meeting communication inputs
+- whether communication artifacts produce markdown summaries, signal-only records, or both
+- source-specific provenance requirements for screenshots and copied message threads
+- privacy rules for remote provider use on emails and client communications
+
+Acceptance criteria:
+
+- non-meeting communication ingest cannot be confused with meeting ingest in ledger, status, filenames, or output directories
+- communication-derived signals preserve source provenance and artifact type
+- playbook aggregation can consume both meeting and communication signals while preserving source distinctions
+- unsupported communication formats fail with typed, recoverable errors
+
+### Layer 8: iQ Context Integration
+
+Goal:
+
+- make durable meeting outputs and communication signals available to project continuity without turning iQ Context into the ingest engine.
+
+Ready after V1 done-process stabilization:
+
+- emit optional iQ Context captures for high-value generated artifacts, decisions, assumptions, discoveries, and stakeholder signals
+- add config gates so projects can opt into capture behavior
+- store durable links from iQ Context captures back to meeting artifacts and signal records
+- define `doctor` checks for missing or stale iQ Context captures only when integration is enabled
+
+Needs design decision:
+
+- which meeting sections qualify for automatic iQ Context capture
+- whether capture happens during ingest, as derived post-output work, or through an explicit sync command
+- how to avoid duplicating sensitive transcript content in project memory
+- whether iQ Context integration should create docs under `docs/sessions/`, `docs/decisions/`, `docs/discoveries/`, and `docs/assumptions/` or only use `.iq-context/` captures
+
+Acceptance criteria:
+
+- iQ Context integration is disabled by default unless project config opts in
+- enabled integration records concise, provenance-linked captures without copying whole transcripts
+- failed capture sync does not fail primary ingest and is reported as derived-work status
+- `iq-context find` can surface useful meeting-derived memory while the original meeting artifact remains the source of truth
+
+### Roadmap Execution Rules
+
+- Do not start a later layer by weakening contracts from an earlier layer.
+- Keep all generated artifact shape changes documented before code changes.
+- Prefer additive CLI behavior until migration and repair workflows are mature.
+- Every roadmap layer needs at least one end-to-end fixture or dry-run verification path.
+- User-facing agent skills and host wrapper docs must be updated in the same change as CLI behavior they depend on.
+- For session-provider work, the canonical local workflow remains `provider=session` with `privacy.allow_session_provider = true`; do not use `mock` for real workflow tests.
+- Where a host wrapper exists, it must consume engine-reported state instead of reimplementing duplicate/no-op, ledger, archive, reconcile, or request/response lifecycle logic.
+
 ## User Guidance Needed
+
+The roadmap layer-specific design-decision lists above supersede this older V1 checklist where they overlap.
 
 Ask the user before deciding:
 
 - whether `ingest` should auto-init or require explicit `init`
 - which real provider should be first
-- whether remote provider use should default to disabled for privacy
-- which host/session-backed provider path should be implemented first
 - whether existing Hearst/Spelman corpora should be migrated, adopted read-only, or ignored for v1
 - exact deterministic cleanup rules if the first fixtures expose ambiguity
 - whether file modified date is acceptable as the v1 fallback effective date

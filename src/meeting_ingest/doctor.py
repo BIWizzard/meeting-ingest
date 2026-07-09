@@ -69,7 +69,7 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
             )
         )
 
-    for record in records:
+    for record in _current_records(records):
         artifacts = record.get("artifacts", {})
         if isinstance(artifacts, dict):
             for artifact in artifacts.values():
@@ -82,6 +82,14 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
         if isinstance(source, dict) and source.get("processed_path"):
             _append_missing_path_issue(paths, issues, "missing_processed_source", str(source["processed_path"]))
         reconcile = record.get("reconcile", {})
+        if _has_primary_artifacts(record) and isinstance(reconcile, dict) and reconcile.get("status") == "pending":
+            issues.append(
+                DoctorIssue(
+                    code="incomplete_reconcile",
+                    message="Primary artifacts are ready but archive/reconcile did not complete.",
+                    path=_source_issue_path(source),
+                )
+            )
         if isinstance(reconcile, dict) and reconcile.get("processed_path") and not (
             isinstance(source, dict) and source.get("processed_path")
         ):
@@ -122,6 +130,29 @@ def _append_missing_path_issue(paths: ProjectPaths, issues: list[DoctorIssue], c
                 path=relative_path,
             )
         )
+
+
+def _has_primary_artifacts(record: dict[str, object]) -> bool:
+    if record.get("event") not in {"primary_artifacts_ready", "ingest_completed", "reconcile_repaired"}:
+        return False
+    artifacts = record.get("artifacts")
+    return isinstance(artifacts, dict) and bool(artifacts)
+
+
+def _current_records(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    current: dict[str, dict[str, object]] = {}
+    for record in records:
+        source_sha256 = record.get("source_sha256")
+        if source_sha256:
+            current[str(source_sha256)] = record
+    return list(current.values())
+
+
+def _source_issue_path(source: object) -> str | None:
+    if not isinstance(source, dict):
+        return None
+    original_path = source.get("original_path")
+    return str(original_path) if original_path else None
 
 
 def _inbox_files(paths: ProjectPaths) -> list[Path]:

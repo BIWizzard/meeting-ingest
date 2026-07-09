@@ -51,3 +51,32 @@ def test_ingest_inbox_json_outputs_batch_summary(tmp_path: Path, monkeypatch, ca
     assert summary["processed"] == 1
     assert summary["results"][0]["status"] == "success"
     assert summary["results"][0]["artifacts"][0]["path"] == "2026-07-03-kushali-sync.md"
+
+
+def test_doctor_json_outputs_project_and_issues(tmp_path: Path, monkeypatch, capsys) -> None:
+    exit_code = main(["init", "--root", str(tmp_path), "--json"])
+    assert exit_code == 0
+    capsys.readouterr()
+    inbox = tmp_path / "_local/project-context/meetings/_inbox"
+    source = inbox / "unprocessed.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(["doctor", "--json"])
+
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert summary["command"] == "doctor"
+    assert summary["status"] == "issues_found"
+    assert summary["artifacts"] == []
+    assert summary["project"]["known_sources"] == 0
+    assert summary["project"]["inbox_files"] == 1
+    assert summary["issues"] == [
+        {
+            "code": "inbox_residue",
+            "message": "Source file remains in inbox.",
+            "path": "_inbox/unprocessed.txt",
+        }
+    ]

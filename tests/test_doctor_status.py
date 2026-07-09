@@ -4,7 +4,7 @@ from pathlib import Path
 import time
 
 from meeting_ingest.clock import FrozenClock
-from meeting_ingest.ledger import read_records
+from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
 from meeting_ingest.pipeline import doctor, ingest, status
 
@@ -91,6 +91,44 @@ def test_doctor_reports_missing_processed_copy(tmp_path: Path) -> None:
         "code": "missing_processed_source",
         "message": "Ledger references a missing path.",
         "path": result.details["archive"]["processed_path"],
+    } in summary.details["issues"]
+
+
+def test_doctor_reports_incomplete_reconcile_state(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    artifact = paths.meetings_root / "2026-07-03-team-sync.md"
+    artifact.write_text("# Team Sync\n", encoding="utf-8")
+    signal = paths.signals / "mtg-20260703-abc12345.jsonl"
+    signal.write_text("", encoding="utf-8")
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="primary_artifacts_ready",
+            source_sha256="abc12345",
+            meeting_id="mtg-20260703-abc12345",
+            ingest_run_id="ingest-20260703-20260703T120000Z-abcd",
+            source={"original_path": "_inbox/2026-07-03-team-sync.txt", "source_type": "txt"},
+            artifacts={
+                "summary-plus-verbatim": {
+                    "kind": "markdown",
+                    "status": "ready",
+                    "path": "2026-07-03-team-sync.md",
+                }
+            },
+            signals={"status": "ready", "path": "_signals/mtg-20260703-abc12345.jsonl", "count": 0},
+            reconcile={"status": "pending"},
+        ),
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    summary = doctor(tmp_path)
+
+    assert {
+        "code": "incomplete_reconcile",
+        "message": "Primary artifacts are ready but archive/reconcile did not complete.",
+        "path": "_inbox/2026-07-03-team-sync.txt",
     } in summary.details["issues"]
 
 
