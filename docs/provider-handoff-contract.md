@@ -315,6 +315,30 @@ meeting-ingest provider-request SOURCE --provider session --json
 meeting-ingest ingest SOURCE --provider session --provider-response PATH --json
 ```
 
+`provider-request --json` returns the engine-owned phase-1 state that wrappers should consume instead of inspecting cache directories or ledger files directly. The summary includes:
+
+- `source.path` and `source.source_type`
+- `source_sha256`
+- `meeting_id`
+- `ingest_run_id`
+- `output_mode`
+- `quality`
+- `request_path`
+- `expected_response_path`
+- `provider_request.status: "ready"`
+- `provider_request.path`
+- `provider_request.contract`
+- `provider_response.status: "pending"`
+- `provider_response.path`
+- `normalized_transcript_sha256`
+- `effective_date.value`, `effective_date.confidence`, and `effective_date.source`
+
+The response status remains `pending` until the host/session extraction agent writes the response envelope and phase 2 validates it.
+
+These fields are present on successful phase-1 request creation. Duplicate/no-op runs return the standard no-op summary instead because no new request or expected response file exists.
+
+`source.path` is project-meetings-root-relative when the source is inside the meetings root; external sources use the engine's normal path fallback. `provider_request.path` and `provider_response.path` are the canonical nested handoff paths. The flat `request_path` and `expected_response_path` keys remain for backward compatibility with existing wrappers.
+
 `ingest --provider-response` is phase 2 of this flow and hard-requires the matching persisted request file. It must not accept an arbitrary provider response envelope without the corresponding request file.
 
 `PATH` may be absolute or relative. Relative paths are resolved first from the current working directory and then from the meetings root when needed. Wrappers should prefer the engine-returned `expected_response_path` under `_cache/provider-responses/`, but alternate response locations are valid as long as the envelope and persisted request verify.

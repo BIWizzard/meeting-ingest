@@ -821,6 +821,25 @@ def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> N
     assert request_payload["quality"] == "balanced"
     assert request_payload["output_mode"] == "summary-plus-verbatim"
     assert request_payload["normalized_transcript"] == "Ken: Hello\n"
+    assert summary.details["source"] == {
+        "path": "_inbox/2026-07-03-team-sync.txt",
+        "source_type": "txt",
+    }
+    assert summary.details["provider_request"] == {
+        "status": "ready",
+        "path": summary.details["request_path"],
+        "contract": "meeting-ingest-provider-response-v1",
+    }
+    assert summary.details["provider_response"] == {
+        "status": "pending",
+        "path": summary.details["expected_response_path"],
+    }
+    assert summary.details["normalized_transcript_sha256"] == request_payload["normalized_transcript_sha256"]
+    assert summary.details["effective_date"] == {
+        "value": "2026-07-03",
+        "confidence": "high",
+        "source": "filename",
+    }
     assert response_path.parent.is_dir()
     assert read_records(paths.ledger) == []
 

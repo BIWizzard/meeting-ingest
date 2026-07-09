@@ -394,6 +394,7 @@ def _provider_request_locked(
         "date_source": prepared.extraction.effective_date.source,
         "duration": prepared.extraction.duration,
     }
+    transcript_sha256 = request_payload["normalized_transcript_sha256"]
     request_path, response_path = write_provider_request(paths, request_payload)
     return RunSummary(
         status="success",
@@ -406,8 +407,27 @@ def _provider_request_locked(
             "provider": "session",
             "quality": selected_quality,
             "output_mode": selected_mode,
-            "request_path": str(request_path.relative_to(paths.meetings_root)),
-            "expected_response_path": str(response_path.relative_to(paths.meetings_root)),
+            "source": {
+                "path": _relative_to_meetings(paths, prepared.source),
+                "source_type": prepared.extraction.source_format,
+            },
+            "request_path": _relative_to_meetings(paths, request_path),
+            "expected_response_path": _relative_to_meetings(paths, response_path),
+            "provider_request": {
+                "status": "ready",
+                "path": _relative_to_meetings(paths, request_path),
+                "contract": PROVIDER_CONTRACT,
+            },
+            "provider_response": {
+                "status": "pending",
+                "path": _relative_to_meetings(paths, response_path),
+            },
+            "normalized_transcript_sha256": transcript_sha256,
+            "effective_date": {
+                "value": prepared.extraction.effective_date.value,
+                "confidence": prepared.extraction.effective_date.confidence,
+                "source": prepared.extraction.effective_date.source,
+            },
         },
     )
 
