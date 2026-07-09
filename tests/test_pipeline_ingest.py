@@ -629,7 +629,18 @@ def test_pipeline_ingest_duplicate_source_returns_no_op_and_reconciles_inbox(tmp
     assert second.exit_code == 0
     assert second.meeting_id == first.meeting_id
     assert second.ingest_run_id is None
+    assert second.details["source"] == {
+        "path": "_inbox/2026-07-03-kushali-sync.txt",
+        "source_type": "txt",
+        "known_original_path": "_inbox/2026-07-03-kushali-sync.txt",
+    }
     assert second.details["existing_artifacts"] == {"summary-plus-verbatim": "2026-07-03-kushali-sync.md"}
+    assert second.details["existing_artifact_details"]["summary-plus-verbatim"]["status"] == "ready"
+    assert second.details["existing_artifact_details"]["summary-plus-verbatim"]["path"] == "2026-07-03-kushali-sync.md"
+    assert second.details["repair"] == {
+        "changed": True,
+        "ledger_event": "reconcile_repaired",
+    }
     assert second.details["reconcile"]["status"] == "completed"
     assert second.details["reconcile"]["reason"] == "source_already_ingested"
     assert second.details["archive"]["processed_path"].startswith("_processed/bf3b2898-")
@@ -653,6 +664,10 @@ def test_duplicate_external_source_no_op_does_not_append_repair_snapshot(tmp_pat
     assert second.meeting_id == first.meeting_id
     assert second.details["reconcile"]["status"] == "skipped"
     assert second.details["reconcile"]["archive_repaired"] == "false"
+    assert second.details["repair"] == {
+        "changed": False,
+        "ledger_event": None,
+    }
     assert [record["event"] for record in ledger_records] == ["primary_artifacts_ready", "ingest_completed"]
 
 
@@ -672,14 +687,19 @@ def test_reconcile_repairs_duplicate_inbox_sources_only(tmp_path: Path) -> None:
     assert summary.details["repaired"] == [
         {
             "path": "_inbox/_done/duplicate-name.txt",
+            "source_sha256": "bf3b289874ef561e3862f909101eebd430adf1c2f30eefba602a0c55f4c034e2",
+            "meeting_id": "mtg-20260703-bf3b2898",
             "status": "completed",
             "reason": "source_already_ingested",
             "processed_path": "_processed/bf3b2898-duplicate-name.txt",
+            "changed": True,
         }
     ]
     assert summary.details["skipped"] == [
         {
             "path": "_inbox/unknown.txt",
+            "source_sha256": "006d57abf92bac83541e6b4732dbbb5adc338ff80b8ef0781511dcc16b9b7dd8",
+            "meeting_id": None,
             "reason": "source_not_in_ledger",
         }
     ]
@@ -726,6 +746,15 @@ def test_reingest_after_primary_snapshot_repairs_archive_and_reconcile(tmp_path:
     ledger_records = read_records(paths.ledger)
 
     assert summary.status == "no_op"
+    assert summary.details["source"] == {
+        "path": "_inbox/2026-07-03-kushali-sync.txt",
+        "source_type": "txt",
+        "known_original_path": "_inbox/2026-07-03-kushali-sync.txt",
+    }
+    assert summary.details["repair"] == {
+        "changed": True,
+        "ledger_event": "reconcile_repaired",
+    }
     assert summary.details["archive"]["processed_path"] == "_processed/bf3b2898-2026-07-03-kushali-sync.txt"
     assert (paths.processed / "bf3b2898-2026-07-03-kushali-sync.txt").exists()
     assert not source.exists()
@@ -1317,10 +1346,42 @@ def test_reconcile_skips_failed_record_without_repairing_as_duplicate(tmp_path: 
     assert summary.details["skipped"] == [
         {
             "path": "_inbox/2026-07-03-meeting.pdf",
+            "source_sha256": "0bee0730a4f92127e529b51401c3d53fee2ee323dc5b0cdc767c8a7c541d0be1",
+            "meeting_id": None,
             "reason": "source_not_in_ledger",
         }
     ]
     assert retry_source.exists()
+
+
+def test_reconcile_skipped_failed_record_reports_known_meeting_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    class FailingProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: FailingProvider())
+
+    with pytest.raises(MeetingIngestError):
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+
+    summary = reconcile(tmp_path)
+
+    assert summary.details["repaired"] == []
+    assert summary.details["skipped"] == [
+        {
+            "path": "_inbox/2026-07-03-team-sync.txt",
+            "source_sha256": "28e2f3324abc0594006d4788e3913a97960727e0e1ebdd2e3e4d831b1f50c8e3",
+            "meeting_id": "mtg-20260703-28e2f332",
+            "reason": "source_not_in_ledger",
+        }
+    ]
 
 
 def _allow_session_provider(config_path: Path) -> None:

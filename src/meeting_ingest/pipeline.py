@@ -779,8 +779,8 @@ def status(start: Path) -> RunSummary:
 
 def reconcile(start: Path) -> RunSummary:
     _, paths = load_project(start)
-    repaired: list[dict[str, str]] = []
-    skipped: list[dict[str, str]] = []
+    repaired: list[dict[str, object]] = []
+    skipped: list[dict[str, object]] = []
     with ProjectLock(lock_path(paths.cache)):
         for source in _inbox_sources(paths):
             source_sha256 = sha256_file(source)
@@ -789,6 +789,8 @@ def reconcile(start: Path) -> RunSummary:
                 skipped.append(
                     {
                         "path": str(source.relative_to(paths.meetings_root)),
+                        "source_sha256": source_sha256,
+                        "meeting_id": existing_record.get("meeting_id") if existing_record else None,
                         "reason": "source_not_in_ledger",
                     }
                 )
@@ -803,9 +805,12 @@ def reconcile(start: Path) -> RunSummary:
             repaired.append(
                 {
                     "path": repair_result["reconcile"].get("path", ""),
+                    "source_sha256": source_sha256,
+                    "meeting_id": existing_record.get("meeting_id"),
                     "status": repair_result["reconcile"]["status"],
                     "reason": repair_result["reconcile"]["reason"],
                     "processed_path": repair_result["processed_path"],
+                    "changed": repair_result["changed"],
                 }
             )
     return RunSummary(
@@ -920,12 +925,19 @@ def _no_op_summary(
     reconcile = repair_result["reconcile"]
     artifacts = record.get("artifacts", {})
     existing_artifacts = {}
+    existing_artifact_details = {}
     if isinstance(artifacts, dict):
         existing_artifacts = {
             mode: artifact.get("path")
             for mode, artifact in artifacts.items()
             if isinstance(artifact, dict) and artifact.get("path")
         }
+        existing_artifact_details = {
+            mode: artifact
+            for mode, artifact in artifacts.items()
+            if isinstance(artifact, dict) and artifact.get("path")
+        }
+    source_state = _dict_value(record.get("source"))
     return RunSummary(
         status="no_op",
         exit_code=0,
@@ -936,9 +948,19 @@ def _no_op_summary(
         warnings=[f"source already ingested; reconcile {reconcile['status']}"],
         details={
             "reason": "source_already_ingested",
+            "source": {
+                "path": _relative_to_meetings(paths, source),
+                "source_type": source.suffix.lower().lstrip(".") or "unknown",
+                "known_original_path": source_state.get("original_path"),
+            },
             "existing_artifacts": existing_artifacts,
+            "existing_artifact_details": existing_artifact_details,
             "archive": {"processed_path": repair_result["processed_path"]},
             "reconcile": reconcile,
+            "repair": {
+                "changed": repair_result["changed"],
+                "ledger_event": "reconcile_repaired" if repair_result["changed"] else None,
+            },
         },
     )
 

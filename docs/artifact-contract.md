@@ -735,13 +735,59 @@ Duplicate/no-op summary:
   "artifacts": [],
   "warnings": [],
   "errors": [],
+  "source": {
+    "path": "_inbox/Call with G, Kushali (5).docx",
+    "source_type": "docx",
+    "known_original_path": "_inbox/Call with G, Kushali (5).docx"
+  },
   "existing_artifacts": {
     "summary-plus-verbatim": "2026-06-12-kushali-adbook-fact-revenue-detail.md"
+  },
+  "existing_artifact_details": {
+    "summary-plus-verbatim": {
+      "status": "ready",
+      "path": "2026-06-12-kushali-adbook-fact-revenue-detail.md",
+      "schema_version": "1.0",
+      "title": "Kushali x Ken - AdBook fact_revenue detail design",
+      "slug": "kushali-adbook-fact-revenue-detail"
+    }
+  },
+  "archive": {
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx"
+  },
+  "reconcile": {
+    "status": "completed",
+    "path": "_inbox/_done/Call with G, Kushali (5).docx",
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx",
+    "reason": "source_already_ingested"
+  },
+  "repair": {
+    "changed": true,
+    "ledger_event": "reconcile_repaired"
   }
 }
 ```
 
 A duplicate/no-op run may still perform repair work when the ledger shows an otherwise-ingested source has incomplete archive or reconcile state. In that case, keep `status: "no_op"` and exit `0`, include the repair action in `warnings`, and append a complete `reconcile_repaired` ledger snapshot reflecting the repaired archive/reconcile state. If no archive or reconcile state changed, do not append a repair snapshot.
+
+The `existing_artifacts` map is the backward-compatible mode-to-path summary. `existing_artifact_details` carries the current ledger artifact entries for agents that need provider, title, slug, or schema metadata. `repair.changed` indicates whether the no-op run performed archive/reconcile repair; `repair.ledger_event` is `reconcile_repaired` only when a repair snapshot was appended, otherwise `null`.
+
+`reconcile --json` reports duplicate inbox repair work without re-ingesting sources. Repaired entries include:
+
+- `path`: reconciled inbox done path when reconciliation completed.
+- `source_sha256`
+- `meeting_id`
+- `status`
+- `reason`
+- `processed_path`
+- `changed`
+
+Skipped entries include:
+
+- `path`
+- `source_sha256`
+- `meeting_id`, usually `null`
+- `reason`
 
 Failure summary:
 
