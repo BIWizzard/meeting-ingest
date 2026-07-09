@@ -339,6 +339,38 @@ These fields are present on successful phase-1 request creation. Duplicate/no-op
 
 `source.path` is project-meetings-root-relative when the source is inside the meetings root; external sources use the engine's normal path fallback. `provider_request.path` and `provider_response.path` are the canonical nested handoff paths. The flat `request_path` and `expected_response_path` keys remain for backward compatibility with existing wrappers.
 
+### Batch Session Phase 1
+
+`ingest-inbox --provider session --json` performs engine-assisted batch phase 1 for direct files under `_inbox/`. It does not perform model extraction, write provider responses, render artifacts, write signals, or complete archive/reconcile for fresh sources. Wrappers must use the returned per-file handoff paths, write each provider response envelope, then run phase 2 with `ingest SOURCE --provider session --provider-response PATH --json`.
+
+The batch summary includes:
+
+- `command: "ingest-inbox"`
+- `provider: "session"`
+- `phase: "provider_request"`
+- `meetings_root`
+- `processed`: total per-file result count
+- `pending_provider_responses`: fresh files with provider requests ready for model extraction
+- `succeeded`: non-failed results, equal to `pending_provider_responses + no_ops`
+- `no_ops`: files already known to have primary artifacts
+- `failed`: per-file failures
+- `results`: one per direct inbox file
+
+Fresh per-file results use `status: "pending_provider_response"` and include the same phase-1 fields under `details` that a direct `provider-request --json` call returns, including `request_path`, `expected_response_path`, `provider_request.status: "ready"`, and `provider_response.status: "pending"`.
+
+Duplicate/no-op per-file results keep `status: "no_op"` and return the standard no-op details. They may repair duplicate inbox residue and append a `reconcile_repaired` ledger event as part of the existing no-op reconcile behavior.
+
+Failed per-file results use `status: "failed"` and include the typed error block. Source-read failures for inbox files keep the normal ingest behavior: the source may be quarantined and the ledger may record `source_quarantined`.
+
+The overall batch `status` is:
+
+- `no_op` when no direct inbox files were found
+- `success` when all direct files are either pending provider response or no-op
+- `partial_success` when at least one file failed and at least one file was pending or no-op
+- `failed` when every processed file failed
+
+Rerunning batch phase 1 before completing pending phase-2 ingests may mint fresh request paths and leave older handoff files for stale-cache cleanup. Wrappers should complete pending phase-2 ingests before rerunning a session batch unless they intentionally want a fresh request.
+
 `ingest --provider-response` is phase 2 of this flow and hard-requires the matching persisted request file. It must not accept an arbitrary provider response envelope without the corresponding request file.
 
 `PATH` may be absolute or relative. Relative paths are resolved first from the current working directory and then from the meetings root when needed. Wrappers should prefer the engine-returned `expected_response_path` under `_cache/provider-responses/`, but alternate response locations are valid as long as the envelope and persisted request verify.

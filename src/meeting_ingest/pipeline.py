@@ -203,7 +203,12 @@ def ingest_inbox(
     selected_quality = quality or config.default_quality
     _validate_ingest_options(config, selected_mode, selected_provider)
     if selected_provider == "session":
-        raise ConfigError("ingest-inbox does not support provider 'session'.", code="session_provider_batch_unsupported")
+        return _session_ingest_inbox_requests(
+            paths,
+            selected_mode=selected_mode,
+            selected_quality=selected_quality,
+            clock=clock,
+        )
 
     sources = _direct_inbox_sources(paths)
     results: list[dict[str, object]] = []
@@ -233,36 +238,7 @@ def ingest_inbox(
             )
             continue
 
-        summary_data = summary.to_dict()
-        results.append(
-            {
-                "source": relative_source,
-                "status": summary.status,
-                "exit_code": summary.exit_code,
-                "source_sha256": summary.source_sha256,
-                "meeting_id": summary.meeting_id,
-                "ingest_run_id": summary.ingest_run_id,
-                "artifacts": summary.artifacts,
-                "warnings": summary.warnings,
-                "errors": summary.errors,
-                "details": {
-                    key: value
-                    for key, value in summary_data.items()
-                    if key
-                    not in {
-                        "schema_version",
-                        "status",
-                        "exit_code",
-                        "source_sha256",
-                        "meeting_id",
-                        "ingest_run_id",
-                        "artifacts",
-                        "warnings",
-                        "errors",
-                    }
-                },
-            }
-        )
+        results.append(_batch_result_from_summary(relative_source, summary))
 
     succeeded = sum(1 for result in results if result["status"] in {"success", "no_op"})
     failed = sum(1 for result in results if result["status"] == "failed")
@@ -289,6 +265,110 @@ def ingest_inbox(
             "results": results,
         },
     )
+
+
+def _session_ingest_inbox_requests(
+    paths: ProjectPaths,
+    *,
+    selected_mode: str,
+    selected_quality: str,
+    clock: Clock | None,
+) -> RunSummary:
+    sources = _direct_inbox_sources(paths)
+    results: list[dict[str, object]] = []
+    batch_errors: list[dict[str, object]] = []
+    for source in sources:
+        relative_source = str(source.relative_to(paths.meetings_root))
+        try:
+            summary = provider_request(
+                source,
+                start=paths.meetings_root,
+                mode=selected_mode,
+                provider="session",
+                quality=selected_quality,
+                clock=clock,
+            )
+        except MeetingIngestError as exc:
+            error_block = exc.to_error_block()
+            batch_errors.append({"source": relative_source, **error_block})
+            results.append(
+                {
+                    "source": relative_source,
+                    "status": "failed",
+                    "exit_code": exc.exit_code,
+                    "errors": [error_block],
+                    "artifacts": [],
+                }
+            )
+            continue
+
+        result = _batch_result_from_summary(relative_source, summary)
+        if summary.status == "success":
+            result["status"] = "pending_provider_response"
+        results.append(result)
+
+    pending = sum(1 for result in results if result["status"] == "pending_provider_response")
+    no_op = sum(1 for result in results if result["status"] == "no_op")
+    failed = sum(1 for result in results if result["status"] == "failed")
+    succeeded = pending + no_op
+    if not results:
+        status = "no_op"
+        exit_code = 0
+    elif failed:
+        status = "partial_success" if succeeded else "failed"
+        exit_code = EXIT_GENERAL_FAILURE
+    else:
+        status = "success"
+        exit_code = 0
+
+    return RunSummary(
+        status=status,
+        exit_code=exit_code,
+        errors=batch_errors,
+        details={
+            "command": "ingest-inbox",
+            "provider": "session",
+            "phase": "provider_request",
+            "meetings_root": str(paths.meetings_root),
+            "processed": len(results),
+            "pending_provider_responses": pending,
+            "succeeded": succeeded,
+            "no_ops": no_op,
+            "failed": failed,
+            "results": results,
+        },
+    )
+
+
+def _batch_result_from_summary(relative_source: str, summary: RunSummary) -> dict[str, object]:
+    summary_data = summary.to_dict()
+    return {
+        "source": relative_source,
+        "status": summary.status,
+        "exit_code": summary.exit_code,
+        "source_sha256": summary.source_sha256,
+        "meeting_id": summary.meeting_id,
+        "ingest_run_id": summary.ingest_run_id,
+        "artifacts": summary.artifacts,
+        "warnings": summary.warnings,
+        "errors": summary.errors,
+        "details": {
+            key: value
+            for key, value in summary_data.items()
+            if key
+            not in {
+                "schema_version",
+                "status",
+                "exit_code",
+                "source_sha256",
+                "meeting_id",
+                "ingest_run_id",
+                "artifacts",
+                "warnings",
+                "errors",
+            }
+        },
+    }
 
 
 def _ingest_locked(

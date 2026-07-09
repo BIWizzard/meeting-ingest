@@ -180,7 +180,7 @@ This auto-init decision should be confirmed before implementation.
 
 Future enhancement: add controlled parallelism for inbox ingestion, such as `--jobs`, or harness-level fan-out to multiple focused sub-agents. This should wait until the engine has explicit coordination for shared ledger writes, lock behavior, provider rate limits, and per-file reporting.
 
-Current personal-workflow gap: `ingest-inbox` rejects `provider=session`, so the active agent must currently run the two-phase session-provider loop for each direct inbox file. The expected agent workflow is documented in `docs/session-provider-inbox-agent-workflow.md`. A near-term follow-up should add a first-class session inbox wrapper or engine-assisted workflow so a user can tell Codex or Claude Code to process the inbox and the agent can complete provider-request, extraction response, phase-2 ingest, archive, and reconcile without ad hoc command selection.
+Current personal-workflow state: `ingest-inbox --provider session --json` performs the engine-assisted batch phase 1 by creating one provider request per direct inbox file and returning per-file request/response paths. The active agent must still write provider response JSON and run phase-2 `ingest --provider session --provider-response ...` for each pending result. The expected agent workflow is documented in `docs/session-provider-inbox-agent-workflow.md`. A near-term follow-up should make the active-agent wrapper consume the batch result and complete extraction response, phase-2 ingest, archive, and reconcile without ad hoc command selection.
 
 ## Project Layout
 
@@ -731,7 +731,7 @@ Goal:
 
 Ready now:
 
-- add a session-aware inbox command or wrapper that enumerates direct files in `_inbox/` and runs `provider-request` for each file
+- teach active-agent wrappers to consume `ingest-inbox --provider session --json` results and complete each pending provider response
 - reuse the existing per-file provider response handoff contract for batch orchestration
 - make batch processing resume-safe through engine-owned state reporting, such as `status --json`, no-op `provider-request` output, or the batch command's own per-source planner
 - report per-file success, failure, skipped duplicate, provider-response-needed, and incomplete-reconcile states
@@ -739,7 +739,7 @@ Ready now:
 
 Needs design decision:
 
-- whether this belongs in `meeting-ingest ingest-inbox --provider session`, a separate `session-inbox` command, or host-specific wrappers that call existing engine commands
+- whether later work should keep all orchestration under `meeting-ingest ingest-inbox --provider session` or add host-specific wrappers above the engine command
 - how much of the active agent extraction step can be automated in Codex, Claude Code, Supa Code, and T3 Code without fragmenting behavior
 - whether the command should stop on first session extraction failure or continue to later files
 - whether to propose a provider-handoff contract change to the current runtime file lifecycle: delete request/response files on success, retain them on failure, and let `doctor` warn on stale files

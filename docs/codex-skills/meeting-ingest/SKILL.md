@@ -38,15 +38,15 @@ _local/project-context/meetings/_inbox/
 
 Ignore files already under `_inbox/_done/`.
 
-`meeting-ingest ingest-inbox` does not currently complete session-provider work by itself. Use the two-phase session workflow for each direct inbox file.
+`meeting-ingest ingest-inbox --provider session --json` creates session-provider requests for each direct inbox file. It does not complete the model extraction or phase-2 ingest by itself.
 
 Phase 1:
 
 ```bash
-uv run meeting-ingest provider-request "$SOURCE" --provider session --quality balanced --json
+uv run meeting-ingest ingest-inbox --provider session --quality balanced --json
 ```
 
-Read the returned `request_path` and `expected_response_path`. They are relative to the meetings root.
+For each result with `status: "pending_provider_response"`, read the returned `details.request_path` and `details.expected_response_path`. They are relative to the meetings root.
 
 ## Session Provider Extraction
 

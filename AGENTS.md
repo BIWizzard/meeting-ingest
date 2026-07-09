@@ -102,11 +102,11 @@ allow_session_provider = true
 
 If the config is missing or still defaults to `mock`, update it for this local workflow before processing.
 
-`meeting-ingest ingest-inbox` currently does not complete `provider=session` work by itself because session extraction requires the active agent to produce the provider response JSON. Until a first-class session inbox wrapper exists, process each direct file in `_local/project-context/meetings/_inbox/` with this loop:
+`meeting-ingest ingest-inbox --provider session --json` currently performs batch phase 1 by creating session-provider requests for each direct inbox file. It does not complete session extraction by itself because the active agent must produce the provider response JSON. Process the inbox with this loop:
 
-1. Run `uv run meeting-ingest provider-request <source> --provider session --quality balanced --json`.
-2. Read the generated request file from the returned `request_path`.
-3. Produce the expected provider response JSON at the returned `expected_response_path`.
+1. Run `uv run meeting-ingest ingest-inbox --provider session --quality balanced --json`.
+2. For each result with `status: "pending_provider_response"`, read the generated request file from `details.request_path`.
+3. Produce the expected provider response JSON at `details.expected_response_path`.
 4. Run `uv run meeting-ingest ingest <source> --provider session --provider-response <expected_response_path> --json`.
 5. Confirm the run summary reports `status: "success"`, `provider: "session"`, a markdown artifact path, signal artifact path, archive path, and completed reconcile path.
 6. Continue until no direct files remain in `_inbox/` except files under `_inbox/_done/`.

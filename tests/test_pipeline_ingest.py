@@ -11,6 +11,7 @@ from meeting_ingest.cli import main
 from meeting_ingest.errors import (
     EXIT_ARCHIVE_RECONCILE,
     EXIT_ARTIFACT_WRITE,
+    EXIT_GENERAL_FAILURE,
     EXIT_LEDGER_WRITE,
     EXIT_PROVIDER_FAILURE,
     EXIT_PROVIDER_VALIDATION,
@@ -1218,17 +1219,98 @@ def test_provider_request_duplicate_source_returns_no_op_without_request_file(tm
     assert not list((paths.cache / "provider-requests").glob("*.json"))
 
 
-def test_ingest_inbox_rejects_session_provider_before_batch_loop(tmp_path: Path) -> None:
+def test_ingest_inbox_session_provider_creates_batch_provider_requests(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     _allow_session_provider(paths.config_path)
     source = paths.inbox / "2026-07-03-team-sync.txt"
     source.write_text("Ken: Hello\n", encoding="utf-8")
 
-    with pytest.raises(ConfigError) as exc:
-        ingest_inbox(tmp_path, provider="session")
+    summary = ingest_inbox(
+        tmp_path,
+        provider="session",
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    result = summary.details["results"][0]
+    result_details = result["details"]
 
-    assert exc.value.code == "session_provider_batch_unsupported"
+    assert summary.status == "success"
+    assert summary.details["provider"] == "session"
+    assert summary.details["phase"] == "provider_request"
+    assert summary.details["processed"] == 1
+    assert summary.details["pending_provider_responses"] == 1
+    assert summary.details["succeeded"] == 1
+    assert summary.details["no_ops"] == 0
+    assert result["source"] == "_inbox/2026-07-03-team-sync.txt"
+    assert result["status"] == "pending_provider_response"
+    assert result["meeting_id"] == "mtg-20260703-28e2f332"
+    assert result["ingest_run_id"].startswith("ingest-20260703-20260703T120000Z-")
+    assert result_details["command"] == "provider-request"
+    assert result_details["provider"] == "session"
+    assert result_details["provider_request"]["status"] == "ready"
+    assert result_details["provider_response"]["status"] == "pending"
+    assert (paths.meetings_root / result_details["request_path"]).exists()
+    assert not (paths.meetings_root / result_details["expected_response_path"]).exists()
     assert read_records(paths.ledger) == []
+    assert source.exists()
+
+
+def test_ingest_inbox_session_provider_reports_mixed_batch_outcomes(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    already = paths.inbox / "2026-07-03-already.txt"
+    already.write_text("Ken: Already handled\n", encoding="utf-8")
+    first = ingest(
+        already,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    already.write_text("Ken: Already handled\n", encoding="utf-8")
+    fresh = paths.inbox / "2026-07-03-fresh.txt"
+    fresh.write_text("Ken: Fresh handoff\n", encoding="utf-8")
+    unsupported = paths.inbox / "2026-07-03-unsupported.pdf"
+    unsupported.write_text("not supported", encoding="utf-8")
+
+    summary = ingest_inbox(
+        tmp_path,
+        provider="session",
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)),
+    )
+    results = {result["source"]: result for result in summary.details["results"]}
+    records = read_records(paths.ledger)
+
+    assert summary.status == "partial_success"
+    assert summary.exit_code == EXIT_GENERAL_FAILURE
+    assert summary.details["processed"] == 3
+    assert summary.details["pending_provider_responses"] == 1
+    assert summary.details["succeeded"] == 2
+    assert summary.details["no_ops"] == 1
+    assert summary.details["failed"] == 1
+    assert results["_inbox/2026-07-03-already.txt"]["status"] == "no_op"
+    assert results["_inbox/2026-07-03-already.txt"]["meeting_id"] == first.meeting_id
+    assert results["_inbox/2026-07-03-fresh.txt"]["status"] == "pending_provider_response"
+    assert results["_inbox/2026-07-03-fresh.txt"]["details"]["provider_request"]["status"] == "ready"
+    assert results["_inbox/2026-07-03-unsupported.pdf"]["status"] == "failed"
+    assert results["_inbox/2026-07-03-unsupported.pdf"]["exit_code"] == 3
+    assert summary.errors == [
+        {
+            "source": "_inbox/2026-07-03-unsupported.pdf",
+            "phase": "source_read",
+            "code": "unsupported_source_format",
+            "message": f"Unsupported source format: {unsupported.resolve()}",
+            "recoverable": False,
+            "details": {"path": str(unsupported.resolve())},
+        }
+    ]
+    assert [record["event"] for record in records] == [
+        "primary_artifacts_ready",
+        "ingest_completed",
+        "reconcile_repaired",
+        "source_quarantined",
+    ]
+    assert records[-1]["quarantine"]["status"] == "quarantined"
+    assert not already.exists()
+    assert fresh.exists()
+    assert not unsupported.exists()
 
 
 def test_session_provider_stale_response_returns_no_op_without_consuming_response(tmp_path: Path) -> None:

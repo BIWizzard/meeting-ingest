@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Completed and committed the Layer 1 no-op/reconcile run-summary completeness slice as 5408126 feat: enrich no-op reconcile summaries. Duplicate/no-op summaries now include current source state, known original path, backward-compatible existing_artifacts, richer existing_artifact_details, archive/reconcile state, and repair.changed/ledger_event. reconcile --json repaired/skipped entries now include source_sha256 and meeting_id where known. Claude review returned commit-ready-with-notes; the actionable note was fixed by reporting known meeting_id for non-primary skipped records and adding regression coverage. Verification: uv run pytest tests/test_pipeline_ingest.py => 53 passed; uv run pytest => 119 passed; py_compile passed; git diff --check passed.",
+  "status_summary": "Addressed Claude review blockers for session inbox phase 1. Session batch succeeded now means all non-failed results (pending_provider_response + no_op) and adds no_ops for already-ingested files. Added mixed-outcome regression covering pending request, duplicate no-op/reconcile repair, unsupported source failure/quarantine, partial_success, and aggregate counts. Documented the ingest-inbox --provider session batch envelope and pending_provider_response contract in provider-handoff-contract.md, plus workflow rerun/side-effect notes. Verification: uv run pytest => 120 passed; py_compile passed; git diff --check passed.",
   "active_plan": null,
   "active_task": null,
   "active_files": [],
@@ -15,16 +15,16 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Start a fresh session from a clean pushed main branch. Continue Roadmap Layer 1 or move toward Layer 3 session inbox automation. Recommended next slice: inspect remaining agent-facing summaries and docs for session inbox automation readiness, especially batch/session wrapper state planning and whether ingest-inbox should gain a provider=session engine-assisted workflow."
+    "Next: rerun Claude review on the updated working tree. If clean, commit this session inbox phase-1 slice, including the iQ Context state updates if desired under the project source-control policy. After commit, move to active-agent wrapper automation that consumes batch pending_provider_response results and completes phase 2."
   ],
   "assumptions": [],
-  "continuation_hint": "Completed and committed the Layer 1 no-op/reconcile run-summary completeness slice as 5408126 feat: enrich no-op reconcile summaries. Duplicate/no-op summaries now include current source state, known original path, backward-compatible existing_artifacts, richer existing_artifact_details, archive/reconcile state, and repair.changed/ledger_event. reconcile --json repaired/skipped entries now include source_sha256 and meeting_id where known. Claude review returned commit-ready-with-notes; the actionable note was fixed by reporting known meeting_id for non-primary skipped records and adding regression coverage. Verification: uv run pytest tests/test_pipeline_ingest.py => 53 passed; uv run pytest => 119 passed; py_compile passed; git diff --check passed.",
+  "continuation_hint": "Next: Next: rerun Claude review on the updated working tree. If clean, commit this session inbox phase-1 slice, including the iQ Context state updates if desired under the project source-control policy. After commit, move to active-agent wrapper automation that consumes batch pending_provider_response results and completes phase 2.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-09T00:41:08.610Z",
+  "last_saved_at": "2026-07-09T00:54:50.431Z",
   "last_wrapped_at": "2026-07-09T00:42:20.025Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-09T00:42:20.025Z"
+  "updated_at": "2026-07-09T00:54:50.431Z"
 }

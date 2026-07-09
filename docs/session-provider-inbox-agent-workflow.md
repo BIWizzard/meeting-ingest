@@ -33,33 +33,29 @@ allow_session_provider = true
 
 If the config still uses `default_provider = "mock"` or `allow_session_provider = false`, update the local config before processing the inbox.
 
-## Important Current Limitation
+## Current Session Batch Behavior
 
-`meeting-ingest ingest-inbox` currently rejects `provider=session`.
+`meeting-ingest ingest-inbox --provider session --json` performs batch phase 1 for direct inbox files.
 
-That is intentional in the current engine because a session-provider ingest has two phases:
+A session-provider ingest still has two phases:
 
 1. the engine creates a transcript-bearing provider request
 2. the active agent or extraction sub-agent writes the provider response JSON
 3. the engine completes validation, rendering, signals, ledger, archive, and reconcile
 
-Until a first-class session inbox wrapper exists, agents should process inbox files by looping over direct files in `_inbox/` and running the two-phase flow for each file.
+For session batches, `ingest-inbox` creates one provider request per direct inbox file and returns per-file `request_path` and `expected_response_path` values. It does not perform the model extraction or phase-2 ingest by itself.
+
+Complete pending phase-2 ingests before rerunning the batch, or expect regenerated request paths. Fresh request creation does not write the ledger, but duplicate/no-op files may be reconciled to `_inbox/_done/`, and source-read failures may be quarantined using normal ingest behavior.
 
 ## Workflow
 
-List direct inbox files:
+Run batch phase 1:
 
 ```bash
-find _local/project-context/meetings/_inbox -maxdepth 1 -type f -print
+uv run meeting-ingest ingest-inbox --provider session --quality balanced --json
 ```
 
-For each file, run phase 1:
-
-```bash
-uv run meeting-ingest provider-request "$SOURCE" --provider session --quality balanced --json
-```
-
-Read the JSON summary. It returns:
+Read the JSON summary. Each result with `status: "pending_provider_response"` returns these fields under `details`:
 
 - `request_path`
 - `expected_response_path`
@@ -75,7 +71,7 @@ The returned handoff paths are relative to the meetings root. The meetings root 
 _local/project-context/meetings
 ```
 
-Read the provider request file. It contains the normalized transcript and identity fields the response must echo.
+For each pending result, read the provider request file. It contains the normalized transcript and identity fields the response must echo.
 
 Write one provider response JSON file at the returned `expected_response_path`. The response must use:
 
@@ -119,7 +115,7 @@ Use the current host in `provider.host`:
 
 Use the actual model identifier if the host exposes one. Otherwise use `<host>-session`, such as `codex-session` or `claude-code-session`.
 
-Complete phase 2:
+Complete phase 2 for the same source:
 
 ```bash
 uv run meeting-ingest ingest "$SOURCE" --provider session --provider-response "$RESPONSE_PATH" --json
@@ -135,7 +131,7 @@ Confirm the summary includes:
 - processed archive path
 - reconcile status `completed`
 
-Then process the next direct inbox file.
+Then process the next pending result.
 
 ## Response Quality Requirements
 

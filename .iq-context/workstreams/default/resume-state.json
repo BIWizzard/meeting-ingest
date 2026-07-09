@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Start a fresh session from a clean pushed main branch. Continue Roadmap Layer 1 or move toward Layer 3 session inbox automation. Recommended next slice: inspect remaining agent-facing summaries and docs for session inbox automation readiness, especially batch/session wrapper state planning and whether ingest-inbox should gain a provider=session engine-assisted workflow."
+    "Next: rerun Claude review on the updated working tree. If clean, commit this session inbox phase-1 slice, including the iQ Context state updates if desired under the project source-control policy. After commit, move to active-agent wrapper automation that consumes batch pending_provider_response results and completes phase 2."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Start a fresh session from a clean pushed main branch. Continue Roadmap Layer 1 or move toward Layer 3 session inbox automation. Recommended next slice: inspect remaining agent-facing summaries and docs for session inbox automation readiness, especially batch/session wrapper state planning and whether ingest-inbox should gain a provider=session engine-assisted workflow.",
-  "updated_at": "2026-07-09T00:42:20.025Z"
+  "resume_from": "Resume with: Next: rerun Claude review on the updated working tree. If clean, commit this session inbox phase-1 slice, including the iQ Context state updates if desired under the project source-control policy. After commit, move to active-agent wrapper automation that consumes batch pending_provider_response results and completes phase 2.",
+  "updated_at": "2026-07-09T00:54:50.431Z"
 }
