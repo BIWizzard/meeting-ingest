@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Next action: optionally run a second Claude review on the fixed working tree, then review .iq-context state and commit if clean. Potential later slice: expose the pending handoff planner through status/doctor."
+    "Next slice: expose the pending session handoff planner through status or doctor so stale/pending handoffs are visible outside session-inbox, or begin host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Next action: optionally run a second Claude review on the fixed working tree, then review .iq-context state and commit if clean. Potential later slice: expose the pending handoff planner through status/doctor.",
-  "updated_at": "2026-07-09T01:19:07.392Z"
+  "resume_from": "Resume with: Next slice: expose the pending session handoff planner through status or doctor so stale/pending handoffs are visible outside session-inbox, or begin host-specific extractor adapter design for Codex/Claude/Supa/T3 if a callable sub-agent surface is available.",
+  "updated_at": "2026-07-09T01:20:22.264Z"
 }
