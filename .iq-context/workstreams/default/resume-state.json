@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Push commits when ready, or continue Layer 1 by inspecting run-summary completeness for provider=session, batch ingest, duplicate/no-op, and reconcile outputs."
+    "Continue Layer 1 by inspecting duplicate/no-op and reconcile run summaries for engine-owned state completeness, or push ecac629 and the iQ Context continuity commit after committing this state."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Push commits when ready, or continue Layer 1 by inspecting run-summary completeness for provider=session, batch ingest, duplicate/no-op, and reconcile outputs.",
-  "updated_at": "2026-07-09T00:22:17.839Z"
+  "resume_from": "Resume with: Continue Layer 1 by inspecting duplicate/no-op and reconcile run summaries for engine-owned state completeness, or push ecac629 and the iQ Context continuity commit after committing this state.",
+  "updated_at": "2026-07-09T00:31:31.598Z"
 }
