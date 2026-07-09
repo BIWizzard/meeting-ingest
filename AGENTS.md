@@ -102,9 +102,11 @@ allow_session_provider = true
 
 If the config is missing or still defaults to `mock`, update it for this local workflow before processing.
 
-`meeting-ingest ingest-inbox --provider session --json` currently performs batch phase 1 by creating session-provider requests for each direct inbox file. It does not complete session extraction by itself because the active agent must produce the provider response JSON. Process the inbox with this loop:
+`meeting-ingest session-inbox --json` is the active-agent wrapper surface. It scans existing provider requests first, completes ready responses before creating fresh requests, and skips fresh phase 1 while unresolved handoffs remain. In plain CLI use it reports `pending_provider_response` entries because the CLI cannot invoke the active model session by itself.
 
-1. Run `uv run meeting-ingest ingest-inbox --provider session --quality balanced --json`.
+`meeting-ingest ingest-inbox --provider session --json` is the lower-level batch phase-1 command. It creates session-provider requests for each direct inbox file. It does not complete session extraction by itself because the active agent must produce the provider response JSON. Process the inbox with this loop:
+
+1. Run `uv run meeting-ingest session-inbox --quality balanced --json`.
 2. For each result with `status: "pending_provider_response"`, read the generated request file from `details.request_path`.
 3. Produce the expected provider response JSON at `details.expected_response_path`.
 4. Run `uv run meeting-ingest ingest <source> --provider session --provider-response <expected_response_path> --json`.

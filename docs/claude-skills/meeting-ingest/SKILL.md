@@ -38,12 +38,18 @@ _local/project-context/meetings/_inbox/
 
 Ignore files already under `_inbox/_done/`.
 
-`meeting-ingest ingest-inbox --provider session --json` creates session-provider requests for each direct inbox file. It does not complete the model extraction or phase-2 ingest by itself.
+`meeting-ingest session-inbox --json` is the active-agent wrapper surface. In plain CLI use it creates session-provider requests for each direct inbox file and reports `pending_provider_response` entries because the CLI cannot invoke the active model session by itself.
+
+It scans existing provider requests first, completes ready responses before creating fresh requests, and skips fresh phase 1 while unresolved handoffs remain.
+
+It reports old or out-of-scope request files as `stale_handoff` with a cleanup hint instead of failing the batch.
+
+`meeting-ingest ingest-inbox --provider session --json` is the lower-level phase-1 command. It also creates session-provider requests for each direct inbox file. It does not complete the model extraction or phase-2 ingest by itself.
 
 Phase 1:
 
 ```bash
-uv run meeting-ingest ingest-inbox --provider session --quality balanced --json
+uv run meeting-ingest session-inbox --quality balanced --json
 ```
 
 For each result with `status: "pending_provider_response"`, read the returned `details.request_path` and `details.expected_response_path`. They are relative to the meetings root.

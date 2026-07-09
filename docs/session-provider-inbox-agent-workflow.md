@@ -49,7 +49,36 @@ Complete pending phase-2 ingests before rerunning the batch, or expect regenerat
 
 ## Workflow
 
-Run batch phase 1:
+Run the session inbox wrapper:
+
+```bash
+uv run meeting-ingest session-inbox --quality balanced --json
+```
+
+The CLI wrapper prepares the same handoff files as `ingest-inbox --provider session`.
+Because a plain CLI process cannot invoke the active model session by itself, it reports
+`pending_provider_response` entries until the active agent writes the expected response
+files and runs phase 2.
+
+The reusable automation hook for host wrappers is `meeting_ingest.session_inbox.process_session_inbox`.
+Pass an extractor callback that reads the request payload and writes the response envelope
+to the expected response path. The wrapper then calls phase 2 for each completed response
+and reports markdown, signals, archive, and reconcile paths.
+
+For interruption recovery, `session-inbox` first scans existing provider request files
+under `_cache/provider-requests/`. If a matching response file already exists, it runs
+phase 2 before creating new requests. If an existing request is still waiting for a
+response, it reports that pending handoff and skips fresh phase 1 so the wrapper does
+not mint a second request for the same inbox file.
+
+If an existing request cannot be safely rebound to a direct inbox source, the wrapper
+reports `status: "stale_handoff"` with a cleanup hint rather than failing the batch.
+This can happen for old retained failure pairs, requests for external sources, missing
+inbox files, or hash mismatches. Complete those manually with the lower-level phase-2
+command when appropriate, or remove stale request/response files after confirming they
+are no longer needed.
+
+Lower-level phase 1:
 
 ```bash
 uv run meeting-ingest ingest-inbox --provider session --quality balanced --json

@@ -163,6 +163,7 @@ meeting-ingest init
 meeting-ingest provider-request <source> [--mode summary-plus-verbatim] --provider session [--quality fast|balanced|deep] [--json]
 meeting-ingest ingest <source> [--mode summary-plus-verbatim] [--provider mock|anthropic] [--quality fast|balanced|deep] [--provider-response path] [--json]
 meeting-ingest ingest-inbox [--json]
+meeting-ingest session-inbox [--quality fast|balanced|deep] [--json]
 meeting-ingest doctor
 meeting-ingest status
 meeting-ingest reconcile
@@ -180,7 +181,7 @@ This auto-init decision should be confirmed before implementation.
 
 Future enhancement: add controlled parallelism for inbox ingestion, such as `--jobs`, or harness-level fan-out to multiple focused sub-agents. This should wait until the engine has explicit coordination for shared ledger writes, lock behavior, provider rate limits, and per-file reporting.
 
-Current personal-workflow state: `ingest-inbox --provider session --json` performs the engine-assisted batch phase 1 by creating one provider request per direct inbox file and returning per-file request/response paths. The active agent must still write provider response JSON and run phase-2 `ingest --provider session --provider-response ...` for each pending result. The expected agent workflow is documented in `docs/session-provider-inbox-agent-workflow.md`. A near-term follow-up should make the active-agent wrapper consume the batch result and complete extraction response, phase-2 ingest, archive, and reconcile without ad hoc command selection.
+Current personal-workflow state: `ingest-inbox --provider session --json` performs the engine-assisted batch phase 1 by creating one provider request per direct inbox file and returning per-file request/response paths. The active agent must still write provider response JSON and run phase-2 `ingest --provider session --provider-response ...` for each pending result. `meeting_ingest.session_inbox.process_session_inbox` is the thin active-agent wrapper hook: it scans existing provider requests first, completes any ready responses before minting fresh requests, skips fresh phase 1 while unresolved handoffs remain, invokes a host-provided extractor callback for each pending request, runs phase 2 for completed responses, and reports markdown, signals, archive, and reconcile paths. The `session-inbox` CLI command exposes the same wrapper without an extractor callback, so it honestly reports pending responses instead of pretending the CLI can access the active model. The expected agent workflow is documented in `docs/session-provider-inbox-agent-workflow.md`.
 
 ## Project Layout
 
@@ -731,9 +732,9 @@ Goal:
 
 Ready now:
 
-- teach active-agent wrappers to consume `ingest-inbox --provider session --json` results and complete each pending provider response
+- use `meeting_ingest.session_inbox.process_session_inbox` for active-agent wrappers that consume `ingest-inbox --provider session --json` results and complete each pending provider response
 - reuse the existing per-file provider response handoff contract for batch orchestration
-- make batch processing resume-safe through engine-owned state reporting, such as `status --json`, no-op `provider-request` output, or the batch command's own per-source planner
+- avoid reminting requests after interruptions by completing existing ready responses first and skipping fresh phase 1 while unresolved handoffs remain
 - report per-file success, failure, skipped duplicate, provider-response-needed, and incomplete-reconcile states
 - keep archive, ledger, signal, markdown rendering, and reconcile behavior inside the engine
 
@@ -742,6 +743,7 @@ Needs design decision:
 - whether later work should keep all orchestration under `meeting-ingest ingest-inbox --provider session` or add host-specific wrappers above the engine command
 - how much of the active agent extraction step can be automated in Codex, Claude Code, Supa Code, and T3 Code without fragmenting behavior
 - whether the command should stop on first session extraction failure or continue to later files
+- whether `status --json` and `doctor` should expose the same pending handoff planner used by the wrapper
 - whether to propose a provider-handoff contract change to the current runtime file lifecycle: delete request/response files on success, retain them on failure, and let `doctor` warn on stale files
 
 Acceptance criteria:

@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Pushed session inbox phase-1 slice to origin/main as a713b3d feat: plan session inbox handoffs. The slice makes ingest-inbox --provider session --json perform engine-assisted batch phase 1, returning pending_provider_response results with request/response paths, coherent succeeded/no_ops counts, mixed-outcome behavior, and documented batch contract/workflow updates. Installed Codex and Claude meeting-ingest skills were synced from repo sources. Verification before commit: uv run pytest => 120 passed; py_compile passed; git diff --check passed. Post-push status: main clean and aligned with origin/main.",
+  "status_summary": "Addressed Claude review findings for session-inbox wrapper. Added top-level allow_session_provider gate before scanning/extractor use. Existing handoffs whose inbox source is missing or hash-mismatched now report non-failing stale_handoff with cleanup guidance instead of poisoning the batch. Added tests for out-of-inbox stale requests, disabled-gate extractor prevention, extractor failure, missing-source stale handling, and existing ready/missing response resume behavior. Documented session-inbox JSON contract, phase1 fields, stale_handoff, inbox-scoped planner limits, and corrected retry-pair language in provider-handoff-contract. Synced AGENTS.md, workflow docs, and Codex/Claude skill sources/installed copies. Verification: uv run pytest => 129 passed; py_compile passed; git diff --check passed.",
   "active_plan": null,
   "active_task": null,
   "active_files": [],
@@ -15,16 +15,16 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Start fresh from clean origin/main. Next Layer 3 slice: active-agent wrapper automation for session inbox processing. Consume ingest-inbox --provider session --json, iterate pending_provider_response results, read details.request_path, write provider response envelopes to details.expected_response_path using the active host/session extraction, run ingest <source> --provider session --provider-response <path> --json for each, and report final markdown/signals/archive/reconcile paths. Decide whether this lives first as docs/agent workflow, thin local helper, or CLI-adjacent wrapper; keep extraction outside engine and rendering/ledger/archive/reconcile inside engine."
+    "Next action: optionally run a second Claude review on the fixed working tree, then review .iq-context state and commit if clean. Potential later slice: expose the pending handoff planner through status/doctor."
   ],
   "assumptions": [],
-  "continuation_hint": "Pushed session inbox phase-1 slice to origin/main as a713b3d feat: plan session inbox handoffs. The slice makes ingest-inbox --provider session --json perform engine-assisted batch phase 1, returning pending_provider_response results with request/response paths, coherent succeeded/no_ops counts, mixed-outcome behavior, and documented batch contract/workflow updates. Installed Codex and Claude meeting-ingest skills were synced from repo sources. Verification before commit: uv run pytest => 120 passed; py_compile passed; git diff --check passed. Post-push status: main clean and aligned with origin/main.",
+  "continuation_hint": "Next: Next action: optionally run a second Claude review on the fixed working tree, then review .iq-context state and commit if clean. Potential later slice: expose the pending handoff planner through status/doctor.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-09T00:54:50.431Z",
+  "last_saved_at": "2026-07-09T01:19:07.392Z",
   "last_wrapped_at": "2026-07-09T01:00:13.428Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-09T01:00:13.428Z"
+  "updated_at": "2026-07-09T01:19:07.392Z"
 }

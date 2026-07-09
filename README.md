@@ -120,6 +120,12 @@ Ingest every direct file in `_inbox/`:
 python3 -m meeting_ingest.cli ingest-inbox --json
 ```
 
+Prepare session-provider inbox handoffs:
+
+```bash
+python3 -m meeting_ingest.cli session-inbox --quality balanced --json
+```
+
 ## Providers
 
 The default provider is `mock`, which never sends transcript content outside the local process.

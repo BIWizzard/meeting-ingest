@@ -10,6 +10,7 @@ import sys
 from meeting_ingest import pipeline
 from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.session_inbox import process_session_inbox
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,6 +42,12 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_inbox_parser.add_argument("--provider")
     ingest_inbox_parser.add_argument("--quality")
     ingest_inbox_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+
+    session_inbox_parser = subparsers.add_parser("session-inbox")
+    session_inbox_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    session_inbox_parser.add_argument("--mode")
+    session_inbox_parser.add_argument("--quality")
+    session_inbox_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
     for command in ("doctor", "status", "reconcile"):
         command_parser = subparsers.add_parser(command)
@@ -75,6 +82,12 @@ def run(args: argparse.Namespace) -> RunSummary:
             Path(args.root),
             mode=args.mode,
             provider=args.provider,
+            quality=args.quality,
+        )
+    if args.command == "session-inbox":
+        return process_session_inbox(
+            Path(args.root),
+            mode=args.mode,
             quality=args.quality,
         )
     if args.command == "doctor":

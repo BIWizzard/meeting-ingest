@@ -371,6 +371,56 @@ The overall batch `status` is:
 
 Rerunning batch phase 1 before completing pending phase-2 ingests may mint fresh request paths and leave older handoff files for stale-cache cleanup. Wrappers should complete pending phase-2 ingests before rerunning a session batch unless they intentionally want a fresh request.
 
+### Session Inbox Wrapper
+
+`session-inbox --json` is the active-agent wrapper surface for direct inbox processing with `provider=session`.
+
+The wrapper does not move provider extraction, response validation, rendering, signals, ledger writes, archive, or reconcile out of the engine. It performs orchestration only:
+
+1. scan existing request files under `_cache/provider-requests/`
+2. complete phase 2 for existing handoffs whose expected response file is already present
+3. invoke a host-provided extractor callback when the wrapper is used through `meeting_ingest.session_inbox.process_session_inbox`
+4. run `ingest-inbox --provider session` for fresh direct inbox files only when no unresolved existing handoff is still pending
+5. report the per-file results
+
+A plain CLI invocation cannot access the active host model session. Therefore `meeting-ingest session-inbox --json` may create request files and report `pending_provider_response`, but it does not synthesize provider output.
+
+The top-level wrapper summary includes:
+
+- `command: "session-inbox"`
+- `provider: "session"`
+- `meetings_root`
+- `processed`: total reported records, including stale handoff records
+- `completed`: phase-2 results completed by this wrapper run, including phase-2 no-op results
+- `pending_provider_responses`: existing or fresh handoffs still waiting for provider response JSON
+- `stale_handoffs`: existing request files whose source cannot be safely resolved for the inbox wrapper
+- `no_ops`: fresh phase-1 duplicate/no-op inbox results
+- `failed`: actionable failures
+- `phase1`: fresh phase-1 summary metadata
+- `results`: one record per existing handoff and fresh phase-1 result
+
+The top-level `phase1.status` values are:
+
+- `not_run`: initialized state before any fresh phase-1 attempt
+- `skipped_existing_pending`: fresh phase 1 was skipped because an unresolved existing handoff remains pending
+- any status returned by `ingest-inbox --provider session`, such as `success` or `no_op`
+
+Existing handoff records use `details.phase: "existing_provider_request"` to distinguish them from fresh phase-1 results. When a response is completed, the completed result includes `phase1` containing the original existing-handoff record. This nested `phase1` is per-result provenance; it is separate from the top-level batch `phase1` summary.
+
+Existing handoff result statuses are:
+
+- `pending_provider_response`: source is present, source hash matches the request, and the expected response file is not ready or has not yet completed phase 2
+- `success`: phase 2 completed and produced artifacts/reconcile results
+- `no_op`: phase 2 found primary artifacts already ready for the source hash
+- `stale_handoff`: the request is stale or outside the inbox wrapper scope, such as a request for an external source or a request whose inbox source is missing or hash-mismatched
+- `failed`: malformed request files or actionable wrapper/phase-2 failures
+
+`stale_handoff` is non-failing. It is reported with a warning and a cleanup hint so an old or external request does not permanently poison normal inbox processing. Operators should complete those handoffs manually with the lower-level phase-2 command when appropriate, or remove stale request/response files after confirming they are no longer needed.
+
+The wrapper is inbox-scoped because current provider request files carry `source_name` but not a durable original source path. For existing handoffs, it only treats `_inbox/<source_name>` as actionable when the file exists and its hash matches the request. This avoids completing a stale or out-of-scope request against an unrelated inbox file with the same basename. Future support for arbitrary pending handoffs would require the request contract to persist an original source path or equivalent rebinding data.
+
+The wrapper may complete a persisted request/response pair until that pair is superseded by a successful ingest and cache cleanup. If phase 2 failed and retained the pair, a corrected response at the same expected path is treated as completing the same attempt. A new attempt for the same source should still start from a fresh phase-1 request when the prior pair should no longer be reused.
+
 `ingest --provider-response` is phase 2 of this flow and hard-requires the matching persisted request file. It must not accept an arbitrary provider response envelope without the corresponding request file.
 
 `PATH` may be absolute or relative. Relative paths are resolved first from the current working directory and then from the meetings root when needed. Wrappers should prefer the engine-returned `expected_response_path` under `_cache/provider-responses/`, but alternate response locations are valid as long as the envelope and persisted request verify.

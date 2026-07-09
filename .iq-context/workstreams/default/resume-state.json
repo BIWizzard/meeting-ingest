@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Start fresh from clean origin/main. Next Layer 3 slice: active-agent wrapper automation for session inbox processing. Consume ingest-inbox --provider session --json, iterate pending_provider_response results, read details.request_path, write provider response envelopes to details.expected_response_path using the active host/session extraction, run ingest <source> --provider session --provider-response <path> --json for each, and report final markdown/signals/archive/reconcile paths. Decide whether this lives first as docs/agent workflow, thin local helper, or CLI-adjacent wrapper; keep extraction outside engine and rendering/ledger/archive/reconcile inside engine."
+    "Next action: optionally run a second Claude review on the fixed working tree, then review .iq-context state and commit if clean. Potential later slice: expose the pending handoff planner through status/doctor."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Start fresh from clean origin/main. Next Layer 3 slice: active-agent wrapper automation for session inbox processing. Consume ingest-inbox --provider session --json, iterate pending_provider_response results, read details.request_path, write provider response envelopes to details.expected_response_path using the active host/session extraction, run ingest <source> --provider session --provider-response <path> --json for each, and report final markdown/signals/archive/reconcile paths. Decide whether this lives first as docs/agent workflow, thin local helper, or CLI-adjacent wrapper; keep extraction outside engine and rendering/ledger/archive/reconcile inside engine.",
-  "updated_at": "2026-07-09T01:00:13.428Z"
+  "resume_from": "Resume with: Next action: optionally run a second Claude review on the fixed working tree, then review .iq-context state and commit if clean. Potential later slice: expose the pending handoff planner through status/doctor.",
+  "updated_at": "2026-07-09T01:19:07.392Z"
 }
