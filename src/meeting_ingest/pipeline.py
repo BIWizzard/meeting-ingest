@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+import json
 import re
 
 from meeting_ingest.archive import archive_and_reconcile, quarantine_source, repair_duplicate_source
@@ -15,6 +17,7 @@ from meeting_ingest.errors import (
     ConfigError,
     EXIT_ARTIFACT_WRITE,
     EXIT_GENERAL_FAILURE,
+    EXIT_USAGE_OR_CONFIG,
     MeetingIngestError,
     ProviderError,
     SourceExtractionError,
@@ -23,7 +26,7 @@ from meeting_ingest.errors import (
 from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id
-from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record_for_source
+from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record_for_source, read_records
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
@@ -158,6 +161,128 @@ def ingest(
             meeting_date=meeting_date,
             clock=clock,
         )
+
+
+def repair_date(
+    selector: str,
+    *,
+    date: str,
+    start: Path | None = None,
+    clock: Clock | None = None,
+) -> RunSummary:
+    new_date = _validate_meeting_date(date)
+    _, paths = load_project(start or Path.cwd())
+    with ProjectLock(lock_path(paths.cache), clock=clock):
+        return _repair_date_locked(selector, new_date=new_date, paths=paths, clock=clock)
+
+
+def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, clock: Clock | None) -> RunSummary:
+    target: dict[str, Any] | None = None
+    for record in read_records(paths.ledger):
+        if selector in (record.get("meeting_id"), record.get("source_sha256")) and _record_has_primary_artifacts(record):
+            target = record
+    if target is None:
+        raise MeetingIngestError(
+            phase="repair",
+            code="repair_target_not_found",
+            message=f"No ready ingest found for selector: {selector}",
+            exit_code=EXIT_USAGE_OR_CONFIG,
+            recoverable=True,
+            details={"selector": selector},
+        )
+
+    meeting_id = str(target["meeting_id"])
+    artifacts = {mode: dict(entry) for mode, entry in target.get("artifacts", {}).items() if isinstance(entry, dict)}
+    for mode, entry in artifacts.items():
+        artifact_path = paths.meetings_root / str(entry.get("path", ""))
+        if not entry.get("path") or not artifact_path.exists():
+            raise MeetingIngestError(
+                phase="repair",
+                code="repair_artifact_missing",
+                message=f"Artifact for mode {mode!r} is missing: {entry.get('path')}",
+                exit_code=EXIT_ARTIFACT_WRITE,
+                recoverable=False,
+                details={"mode": mode, "path": entry.get("path")},
+            )
+
+    first_entry = next(iter(artifacts.values()))
+    previous = _front_matter_date_fields(paths.meetings_root / str(first_entry["path"]))
+    paths_already_repaired = all(
+        Path(str(entry["path"])).name.startswith(f"{new_date}-") for entry in artifacts.values()
+    )
+    if previous.get("date") == new_date and paths_already_repaired:
+        return RunSummary(
+            status="no_op",
+            exit_code=0,
+            source_sha256=str(target["source_sha256"]),
+            meeting_id=meeting_id,
+            details={"command": "repair-date", "date": new_date, "reason": "date_already_current"},
+        )
+
+    warnings: list[str] = []
+    changed_modes: list[str] = []
+    for mode, entry in artifacts.items():
+        old_path = paths.meetings_root / str(entry["path"])
+        slug = str(entry.get("slug") or re.sub(r"^\d{4}-\d{2}-\d{2}-", "", old_path.stem))
+        destination = _repaired_artifact_path(paths, new_date, slug, current=old_path)
+        content = _rewrite_front_matter_date(
+            old_path.read_text(encoding="utf-8"), date=new_date, confidence="manual", source="repair"
+        )
+        destination.path.write_text(content, encoding="utf-8")
+        if destination.path != old_path:
+            old_path.unlink()
+        if destination.collision:
+            warnings.append(f"artifact filename collision; wrote {destination.path.relative_to(paths.meetings_root)}")
+        entry["path"] = str(destination.path.relative_to(paths.meetings_root))
+        changed_modes.append(mode)
+
+    signals_state = dict(target.get("signals", {})) if isinstance(target.get("signals"), dict) else {}
+    if signals_state.get("path"):
+        _rewrite_signal_effective_at(paths.meetings_root / str(signals_state["path"]), new_date=new_date)
+
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="date_repaired",
+            source_sha256=str(target["source_sha256"]),
+            meeting_id=meeting_id,
+            ingest_run_id=None,
+            source=dict(target.get("source", {})),
+            artifacts=artifacts,
+            signals=signals_state,
+            reconcile=dict(target.get("reconcile", {})),
+            derived=dict(target.get("derived", {"playbook_update_status": "not_applicable"})),
+            repair={
+                "previous_date": previous.get("date"),
+                "previous_date_confidence": previous.get("date_confidence"),
+                "previous_date_source": previous.get("date_source"),
+                "date": new_date,
+                "changed_modes": changed_modes,
+            },
+        ),
+        clock=clock,
+    )
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        source_sha256=str(target["source_sha256"]),
+        meeting_id=meeting_id,
+        artifacts=[
+            {"kind": "markdown", "mode": mode, "status": "ready", "path": str(entry["path"])}
+            for mode, entry in artifacts.items()
+        ],
+        warnings=warnings,
+        details={
+            "command": "repair-date",
+            "repair": {
+                "previous_date": previous.get("date"),
+                "previous_date_confidence": previous.get("date_confidence"),
+                "previous_date_source": previous.get("date_source"),
+                "date": new_date,
+                "changed_modes": changed_modes,
+            },
+        },
+    )
 
 
 def provider_request(
@@ -982,6 +1107,60 @@ def _date_warnings(extraction: object) -> list[str]:
     return warnings
 
 
+def _front_matter_date_fields(path: Path) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return fields
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        for key in ("date", "date_confidence", "date_source"):
+            prefix = f"{key}: "
+            if line.startswith(prefix):
+                fields[key] = line[len(prefix):].strip()
+    return fields
+
+
+def _rewrite_front_matter_date(content: str, *, date: str, confidence: str, source: str) -> str:
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return content
+    replacements = {"date": date, "date_confidence": confidence, "date_source": source}
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            break
+        for key, value in replacements.items():
+            if lines[index].startswith(f"{key}: "):
+                lines[index] = f"{key}: {value}"
+    return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
+
+
+def _repaired_artifact_path(paths: ProjectPaths, new_date: str, slug: str, *, current: Path) -> _ArtifactPath:
+    base = f"{new_date}-{slug}"
+    candidate = paths.meetings_root / f"{base}.md"
+    collision = False
+    counter = 2
+    while candidate.exists() and candidate != current:
+        collision = True
+        candidate = paths.meetings_root / f"{base}-{counter}.md"
+        counter += 1
+    return _ArtifactPath(path=candidate, collision=collision)
+
+
+def _rewrite_signal_effective_at(path: Path, *, new_date: str) -> None:
+    if not path.exists():
+        return
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        record["effective_at"] = new_date
+        lines.append(json.dumps(record, sort_keys=True))
+    path.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+
+
 def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> _ArtifactPath:
     slug = _slug(title) or "untitled-meeting"
     base = f"{effective_date}-{slug}"
@@ -1147,7 +1326,7 @@ def _dict_value(value: object) -> dict:
 def _record_has_primary_artifacts(record: dict[str, object] | None) -> bool:
     if record is None:
         return False
-    if record.get("event") not in {"primary_artifacts_ready", "ingest_completed", "reconcile_repaired"}:
+    if record.get("event") not in {"primary_artifacts_ready", "ingest_completed", "reconcile_repaired", "date_repaired"}:
         return False
     artifacts = record.get("artifacts")
     return isinstance(artifacts, dict) and bool(artifacts)

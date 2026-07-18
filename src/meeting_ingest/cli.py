@@ -59,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     session_inbox_parser.add_argument("--quality")
     session_inbox_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
+    repair_date_parser = subparsers.add_parser("repair-date")
+    repair_date_parser.add_argument("selector", help="meeting_id or full source_sha256 of the ingest to repair.")
+    repair_date_parser.add_argument("--date", required=True, help="Correct meeting occurrence date (YYYY-MM-DD).")
+    repair_date_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    repair_date_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+
     for command in ("doctor", "status", "reconcile"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--root", default=".", help="Path used for project discovery.")
@@ -108,6 +114,8 @@ def run(args: argparse.Namespace) -> RunSummary:
         return pipeline.status(Path(args.root))
     if args.command == "reconcile":
         return pipeline.reconcile(Path(args.root))
+    if args.command == "repair-date":
+        return pipeline.repair_date(args.selector, date=args.date, start=Path(args.root))
     raise AssertionError(f"Unhandled command: {args.command}")
 
 

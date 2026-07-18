@@ -24,6 +24,7 @@ class LedgerSnapshot:
     derived: dict[str, Any] = field(default_factory=lambda: {"playbook_update_status": "not_applicable"})
     error: dict[str, Any] | None = None
     quarantine: dict[str, Any] | None = None
+    repair: dict[str, Any] | None = None
     schema_version: str = "1.0"
 
     def to_dict(self, *, clock: Clock | None = None) -> dict[str, Any]:
@@ -42,6 +43,7 @@ class LedgerSnapshot:
             "error": self.error,
             "quarantine": self.quarantine,
             "reconcile": self.reconcile,
+            **({"repair": self.repair} if self.repair is not None else {}),
         }
 
 
