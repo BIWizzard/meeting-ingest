@@ -129,3 +129,13 @@ Use [docs/session-provider-inbox-agent-workflow.md](docs/session-provider-inbox-
 For Codex specifically, the reusable skill source is maintained at [docs/codex-skills/meeting-ingest/SKILL.md](docs/codex-skills/meeting-ingest/SKILL.md) and installed to `~/.codex/skills/meeting-ingest/SKILL.md`. Keep those in sync when changing Codex-facing behavior.
 
 This is currently a lightweight local continuity layer. Semantic retrieval and richer host integrations are future work.
+
+## Tool Distribution
+
+The `meeting-ingest` CLI used outside this repo is a frozen `uv tool` install, not an editable one: consumer projects only ever run code that has merged to `main`, never in-progress working-tree state. After merging changes to `main`, refresh the global install from the repo root:
+
+```bash
+uv tool install --reinstall .
+```
+
+In this clone the refresh is automatic: post-commit/post-merge hooks under `scripts/git-hooks/` reinstall the tool whenever `main` moves, enabled via `git config core.hooksPath scripts/git-hooks`. That config is local-only, so fresh clones must run it once.
