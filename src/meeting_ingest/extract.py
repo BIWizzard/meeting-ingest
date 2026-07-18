@@ -21,6 +21,20 @@ class EffectiveDate:
 
 
 @dataclass(frozen=True)
+class OccurrenceCandidate:
+    value: str
+    confidence: str
+    source: str
+
+
+@dataclass(frozen=True)
+class OccurrenceSelection:
+    chosen: EffectiveDate
+    candidates: tuple[OccurrenceCandidate, ...]
+    conflict: bool
+
+
+@dataclass(frozen=True)
 class SourceExtraction:
     path: Path
     source_format: str
@@ -28,6 +42,7 @@ class SourceExtraction:
     normalized_text: str
     effective_date: EffectiveDate
     duration: str | None = None
+    date_selection: OccurrenceSelection | None = None
 
 
 _DATE_PATTERNS = (
@@ -39,23 +54,44 @@ _HUMAN_DATE = re.compile(r"^(?P<month>[A-Z][a-z]+) (?P<day>\d{1,2}), (?P<year>20
 _DURATION = re.compile(r"^(?:(?P<hours>\d+)h\s*)?(?:(?P<minutes>\d+)m\s*)?(?:(?P<seconds>\d+)s)$", re.MULTILINE)
 
 
-def infer_effective_date(path: Path, content: str = "") -> EffectiveDate:
+def select_occurrence(path: Path, content: str = "", *, override: str | None = None) -> OccurrenceSelection:
+    candidates: list[OccurrenceCandidate] = []
+    if override is not None:
+        candidates.append(OccurrenceCandidate(value=override, confidence="manual", source="override"))
+
     content_date = _date_from_content(content)
     if content_date is not None:
-        return EffectiveDate(value=content_date, confidence="high", source="content")
+        candidates.append(OccurrenceCandidate(value=content_date, confidence="high", source="content"))
 
     for pattern in _DATE_PATTERNS:
         match = pattern.search(path.name)
         if match:
             date_value = _valid_date(match.group("year"), match.group("month"), match.group("day"))
             if date_value is not None:
-                return EffectiveDate(value=date_value, confidence="high", source="filename")
+                candidates.append(OccurrenceCandidate(value=date_value, confidence="high", source="filename"))
+                break
 
     modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-    return EffectiveDate(value=modified.strftime("%Y-%m-%d"), confidence="low", source="file_mtime")
+    candidates.append(OccurrenceCandidate(value=modified.strftime("%Y-%m-%d"), confidence="low", source="file_mtime"))
+
+    chosen_candidate = candidates[0]
+    trusted_values = {candidate.value for candidate in candidates if candidate.source != "file_mtime"}
+    return OccurrenceSelection(
+        chosen=EffectiveDate(
+            value=chosen_candidate.value,
+            confidence=chosen_candidate.confidence,
+            source=chosen_candidate.source,
+        ),
+        candidates=tuple(candidates),
+        conflict=len(trusted_values) > 1,
+    )
 
 
-def extract_source(path: Path) -> SourceExtraction:
+def infer_effective_date(path: Path, content: str = "") -> EffectiveDate:
+    return select_occurrence(path, content).chosen
+
+
+def extract_source(path: Path, *, meeting_date: str | None = None) -> SourceExtraction:
     suffix = path.suffix.lower()
     if suffix == ".txt":
         raw_text = _read_text(path)
@@ -72,13 +108,15 @@ def extract_source(path: Path) -> SourceExtraction:
     else:
         raise UnsupportedSourceFormatError(str(path))
 
+    selection = select_occurrence(path, raw_text, override=meeting_date)
     return SourceExtraction(
         path=path,
         source_format=source_format,
         raw_text=raw_text,
         normalized_text=normalized,
-        effective_date=infer_effective_date(path, raw_text),
+        effective_date=selection.chosen,
         duration=_duration_from_content(raw_text),
+        date_selection=selection,
     )
 
 

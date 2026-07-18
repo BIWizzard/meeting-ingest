@@ -5,7 +5,7 @@ from zipfile import ZipFile
 import pytest
 
 from meeting_ingest.errors import UnsupportedSourceFormatError
-from meeting_ingest.extract import extract_source, infer_effective_date
+from meeting_ingest.extract import extract_source, infer_effective_date, select_occurrence
 
 
 def test_extract_txt_normalizes_text_and_infers_filename_date(tmp_path: Path) -> None:
@@ -272,3 +272,59 @@ def test_extract_source_rejects_unsupported_format(tmp_path: Path) -> None:
 
     with pytest.raises(UnsupportedSourceFormatError):
         extract_source(source)
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "teams-vtt"
+
+
+def _copy_fixture(tmp_path: Path, name: str, *, mtime: int) -> Path:
+    source = tmp_path / name
+    source.write_text((FIXTURES / name).read_text(encoding="utf-8"), encoding="utf-8")
+    os.utime(source, (mtime, mtime))
+    return source
+
+
+def test_select_occurrence_falls_back_to_file_mtime_for_dateless_teams_vtt(tmp_path: Path) -> None:
+    # 2026-07-16 00:00:00 UTC download time for a meeting held 2026-07-10.
+    source = _copy_fixture(tmp_path, "Daily Stand Up - Post-MVP (41).vtt", mtime=1784160000)
+
+    selection = select_occurrence(source, source.read_text(encoding="utf-8"))
+
+    assert selection.chosen.value == "2026-07-16"
+    assert selection.chosen.confidence == "low"
+    assert selection.chosen.source == "file_mtime"
+    assert selection.conflict is False
+    assert [c.source for c in selection.candidates] == ["file_mtime"]
+
+
+def test_select_occurrence_override_wins_and_is_manual(tmp_path: Path) -> None:
+    source = _copy_fixture(tmp_path, "Daily Stand Up - Post-MVP (42).vtt", mtime=1784160000)
+
+    selection = select_occurrence(source, source.read_text(encoding="utf-8"), override="2026-07-13")
+
+    assert selection.chosen.value == "2026-07-13"
+    assert selection.chosen.confidence == "manual"
+    assert selection.chosen.source == "override"
+
+
+def test_select_occurrence_flags_conflicting_trusted_candidates(tmp_path: Path) -> None:
+    source = tmp_path / "2026-07-02-standup.txt"
+    source.write_text("Team Standup-20260701_090000-Meeting Transcript\n", encoding="utf-8")
+
+    selection = select_occurrence(source, source.read_text(encoding="utf-8"))
+
+    assert selection.chosen.value == "2026-07-01"
+    assert selection.chosen.source == "content"
+    assert selection.conflict is True
+
+
+def test_extract_source_threads_meeting_date_override(tmp_path: Path) -> None:
+    source = _copy_fixture(tmp_path, "Daily Stand Up - Post-MVP (41).vtt", mtime=1784160000)
+
+    result = extract_source(source, meeting_date="2026-07-10")
+
+    assert result.effective_date.value == "2026-07-10"
+    assert result.effective_date.confidence == "manual"
+    assert result.effective_date.source == "override"
+    assert result.date_selection is not None
+    assert result.date_selection.conflict is False
