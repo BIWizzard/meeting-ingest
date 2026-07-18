@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Reviewed first external-consumer UAT run of meeting-ingest (Codex in HTV-IQ-DataAnalytics). Engine contract held; friction was all in the provider-response layer: schema guessed and discovered rejection-by-rejection, fail-fast validation forcing four retry round-trips, and the low-confidence mtime date noted but not escalated before ID minting. Captured full findings as cap_20260718T220148Z_a28fa2b4. Queued the session provider response contract hardening block as the next work block, ahead of Layer 5A.",
+  "status_summary": "Shipped Layer 1 effective-date reliability end-to-end: planned with a TDD task plan, executed via Codex implementer subagents with Claude reviewers per task, final whole-branch review ready-to-merge, merged to main and pushed (151 tests green). Delivered: frozen occurrence/override/repair contract in artifact-contract.md, deterministic occurrence candidate selection with sanitized Teams VTT fixtures, --meeting-date override with mtime/conflict warnings, repair-date command with date_repaired ledger snapshots, doctor low_confidence_meeting_date check, and reconciled status docs. Also executed the iQ Context integration brief (tracked_artifacts globs, post-ingest capture protocol in AGENTS.md and both installed skills, doctor clean), automated global uv-tool refresh via versioned git hooks on main, and reviewed the first external consumer UAT run (HTV repo) - engine contract held; response-envelope friction captured as cap_20260718T220148Z_a28fa2b4 and queued as the next work block.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
@@ -15,18 +15,23 @@
     "AGENTS.md"
   ],
   "blockers": [],
-  "open_questions": [],
+  "open_questions": [
+    "What are the true occurrence dates for the three low_confidence_meeting_date artifacts (nitesh follow-up, wide-orbit orchestration, fable-5 workflow review)?",
+    "Should doctor distinguish advisory issues from failures so low_confidence_meeting_date does not force exit 1 (final-review finding)?"
+  ],
   "next_actions": [
-    "Next work block (before Layer 5A): (1) embed the full provider-response contract - filled example or JSON schema - in the phase-1 request payload and skill docs; (2) aggregate provider-response validation errors into one report and add a validate-response pre-flight command; (3) add a skill/AGENTS.md protocol step to confirm the occurrence date via --meeting-date when phase-1 date_confidence is low. Then Layer 5A schema 1.1 and reviewed identity. Backlog: stale-handoff cleanup command, word-boundary slug truncation, repair-date for the three flagged artifacts plus mtg-20260718-aa2fd13f in HTV repo once dates are confirmed."
+    "Execute the response-contract hardening block before Layer 5A: embed the full provider-response contract in phase-1 requests and skill docs; aggregate validation errors and add a validate-response pre-flight; add the low-date-confidence escalation step to the skill protocol.",
+    "Begin Layer 5A: schema 1.1 and reviewed identity implementation.",
+    "Run repair-date for the three flagged local artifacts and confirm mtg-20260718-aa2fd13f in the HTV repo once occurrence dates are confirmed."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Next work block (before Layer 5A): (1) embed the full provider-response contract - filled example or JSON schema - in the phase-1 request payload and skill docs; (2) aggregate provider-response validation errors into one report and add a validate-response pre-flight command; (3) add a skill/AGENTS.md protocol step to confirm the occurrence date via --meeting-date when phase-1 date_confidence is low. Then Layer 5A schema 1.1 and reviewed identity. Backlog: stale-handoff cleanup command, word-boundary slug truncation, repair-date for the three flagged artifacts plus mtg-20260718-aa2fd13f in HTV repo once dates are confirmed.",
+  "continuation_hint": "Shipped Layer 1 effective-date reliability end-to-end: planned with a TDD task plan, executed via Codex implementer subagents with Claude reviewers per task, final whole-branch review ready-to-merge, merged to main and pushed (151 tests green). Delivered: frozen occurrence/override/repair contract in artifact-contract.md, deterministic occurrence candidate selection with sanitized Teams VTT fixtures, --meeting-date override with mtime/conflict warnings, repair-date command with date_repaired ledger snapshots, doctor low_confidence_meeting_date check, and reconciled status docs. Also executed the iQ Context integration brief (tracked_artifacts globs, post-ingest capture protocol in AGENTS.md and both installed skills, doctor clean), automated global uv-tool refresh via versioned git hooks on main, and reviewed the first external consumer UAT run (HTV repo) - engine contract held; response-envelope friction captured as cap_20260718T220148Z_a28fa2b4 and queued as the next work block.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
   "last_saved_at": "2026-07-18T22:02:00.927Z",
-  "last_wrapped_at": "2026-07-18T17:21:43.119Z",
+  "last_wrapped_at": "2026-07-18T22:42:21.805Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-18T22:02:00.927Z"
+  "updated_at": "2026-07-18T22:42:21.805Z"
 }

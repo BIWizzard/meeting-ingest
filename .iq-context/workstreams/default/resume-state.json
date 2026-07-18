@@ -5,9 +5,11 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Next work block (before Layer 5A): (1) embed the full provider-response contract - filled example or JSON schema - in the phase-1 request payload and skill docs; (2) aggregate provider-response validation errors into one report and add a validate-response pre-flight command; (3) add a skill/AGENTS.md protocol step to confirm the occurrence date via --meeting-date when phase-1 date_confidence is low. Then Layer 5A schema 1.1 and reviewed identity. Backlog: stale-handoff cleanup command, word-boundary slug truncation, repair-date for the three flagged artifacts plus mtg-20260718-aa2fd13f in HTV repo once dates are confirmed."
+    "Execute the response-contract hardening block before Layer 5A: embed the full provider-response contract in phase-1 requests and skill docs; aggregate validation errors and add a validate-response pre-flight; add the low-date-confidence escalation step to the skill protocol.",
+    "Begin Layer 5A: schema 1.1 and reviewed identity implementation.",
+    "Run repair-date for the three flagged local artifacts and confirm mtg-20260718-aa2fd13f in the HTV repo once occurrence dates are confirmed."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Next work block (before Layer 5A): (1) embed the full provider-response contract - filled example or JSON schema - in the phase-1 request payload and skill docs; (2) aggregate provider-response validation errors into one report and add a validate-response pre-flight command; (3) add a skill/AGENTS.md protocol step to confirm the occurrence date via --meeting-date when phase-1 date_confidence is low. Then Layer 5A schema 1.1 and reviewed identity. Backlog: stale-handoff cleanup command, word-boundary slug truncation, repair-date for the three flagged artifacts plus mtg-20260718-aa2fd13f in HTV repo once dates are confirmed.",
-  "updated_at": "2026-07-18T22:02:00.927Z"
+  "resume_from": "Resume with: Execute the response-contract hardening block before Layer 5A: embed the full provider-response contract in phase-1 requests and skill docs; aggregate validation errors and add a validate-response pre-flight; add the low-date-confidence escalation step to the skill protocol.",
+  "updated_at": "2026-07-18T22:42:21.805Z"
 }
