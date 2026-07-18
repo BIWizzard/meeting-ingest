@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Start Layer 1 effective-date reliability: freeze the --meeting-date and controlled repair-date contract, add sanitized July 10/13 Teams VTT fixtures, implement occurrence candidate selection before meeting ID/provider-request minting, warn on file-mtime occurrence fallback, and repair the affected existing artifacts through the engine. Then begin Layer 5A schema 1.1 and reviewed identity implementation."
+    "Push main to origin when ready. Next engineering work: Layer 5A schema 1.1 and reviewed identity. Outstanding: repair-date for the three low-confidence artifacts when dates are confirmed."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Start Layer 1 effective-date reliability: freeze the --meeting-date and controlled repair-date contract, add sanitized July 10/13 Teams VTT fixtures, implement occurrence candidate selection before meeting ID/provider-request minting, warn on file-mtime occurrence fallback, and repair the affected existing artifacts through the engine. Then begin Layer 5A schema 1.1 and reviewed identity implementation.",
-  "updated_at": "2026-07-18T16:30:35.548Z"
+  "resume_from": "Resume with: Push main to origin when ready. Next engineering work: Layer 5A schema 1.1 and reviewed identity. Outstanding: repair-date for the three low-confidence artifacts when dates are confirmed.",
+  "updated_at": "2026-07-18T18:30:42.046Z"
 }
