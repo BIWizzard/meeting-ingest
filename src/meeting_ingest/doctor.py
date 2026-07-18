@@ -98,6 +98,7 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
             isinstance(source, dict) and source.get("processed_path")
         ):
             _append_missing_path_issue(paths, issues, "missing_processed_source", str(reconcile["processed_path"]))
+    issues.extend(_low_confidence_date_issues(paths, records))
     return issues
 
 
@@ -180,10 +181,51 @@ def _append_missing_path_issue(paths: ProjectPaths, issues: list[DoctorIssue], c
 
 
 def _has_primary_artifacts(record: dict[str, object]) -> bool:
-    if record.get("event") not in {"primary_artifacts_ready", "ingest_completed", "reconcile_repaired"}:
+    if record.get("event") not in {"primary_artifacts_ready", "ingest_completed", "reconcile_repaired", "date_repaired"}:
         return False
     artifacts = record.get("artifacts")
     return isinstance(artifacts, dict) and bool(artifacts)
+
+
+def _low_confidence_date_issues(paths: ProjectPaths, records: list[dict[str, object]]) -> list[DoctorIssue]:
+    issues: list[DoctorIssue] = []
+    for record in _current_records(records):
+        if not _has_primary_artifacts(record):
+            continue
+        artifacts = record.get("artifacts", {})
+        if not isinstance(artifacts, dict):
+            continue
+        for artifact in artifacts.values():
+            if not isinstance(artifact, dict) or not artifact.get("path"):
+                continue
+            artifact_path = paths.meetings_root / str(artifact["path"])
+            if not artifact_path.exists():
+                continue
+            if _front_matter_value(artifact_path, "date_source") == "file_mtime":
+                issues.append(
+                    DoctorIssue(
+                        code="low_confidence_meeting_date",
+                        message="Artifact meeting date came from file modification time and may be a download date; verify and fix with repair-date.",
+                        path=str(artifact["path"]),
+                    )
+                )
+    return issues
+
+
+def _front_matter_value(path: Path, key: str) -> str | None:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    if not lines or lines[0].strip() != "---":
+        return None
+    prefix = f"{key}: "
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return None
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return None
 
 
 def _current_records(records: list[dict[str, object]]) -> list[dict[str, object]]:

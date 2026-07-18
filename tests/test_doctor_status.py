@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import time
 
+from meeting_ingest import pipeline
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
@@ -52,6 +53,31 @@ def test_doctor_reports_clean_project_after_ingest(tmp_path: Path) -> None:
     assert summary.details["issues"] == []
     assert summary.details["project"]["ledger_records"] == 2
     assert summary.details["project"]["known_sources"] == 1
+
+
+def test_doctor_reports_low_confidence_meeting_date_and_clears_after_repair(tmp_path: Path) -> None:
+    pipeline.initialize(tmp_path)
+    meetings_root = tmp_path / "_local/project-context/meetings"
+    source = meetings_root / "_inbox" / "Daily Stand Up - Post-MVP (41).vtt"
+    source.write_text(
+        "WEBVTT\n\n"
+        "7f3a2c9e-4b1d-4e8a-9c5f-1a2b3c4d5e6f/1-0\n"
+        "00:00:03.120 --> 00:00:06.480\n"
+        "<v Graham, Ken (Contractor)>Please capture this request. [mock-signal]</v>\n",
+        encoding="utf-8",
+    )
+    os.utime(source, (1784160000, 1784160000))
+    summary = pipeline.ingest(source, start=tmp_path, provider="mock")
+
+    doctor_summary = pipeline.doctor(tmp_path)
+    issue_codes = [issue["code"] for issue in doctor_summary.details["issues"]]
+    assert "low_confidence_meeting_date" in issue_codes
+
+    pipeline.repair_date(summary.meeting_id, date="2026-07-10", start=tmp_path)
+
+    doctor_summary = pipeline.doctor(tmp_path)
+    issue_codes = [issue["code"] for issue in doctor_summary.details["issues"]]
+    assert "low_confidence_meeting_date" not in issue_codes
 
 
 def test_doctor_reports_inbox_residue(tmp_path: Path) -> None:
