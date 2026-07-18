@@ -22,15 +22,27 @@ This repo exists to turn that working but Claude-first workflow into a host-neut
 
 The initial product scope is personal-workflow first. The maintainer's own meeting, transcript, stakeholder communication, and agentic harness workflows should shape the first build before any broader market-facing generalization.
 
+## Current Authority
+
+This primer records the rebuild's original context. For current implementation and roadmap state, read:
+
+- `docs/product-status.md`
+- `DECISIONS.md`
+- `docs/stakeholder-playbook-design.md`
+- `docs/artifact-contract.md`
+- `docs/implementation-plan.md`
+
+The host-neutral engine in this repository is now the implementation authority. The legacy skill remains historical reference material, not the source of truth for current behavior.
+
 ## Existing Implementation Reference
 
-This rebuild is not starting from zero. The current working implementation lives as a user-level Claude skill here:
+This rebuild did not start from zero. The original working implementation lived as a user-level Claude skill here:
 
 - `~/.claude/skills/ingest-meeting/`
 
 That skill contains the current Python ingestion engine, CLI, path model, bootstrap logic, ledger behavior, and the Claude-specific orchestration contract.
 
-Important: this repo (`meeting-ingest`) is now the rebuild target, but the existing skill directory remains the primary reference source for current behavior.
+Important: this repo (`meeting-ingest`) is the current engine and contract authority. The existing skill directory is useful only for historical behavior and migration context.
 
 ## Source Files To Read First From The Existing Skill
 

@@ -6,6 +6,8 @@ This file tracks the highest-value open questions for the `meeting-ingest` rebui
 
 The goal is to keep design exploration focused on decisions that materially shape the engine and its usability across hosts and projects.
 
+Some numbered sections preserve historical discovery context. Where a question has been resolved, `DECISIONS.md`, `docs/stakeholder-playbook-design.md`, and `docs/artifact-contract.md` are authoritative.
+
 ## Open Questions
 
 ### 1. What should the project-local directory and config layout be?
@@ -229,11 +231,17 @@ Need to decide:
 - how obvious ASR junk is identified
 - how uncertain cleanup is marked
 - when transcript repair requires a provider call
-- whether file modified date is acceptable as fallback effective date when no meeting date is detectable
+- how contextual date candidates are scored when explicit metadata is absent
+- exact manual meeting-date override and controlled date-repair behavior
 
 Why it matters:
 - "cleaned verbatim" must preserve substantive content
 - users and agents need to know how much the transcript was altered
+
+Resolved direction:
+- occurrence, acquisition/download, and processing time are distinct
+- file modification time is a low-confidence acquisition-oriented fallback, not a trustworthy occurrence date for downloaded historical transcripts
+- the engine must expose a safe explicit-date override and controlled repair path rather than requiring hand edits
 
 ### 13. What should the sub-agent contract be?
 
@@ -262,23 +270,21 @@ Resolved direction:
 
 ### 14. How should stakeholder communication signals be modeled?
 
-Need to decide:
-- signal schema
-- confidence and provenance fields
-- how to distinguish explicit asks from inferred priorities
-- how to represent communication style cues
-- how to avoid turning the tool into a broad profiling or messaging product
+Status: resolved at the architectural level; value-level contract parameters and implementation remain.
 
 Why it matters:
 - a major workflow goal is helping the user communicate in their own voice with stakeholders
 - downstream messaging support depends on clean source-grounded signals
 
 Resolved direction:
-- per-meeting signals should feed a rolling stakeholder playbook
-- primary meeting markdown should be available before slower playbook maintenance blocks the user
-- signal records should distinguish explicit statements from inferred patterns
-- v1 signal taxonomy should stay small and factual
-- communication guidance belongs in playbook derivation, not raw per-meeting signals
+- source observations feed deterministic Stakeholder Briefing V1, followed later by provider-assisted Playbook Guidance V1.1
+- source observations remain factual and distinguish explicit evidence from strong or weak inference
+- the playbook foundation adds narrow `communication_preference`, `communication_behavior`, and `interaction_response` observation types
+- `communication_style` is derived pattern vocabulary only and is never extracted as a stakeholder trait
+- primary meeting ingest only marks eligible playbook input; deterministic rebuild is an explicit separate operation
+- reviewed project-local identity is resolved during derivation without rewriting source observations
+- every profile entry preserves evidence, uncertainty, freshness, contradiction, and review state
+- the playbook is communication accommodation and memory, not personality, vulnerability, persuasion, or relationship scoring
 
 ### 15. How should future communication artifact ingest be bounded?
 
@@ -301,9 +307,11 @@ Why it matters:
 - broadening too early could dilute the meeting/transcript ingest engine
 
 Current stance:
-- valuable future extension
-- not part of the first implementation target
-- architecture should keep source and signal models flexible enough to support it later
+- meeting-derived Stakeholder Briefing V1 comes first
+- plain-text email bodies or pasted messages are the first non-meeting pilot
+- Teams/text screenshots follow only after OCR and region-addressable evidence contracts are trusted
+- public/social sources require a separate privacy, attribution, retention, and acceptable-use policy
+- all source kinds reuse generalized provenance while remaining distinguishable in artifacts, evidence, and privacy gates
 
 ## Already Decided
 
@@ -318,20 +326,21 @@ Current stance:
 - sub-agent operation remains desirable
 - summary plus verbatim is the default mode
 - output filenames must be scannable and may be repaired after ingest
-- stakeholder communication should accumulate into a rolling playbook
+- stakeholder communication should accumulate into deterministic Stakeholder Briefing V1 and later reviewed Playbook Guidance V1.1
 - generated markdown lives in the meetings root by default
-- primary meeting artifacts are ready before derived playbook work blocks the user
+- playbook derivation is explicit and never part of primary ingest completion
 - markdown should be optimized for agent consumption
 - ledger records are source-level with mode-specific artifacts
 - meeting identity is immutable and separate from mutable title/slug/filename
-- signal files are keyed by immutable `meeting_id`
+- meeting signal files are keyed by immutable `meeting_id`; generalized non-meeting signals use communication-neutral `source_id`
 - ledger records are full snapshots with explicit event vocabulary
 - duplicate/no-op ingest uses exit code `0`
-- v1 uses lightweight deterministic identity normalization, not roster storage
+- stakeholder profiles use a small reviewed project-local identity registry; extraction-time IDs remain advisory
 - CLI is a thin adapter over a reusable pipeline API
 - duplicate/no-op may repair incomplete reconcile state
-- v1 signal extraction should stay factual and minimal
-- communication artifact ingest is a future extension, not the first build target
+- signal extraction stays factual and uses narrow source-observation types
+- communication artifact ingest follows the meeting-derived briefing foundation in plain-text, image-based, then public/social phases
+- file modification time is not considered a reliable occurrence date for downloaded historical Teams transcripts
 
 ## Not In Scope Right Now
 

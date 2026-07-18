@@ -23,6 +23,19 @@ It can turn `.txt`, `.vtt`, and `.docx` meeting artifacts into durable project k
 
 The product is currently strongest for a technical owner using Codex, Claude Code, Supa Code, T3 Code, or plain CLI automation. It is not yet a general self-serve product.
 
+## Current Development State
+
+Committed implementation is stable through the session-inbox and handoff-health work. The Stakeholder Playbook effort is currently a design-and-contract workstream, not a shipped feature.
+
+Current accounting:
+
+- Stakeholder Briefing V1 and Playbook Guidance V1.1 have an accepted durable design baseline in `docs/stakeholder-playbook-design.md`.
+- `DECISIONS.md` records the accepted identity, provenance, storage, derivation, review, privacy, and milestone boundaries.
+- schema 1.1 and Stakeholder Briefing V1 artifact-contract amendments passed focused review and are frozen for implementation.
+- Layer 2 output-mode, title-repair, and regeneration contracts are written, but their implementation has not started.
+- no schema 1.1, identity-registry, stakeholder-profile, briefing, guidance, email, screenshot, or social-source code has shipped.
+- the current filesystem/JSONL/Markdown architecture remains sufficient for the planned V1 work; no backend or embeddings are planned.
+
 ## Available User Workflows
 
 ### Single-File Ingest
@@ -103,6 +116,12 @@ Complete:
 - cleaned-verbatim transcript normalization
 - unsupported inbox source quarantine
 
+Known limitation:
+
+- effective-date extraction recognizes explicit supported filename and Teams export-header dates, but VTT transcripts without those forms still fall back to file modification time
+- for downloaded historical Teams transcripts, that timestamp is usually acquisition time rather than the meeting occurrence date
+- there is no implemented `--meeting-date` override or controlled date-repair command yet
+
 ### Artifact Generation
 
 Complete:
@@ -139,8 +158,10 @@ Complete:
 
 Not complete:
 
-- rolling stakeholder playbook aggregation
-- derived playbook status
+- generalized schema 1.1 signal writing
+- reviewed stakeholder identity registry and derivation-time resolution
+- deterministic Stakeholder Briefing aggregation
+- playbook derivation ledger, review overlays, profiles, briefings, status, and doctor behavior
 
 ### Archive, Reconcile, And Idempotency
 
@@ -218,24 +239,31 @@ Done:
 Remaining:
 
 - improve title/filename inference quality using more real transcript fixtures
+- make meeting occurrence reliable when a transcript is downloaded after the meeting date
+- distinguish occurrence, acquisition, and processing time in implemented signal provenance
+- add a manual meeting-date override and controlled repair path for already-ingested artifacts
+- warn when file modification time may be a download date rather than the meeting date
 - decide exact confidence policy for provider-suggested titles/slugs
 - decide whether doctor should only report repair suggestions or also implement repairs
 
 ### Layer 2: Output Modes And Repair/Regenerate Workflows
 
-Status: not implemented beyond the current default mode.
+Status: contract finalized; implementation not started beyond the current default mode.
 
 Done:
 
 - `summary-plus-verbatim` mode
 - mode field in config/run summaries/artifacts
+- `summary` and `verbatim` artifact section contracts
+- `repair-title` command UX and `title_repaired` ledger semantics
+- `regenerate` command UX and `artifact_regenerated` ledger semantics
 
 Remaining:
 
 - implement `summary` mode
 - implement `verbatim` mode
-- define and implement title repair
-- define and implement artifact regeneration from `_processed/`
+- implement title repair
+- implement artifact regeneration from `_processed/`
 - support multiple mode artifacts for one source hash
 - add renderer golden tests for all modes
 
@@ -283,23 +311,49 @@ Remaining:
 - decide model provenance expectations for subscription-backed hosts
 - add other provider adapters only when selected
 
-### Layer 5: Stakeholder Playbook V1
+### Layer 5: Stakeholder Briefing And Playbook Guidance
 
-Status: signal foundation exists; playbook not built.
+Status: accepted design baseline and artifact contract; implementation not started.
 
 Done:
 
 - per-meeting communication signal schema/output
 - signal provenance to meeting/run IDs
 - signal markdown mirroring
+- independent design and arbitration passes
+- accepted `docs/stakeholder-playbook-design.md` baseline
+- decisions frozen for reviewed identity, deterministic full rebuilds, immutable generations, separate derivation history, review overlays, dedicated synthesis privacy gates, and the Briefing V1/Guidance V1.1 split
+- reviewed schema 1.1 and deterministic Stakeholder Briefing artifact contracts
+
+#### Layer 5A: Generalized Provenance And Identity Foundation
 
 Remaining:
 
-- playbook schema
-- derived `_derived/` artifact location
-- per-stakeholder aggregation
-- confidence/provenance policy
-- playbook update status in doctor/status
+- add annotated compatibility and adversarial fixtures
+- implement schema 1.1 tolerant readers/writers
+- implement generalized source and occurrence/acquisition/processing provenance
+- implement deterministic signal identity and regeneration supersession
+- implement the reviewed project-local identity registry, derivation-time resolution, and identity candidates
+
+#### Layer 5B: Stakeholder Briefing V1
+
+Remaining:
+
+- implement deterministic full rebuilds
+- materialize canonical profile JSON and human/agent-readable briefing Markdown
+- implement immutable generations, derivation ledger, current index, and input fingerprints
+- implement tracked asks and commitments, priorities, concerns, rationales, preferences, behaviors, interaction responses, freshness, and contradiction candidates
+- implement reject, resolve, suppress-signal, and identity-correction controls
+- implement `playbook update`, `show`, and briefing surfaces plus status/doctor visibility
+
+#### Layer 5C: Playbook Guidance V1.1
+
+Remaining:
+
+- freeze the structured derivation provider request/response contract and approach-tag vocabulary
+- implement dedicated playbook-synthesis privacy gates
+- implement semantic clustering, contextual scope, contradiction confirmation, positive-response patterns, communication cues, and caveats
+- implement explicit review state for inferred guidance
 
 ### Layer 6: Migration And Existing Corpus Adoption
 
@@ -316,12 +370,29 @@ Remaining:
 
 Status: not started.
 
+#### Layer 7A: Plain-Text Communication Pilot
+
 Remaining:
 
-- artifact taxonomy for non-meeting communications
-- email/memo/message/screenshot extraction
-- non-meeting signal provenance
-- playbook aggregation across meeting and communication sources
+- email-body or pasted-message ingest
+- sender/recipient/subject/thread/sent-time/acquisition provenance
+- generalized observations that can rebuild the same stakeholder profiles as meeting evidence
+
+#### Layer 7B: Image-Based Communication Ingest
+
+Remaining:
+
+- Teams and text-message screenshots
+- OCR provenance and image-region evidence locators
+- communication-event identity to prevent double-counting duplicate representations
+
+#### Layer 7C: Public And Social Sources
+
+Remaining:
+
+- public/social acceptable-use and privacy policy
+- social post and profile provenance, retention, and refresh semantics
+- safeguards against personality, vulnerability, protected-trait, or persuasion profiling
 
 ### Layer 8: iQ Context Integration
 
@@ -342,15 +413,17 @@ Remaining:
 
 ## Recommended Next Product Slice
 
-The recommended next product slice is Layer 2 contract and implementation planning:
+The active product sequence is:
 
-1. finalize `summary` and `verbatim` artifact contracts
-2. decide repair/regenerate command UX
-3. implement `summary` mode
-4. implement `verbatim` mode
-5. then implement title repair or regenerate
+1. freeze and implement effective-date reliability, a manual meeting-date override, and controlled date repair as a Layer 1 prerequisite
+2. add annotated schema 1.1 compatibility and adversarial fixtures
+3. update provider/prompt/skill contracts when the new observation taxonomy becomes user-facing
+4. implement Layer 5A generalized provenance and reviewed identity
+5. implement deterministic Stakeholder Briefing V1
 
-Reason: the core ingest/done-process and session inbox machinery are now strong enough. The next user-visible value is giving the user deliberate control over artifact depth and repair/regeneration.
+Layer 2 output modes remain independently shippable and contract-ready. They are a valid smaller implementation slice, but they are no longer the default priority after the stakeholder-playbook direction was accepted.
+
+Reason: the live July 10/13 Teams VTT failure showed that meeting-date trust must be resolved before freshness and response sequencing can be credible. Once that foundation is reliable, the deterministic briefing is the highest-value next product surface.
 
 ## Evidence
 
@@ -365,8 +438,8 @@ Recent implementation commits include:
 - `85319c5 Add Anthropic provider adapter`
 - `c5e11ca Add sequential inbox batch ingest`
 
-Current verification at the time this status was written:
+Current verification on 2026-07-18:
 
 - `uv run pytest` passed with 133 tests
-- `uv run python -m py_compile src/meeting_ingest/*.py` passed
 - `git diff --check` passed
+- committed `main` matched `origin/main` before this documentation checkpoint

@@ -126,7 +126,7 @@ Filename/title repair after ingest is acceptable when transcript-derived context
 
 Meeting identity must remain separate from title, slug, and filename. `meeting_id` should be immutable and content/date-derived so rename repair does not break ledger records, signals, cross-references, or derived playbook entries.
 
-Signal files should be keyed by immutable `meeting_id`, not mutable slug or filename.
+Meeting signal files should remain keyed by immutable `meeting_id`, not mutable slug or filename. Generalized non-meeting signal files should be keyed by communication-neutral `source_id`.
 
 If inferred filenames collide, append a numeric suffix and surface a warning in the run summary.
 
@@ -134,7 +134,11 @@ If inferred filenames collide, append a numeric suffix and surface a warning in 
 
 Per-meeting communication signals should feed a durable stakeholder playbook over time.
 
-The playbook should help the maintainer understand stakeholder priorities, communication patterns, recurring asks, and useful framing guidance across meetings. This should remain grounded in source provenance and should support communication memory rather than becoming a separate messaging product.
+The playbook should help the maintainer prepare for interactions by surfacing stakeholder priorities, tracked asks and commitments, observed communication preferences and behaviors, recurring patterns, contradictions, freshness, and useful framing guidance across sources.
+
+The playbook is evidence-grounded communication memory, not a personality dossier, relationship score, persuasion engine, or autonomous messaging product. Source observations remain distinct from derived patterns and guidance. Every profile entry must preserve provenance, uncertainty, and review state.
+
+The durable design baseline is `docs/stakeholder-playbook-design.md`.
 
 ### 14. Generated markdown lives in the meetings root by default
 
@@ -142,13 +146,15 @@ Generated meeting markdown should live directly under the project meeting root f
 
 Directory hygiene should come from keeping raw inputs, processed copies, signals, cache files, quarantine records, and derived aggregate outputs in their own underscore-prefixed directories.
 
-### 15. Primary meeting artifacts are ready before derived playbook work blocks the user
+### 15. Playbook derivation is explicit and never part of primary ingest completion
 
 The ingest workflow should prioritize producing the meeting markdown and signal output, then notifying the user those outputs are ready.
 
-Rolling stakeholder playbook updates should happen during ingest when possible, but slower derived playbook maintenance should not delay access to the primary meeting output.
+Source ingest marks playbook inputs pending and completes without running a blocking profile rebuild. Stakeholder Briefing V1 uses an explicit deterministic rebuild command. `status` and `doctor` report whether the current playbook is stale.
 
-Playbook update failure should not make the primary meeting ingest fail. It should be tracked as separately-statused derived work.
+Agent wrappers may offer or invoke the explicit rebuild after primary ingest, but that is a separate engine operation. Provider-assisted guidance always uses its own two-phase derivation workflow and never holds the project lock during model judgment.
+
+Playbook failure cannot make the primary meeting ingest fail because playbook derivation is not part of primary ingest completion.
 
 ### 16. Markdown should be optimized for agent consumption
 
@@ -156,21 +162,23 @@ Generated markdown should remain human-readable, but the primary downstream cons
 
 Artifacts should use stable metadata, stable headings, explicit identifiers, clear tables/lists, and predictable transcript delimiters so agents can consume them reliably.
 
-### 17. Ledger records are source-level with mode-specific artifacts
+### 17. Source and playbook derivation use separate authoritative ledgers
 
-The ledger should track each source content hash once and attach generated artifacts by output mode.
+The source ledger should track each source content hash once and attach generated artifacts by output mode.
 
 This matches the user's mental model: a transcript source is known once, and the tool can list which artifact variants exist or are missing.
 
 This is preferred over separate ledger rows for every source-plus-mode pair.
 
-Ledger entries should track per-artifact status, provider/model/schema metadata, derived-work status, and support regeneration from processed archive copies.
+Source-ledger entries should track per-artifact status, provider/model/schema metadata, an ingest-time playbook-input hint, and regeneration from processed archive copies.
 
 The append-only ledger should define a current-state rule such as "last valid record wins per source hash."
 
-Ledger records should be complete current-state snapshots, not partial deltas. V1 ledger events should distinguish primary artifact readiness, completed ingest, reconcile repair, failed ingest, quarantine, regeneration, title repair, and derived updates.
+Source-ledger records should be complete current-state snapshots, not partial deltas. Source-ledger events should distinguish primary artifact readiness, completed ingest, reconcile repair, failed ingest, quarantine, regeneration, and title repair.
 
-### 18. V1 signal extraction should stay factual and minimal
+Corpus-derived playbook history does not belong in every source snapshot. `_playbook-state/derivation-ledger.jsonl` is authoritative for playbook rebuild history, provider provenance, committed generations, and failure state. `_derived/playbook-index.json` is a rebuildable pointer to the current committed generation. Existing source-ledger and ingest-run-summary `derived_updated` or `derived.playbook_update_status` values remain compatibility data but are superseded for new playbook behavior.
+
+### 18. Signal extraction stays factual and uses narrow observation types
 
 V1 per-meeting signals should use a small taxonomy:
 
@@ -180,27 +188,37 @@ V1 per-meeting signals should use a small taxonomy:
 - commitment
 - risk or concern
 
+The playbook foundation adds three source-grounded observation types:
+
+- communication preference
+- communication behavior
+- interaction response
+
+`communication_style` is derived pattern vocabulary only. It must not be emitted as a source observation or used for trait labeling.
+
 Every signal should include evidence, inference level, and confidence.
 
 Communication guidance should be generated during playbook derivation rather than extracted directly into per-meeting signal records.
 
+Providers do not set recurrence. Extraction records recurrence as unknown; playbook derivation computes recurrence across qualified observations.
+
 Duplicate/no-op ingest is a success-class outcome: JSON should use `status: "no_op"` and exit code `0`.
 
-Derived playbook failure should default to exit code `0` after primary artifact success unless the caller explicitly asks derived work to be blocking.
+Exit code `11` is reserved rather than used for blocking playbook work. An explicitly invoked playbook command is the primary operation and reports the applicable provider, validation, write, ledger, lock, stale-input, CLI, or general failure category.
 
-### 19. Communication artifact ingest is a valuable future extension, not the first build target
+### 19. Communication artifact ingest follows the meeting-derived briefing foundation
 
 Emails, memos, Teams messages/threads, screenshots of communications, and related attachments may provide valuable stakeholder voice, commitments, decisions, and requests.
 
-The first implementation should stay focused on meeting/transcript ingestion. However, the architecture should avoid assuming that all future sources are meetings with transcripts. The signal schema, source ledger, and rolling stakeholder playbook should be general enough to later support other communication artifact types.
+Stakeholder Briefing V1 should first prove identity resolution, generalized signal provenance, deterministic rebuilds, review overlays, and meeting-derived profiles. Plain-text email or pasted-message ingest is the first non-meeting pilot after that foundation. Image-based and public/social sources follow only after their provenance, privacy, attribution, and evidence-location contracts are reviewed.
 
-### 20. V1 uses lightweight deterministic identity normalization, not roster storage
+### 20. Stakeholder profiles require a reviewed project-local identity registry
 
-V1 should not implement global or project-local roster storage.
+Playbook derivation uses a small, human-owned project-local registry under `_playbook-state/`. It stores immutable person IDs, reviewed display names, and reviewed aliases.
 
-Provider-proposed display names should be deterministically slugified into person IDs, raw speaker labels should be preserved, and uncertain identities should be marked rather than silently collapsed.
+Canonical observations preserve raw stakeholder labels. Provider-proposed IDs and extraction-time deterministic slugs are advisory only. Derivation always resolves raw labels through the current registry; ambiguous aliases remain unresolved and fuzzy matching never auto-merges people.
 
-Full roster-based identity resolution remains a later feature.
+Cross-project/global roster behavior, automatic candidate promotion, and fuzzy identity resolution remain deferred.
 
 ### 21. The CLI is a thin adapter over a reusable pipeline API
 
@@ -215,6 +233,64 @@ If a duplicate source is detected but the ledger shows incomplete archive or rec
 This is intended to prevent inbox residue from becoming permanent workflow debt.
 
 Repair work should append a complete `reconcile_repaired` snapshot when archive or reconcile state changes.
+
+### 23. The playbook ships as Stakeholder Briefing V1 and Playbook Guidance V1.1
+
+Stakeholder Briefing V1 is a complete deterministic milestone. It produces canonical profile JSON and human/agent-readable briefing Markdown with tracked asks and commitments, priorities, concerns, rationales, preferences, behaviors, interaction responses, freshness, evidence coverage, and unresolved identity.
+
+Playbook Guidance V1.1 adds provider-assisted semantic clustering, contextual scope, contradiction confirmation, positive-response patterns, and practical communication cues after review controls exist.
+
+The primary consumption surface is a concise pre-interaction briefing. The profile file is its substrate, not the end of the product experience.
+
+### 24. Playbook profiles use full rebuilds and immutable generations
+
+Validated source observations, the identity registry, versioned rules, and append-only review overlays are canonical playbook inputs. Profiles and briefings are rebuildable materializations.
+
+Briefing V1 uses a full deterministic rebuild. Targeted refresh is deferred until corpus size justifies its additional equivalence and concurrency surface.
+
+Each rebuild writes a new immutable generation under `_derived/generations/<derivation-run-id>/`. The derivation-ledger append is the commit point, and `_derived/playbook-index.json` is atomically rewritten to point to the committed generation. Readers use the index and never infer current state from generation timestamps.
+
+Human-reviewed state lives under `_playbook-state/` and must not be deleted by derived-output or cache cleanup. `_derived/` remains safely rebuildable.
+
+### 25. Communication provenance distinguishes source kind, file format, and three time semantics
+
+Generalized signal provenance uses communication-neutral `source_id` and `source_kind`. `source_kind` describes the communication artifact, while the source ledger's `source_type` continues to describe file formats such as `docx`, `vtt`, and `txt`.
+
+Signal timing distinguishes:
+
+- occurrence: when the meeting or communication happened
+- acquisition: when the source was downloaded, copied, or captured
+- recording: when Meeting Ingest processed the observation
+
+File modification time normally describes acquisition for downloaded Teams transcripts. When used as an occurrence fallback, it remains low confidence and must be reported as such.
+
+Schema 1.1 adds generalized source, timing, and raw stakeholder-label fields while keeping tolerant reads for schema 1.0 meeting signals.
+
+### 26. Signal identity and review lineage must survive ordinary evidence evolution
+
+New signal IDs combine source identity with a deterministic observation identity. Stable source locators are preferred over provider wording so paraphrase changes do not unnecessarily remint observations.
+
+Signal regeneration explicitly supersedes observations it cannot preserve. Rebuild and `doctor` report orphaned overrides and suppressed content that re-emerges under a new signal ID.
+
+Tracked asks, commitments, and single-observation facts anchor review lineage to their originating observation. Pattern and guidance lineage excludes contradicting evidence and provider wording. Review decisions never transfer silently when a pattern's supporting basis materially changes.
+
+### 27. Playbook synthesis has stricter provider and privacy boundaries than source extraction
+
+Deterministic Briefing V1 uses no provider. Provider-assisted guidance may group, scope, confirm, or phrase qualified observations, but it may not mint source facts, raise observation confidence, remove contradictions, resurrect disqualified evidence, or assign reviewed identity.
+
+Guidance synthesis uses dedicated default-false privacy gates for API-backed and session-backed providers. Meeting extraction permission does not imply permission to send concentrated cross-source playbook evidence for synthesis.
+
+Session-backed guidance uses a persisted two-phase derivation request. Phase 1 fingerprints inputs under the project lock, provider judgment runs without the lock, and phase 2 rechecks the complete fingerprint before publishing. Changed inputs produce a typed `stale_inputs` result and require a fresh phase 1.
+
+### 28. Human review and evidence discipline are part of the playbook contract
+
+Briefing V1 supports rejecting a derived entry, resolving a tracked ask or commitment, suppressing a bad source observation, and correcting identity through the registry. Guidance V1.1 adds accept, reject, and tombstone controls for inferred guidance.
+
+Review events are append-only, audited, and applied during rebuild without mutating source observations. Absence of closure evidence never means an ask or commitment is open; the briefing states that no resolution evidence was found.
+
+The playbook must not infer or store protected traits, diagnoses, intelligence ratings, personality types, hidden motives, emotional vulnerabilities, manipulation opportunities, or relationship scores. Guidance is framed as communication accommodation and always cites qualified evidence.
+
+Profiles and briefings remain in ignored project-local storage. iQ Context and other capture integrations must not copy profile bodies or concentrated evidence by default.
 
 ## Working Assumptions
 

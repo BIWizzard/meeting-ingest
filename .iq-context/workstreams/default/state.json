@@ -5,26 +5,28 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Session wrapped after adding and pushing the audited product status accounting. Latest pushed commit is 32c258f docs: add product status accounting. docs/product-status.md is now the current source of truth for built/partial/not-started product status, README points to it first, and docs/implementation-plan.md roadmap language was corrected so Layer 1 is mostly complete, Layer 3 engine/planner is mostly complete, Layer 4 provider boundary is substantially implemented, and Layers 5-8 remain future product expansion. Verification before commit: uv run pytest => 133 passed; git diff --check passed. Post-push status: main clean and aligned with origin/main.",
+  "status_summary": "Closed the final Stakeholder Briefing V1 artifact-contract review. Added source-safe entry IDs hashed from the full person/kind/source/signal anchor tuple and earliest-qualifying lineage for deterministic multi-observation rollups, with explicit remint/orphan/successor behavior. Resolved all review minors and nits: commit-time index status versus live freshness, explicitly_outstanding review state, eligible signal-file definition, provider-contract dependency, meeting acquisition requirements, signal-set fingerprinting, Recent Changes behavior, collision ordering, response valence guidance, and derivation trigger enums. Reconciled implementation plan, product status, current questions, context primer, and README; removed generated egg-info. Verification: 133 tests pass, 28 JSON examples parse, Markdown fences balance, and git diff check passes.",
   "active_plan": null,
   "active_task": null,
-  "active_files": [],
+  "active_files": [
+    "docs/artifact-contract.md"
+  ],
   "active_artifacts": [
     "AGENTS.md"
   ],
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation. Start from docs/product-status.md and docs/artifact-contract.md; update contracts before code."
+    "Commit the frozen design-and-contract checkpoint. Next, freeze the effective-date override/repair contract, add sanitized July 10/13 Teams VTT fixtures, and implement occurrence reliability before Layer 5A schema and identity work."
   ],
   "assumptions": [],
-  "continuation_hint": "Session wrapped after adding and pushing the audited product status accounting. Latest pushed commit is 32c258f docs: add product status accounting. docs/product-status.md is now the current source of truth for built/partial/not-started product status, README points to it first, and docs/implementation-plan.md roadmap language was corrected so Layer 1 is mostly complete, Layer 3 engine/planner is mostly complete, Layer 4 provider boundary is substantially implemented, and Layers 5-8 remain future product expansion. Verification before commit: uv run pytest => 133 passed; git diff --check passed. Post-push status: main clean and aligned with origin/main.",
+  "continuation_hint": "Next: Commit the frozen design-and-contract checkpoint. Next, freeze the effective-date override/repair contract, add sanitized July 10/13 Teams VTT fixtures, and implement occurrence reliability before Layer 5A schema and identity work.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-09T01:47:54.834Z",
-  "last_wrapped_at": "2026-07-09T03:35:53.327Z",
+  "last_saved_at": "2026-07-18T16:23:06.991Z",
+  "last_wrapped_at": "2026-07-10T21:58:35.379Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-09T03:35:53.327Z"
+  "updated_at": "2026-07-18T16:23:06.991Z"
 }

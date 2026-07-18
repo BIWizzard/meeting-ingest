@@ -650,16 +650,18 @@ This roadmap starts from the working V1 engine and sequences the next product la
 
 For the current audited product accounting, use `docs/product-status.md`. This roadmap is directional; the product status document is the first place to check whether a roadmap item has already landed.
 
-Roadmap priorities, with the layer headings below as the canonical order:
+Roadmap priorities, with the layer headings below as the canonical dependency order:
 
-1. finish V1 completion polish
-2. add output modes and repair/regenerate workflows
-3. make session inbox processing first-class
+1. finish V1 completion polish, including trustworthy effective-date handling
+2. keep output modes and repair/regenerate workflows independently shippable
+3. finish session inbox and host-wrapper productization
 4. harden providers and host wrappers
-5. ship stakeholder playbook V1
-6. support migration and existing corpus adoption
-7. ingest broader communication artifacts
-8. integrate with iQ Context
+5. implement generalized provenance and reviewed stakeholder identity
+6. ship deterministic Stakeholder Briefing V1
+7. add provider-assisted Playbook Guidance V1.1
+8. support migration and existing corpus adoption
+9. add plain-text, image-based, and public/social communication sources in that order
+10. integrate with iQ Context
 
 ### Layer 1: V1 Completion Polish
 
@@ -680,17 +682,26 @@ Done:
 - add focused regression fixtures for real observed transcript edge cases
 - document the exact done state for `ingest`, `provider-request`, manual session phase 2, `reconcile`, `status`, and `doctor`
 - enrich duplicate/no-op summaries with current source, existing artifact, archive/reconcile, and repair state
+- extract explicit dates from supported filename shapes and Teams export headers
+- record date source and confidence, including low-confidence file-modification fallback
 
 Remaining:
 
 - tighten title and filename inference so `generic-<hash>` is rare on a broader real-transcript set
 - add more real observed transcript fixtures as new edge cases appear
+- separate meeting occurrence from acquisition/download time throughout the engine-facing contract
+- infer meeting occurrence from trustworthy source metadata and corroborated transcript evidence before minting IDs and provider requests
+- add an explicit `--meeting-date YYYY-MM-DD` override for known dates
+- define and implement controlled effective-date repair for already-ingested artifacts without changing immutable `meeting_id`
+- warn prominently whenever file modification time is used as the meeting occurrence fallback
 
 Needs design decision:
 
 - exact confidence threshold for accepting provider-suggested titles and slugs
 - whether fallback filenames should include meeting type, counterpart, topic, or only source hash when confidence is low
 - whether `doctor` should offer machine-readable repair suggestions only, or also implement interactive repair later
+- the deterministic candidate, conflict, and confidence rules for contextual date evidence such as weekday, relative-date, and nearby absolute-date references
+- the exact `repair-date` CLI, ledger snapshot, signal timing, artifact rename, and run-summary contract
 
 Acceptance criteria:
 
@@ -698,6 +709,8 @@ Acceptance criteria:
 - `uv run pytest` passes with regression coverage for filename fallback, run-summary paths, doctor warnings, and duplicate/no-op behavior
 - `doctor --json` identifies incomplete archive/reconcile state without mutating project files
 - docs clearly state what counts as complete, incomplete, duplicate, failed, and quarantined ingest state
+- a downloaded Teams transcript from an earlier day does not silently use its download timestamp as a high-confidence meeting date
+- an operator can supply or repair a known meeting date through the engine without hand-editing artifacts, signals, or ledger records
 
 ### Layer 2: Output Modes And Repair/Regenerate Workflows
 
@@ -707,31 +720,33 @@ Goal:
 
 Status:
 
-- next major product capability
+- contract-ready independent product slice
+- contract finalized
 - not implemented beyond the current `summary-plus-verbatim` default
 
 Preconditions before implementation:
 
-- extend `docs/artifact-contract.md` with `summary` and `verbatim` section contracts
-- define rename-repair and regeneration semantics, including `title_repaired` and `artifact_regenerated` ledger snapshot shapes
+- done: `docs/artifact-contract.md` defines `summary` and `verbatim` section contracts
+- done: `docs/artifact-contract.md` defines `repair-title` and `regenerate` semantics, including `title_repaired` and `artifact_regenerated` ledger snapshot shapes
 
 Ready after prerequisites:
 
 - complete `summary` mode using the same structured provider response and deterministic renderer without transcript output
 - complete `verbatim` mode using deterministic transcript normalization and minimal provider use
 - store mode-specific artifact entries under one source-level ledger snapshot
-- add `repair-title` or equivalent controlled rename command that updates artifact paths and ledger references without changing `meeting_id`
+- add `repair-title` controlled rename command that updates artifact paths and ledger references without changing `meeting_id`
 - add `regenerate` for already-processed sources using `_processed/` as the durable source of truth and `_cache/` only as an optimization
 - add renderer golden tests for all supported modes
 
-Needs design decision:
+Decided UX and contract:
 
-- final command names and UX: `repair title`, `rename`, `regenerate`, or subcommands under a broader `repair`
-- whether regeneration should overwrite the current artifact, create a timestamped replacement, or retain superseded files under `_derived/` or `_archive`
-- whether repaired filenames should preserve old links through a redirect/stub file or rely only on ledger history
-- whether `verbatim` mode is strictly deterministic or can optionally ask a provider to repair speaker attribution
-- whether regeneration uses only `_processed/` as the durable source of truth, with `_cache/` as an optimization, or allows another documented source
-- how `regenerate --provider session` starts a fresh phase-1 request with a new `ingest_run_id` instead of reusing prior request/response pairs
+- title repair command is `meeting-ingest repair-title <meeting-id-or-source-sha> --title ... [--slug ...] [--json]`
+- regeneration command is `meeting-ingest regenerate <meeting-id-or-source-sha> --mode summary|summary-plus-verbatim|verbatim ...`
+- regeneration atomically replaces the selected current artifact and preserves old paths through append-only ledger history, not public stubs
+- repaired filenames also rely on ledger history, not redirect/stub files
+- `verbatim` mode is deterministic by default; any provider-assisted speaker repair must be explicit future behavior
+- regeneration uses `_processed/` as durable source of truth and `_cache/` only as an optimization
+- `regenerate --provider session` starts a fresh phase-1 handoff with a new `ingest_run_id` and cannot reuse prior request/response files
 
 Acceptance criteria:
 
@@ -819,43 +834,114 @@ Acceptance criteria:
 - privacy-denied provider use fails with a clear typed error and no transcript leaves the local workflow
 - wrapper docs and installed skills match the repo source for normal inbox processing behavior
 
-### Layer 5: Stakeholder Playbook V1
+### Layer 5: Stakeholder Briefing And Playbook Guidance
 
 Goal:
 
-- turn per-meeting communication signals into a durable, useful stakeholder communication memory without blocking primary meeting artifacts.
+- turn source-grounded communication observations into durable stakeholder briefings and later evidence-grounded communication guidance without blocking primary meeting artifacts.
 
 Status:
 
-- signal foundation exists
-- playbook not built
+- accepted durable design baseline exists in `docs/stakeholder-playbook-design.md`
+- schema 1.1 and Stakeholder Briefing V1 artifact-contract amendments passed focused review
+- no Layer 5 implementation has started
+
+The accepted design replaces the former monolithic playbook milestone with three independently testable increments.
+
+#### Layer 5A: Generalized Provenance And Identity Foundation
+
+Goal:
+
+- make meeting and later non-meeting observations safe to aggregate across time and reviewed stakeholder identity.
+
+Status:
+
+- schema and artifact contract finalized
+- implementation not started
 
 Preconditions before implementation:
 
-- define the rolling playbook document/index schema in `docs/artifact-contract.md`
-- decide whether playbook V1 uses v1 person IDs or introduces a project-local roster
+- done: focused review of the schema 1.1 and playbook artifact-contract amendments
+- freeze annotated fixtures for compatibility, date semantics, signal identity, regeneration, and identity resolution
+- coordinate provider payload, extraction prompt, and installed skill changes when the new observation taxonomy becomes user-facing
 
 Ready after prerequisites:
 
-- define a `_derived/` playbook artifact location and ledger-derived update status
-- add a per-stakeholder aggregation pass over validated signal JSONL files
-- support explicit asks, priorities, commitments, concerns, communication cues, and follow-up expectations
-- record provenance back to `meeting_id`, artifact path, and supporting quote/paraphrase
-- treat playbook update failure as derived-work failure, not primary ingest failure
-
-Needs design decision:
-
-- exact playbook output shape: one markdown file, one JSONL/JSON index, or both
-- whether stakeholder identity remains v1 person-ID based or introduces a project-local roster before playbook V1
-- how to handle sensitive or low-confidence inferred communication guidance
-- whether playbook updates happen during every ingest, only on demand, or both
+- implement tolerant schema 1.0 readers and schema 1.1 writers
+- implement generalized `source_id`, `source_kind`, and occurrence/acquisition/processing timing
+- implement deterministic signal identity and regeneration supersession for new records
+- implement the human-owned registry under `_playbook-state/`
+- resolve identities at derivation time and emit unresolved/ambiguous identity candidates
+- add status and doctor findings for registry conflicts and identity candidates
 
 Acceptance criteria:
 
-- ingesting a meeting with stakeholder signals can update a derived playbook without changing the primary artifact success criteria
-- every playbook entry has provenance and confidence
-- low-confidence or inferred guidance is marked clearly and does not overwrite explicit stakeholder asks
-- `doctor` and `status` can report stale or failed playbook derivation separately from meeting ingest health
+- existing schema 1.0 signals remain consumable
+- reviewed aliases resolve retroactively without rewriting source observations
+- ambiguous aliases never auto-merge
+- occurrence, acquisition, and processing time remain distinct
+- regenerated signals preserve stable identity where locators allow and surface supersession where they do not
+
+#### Layer 5B: Stakeholder Briefing V1
+
+Goal:
+
+- deliver a useful deterministic pre-interaction briefing with no model required during derivation.
+
+Status:
+
+- accepted product and technical design exists
+- artifact contract finalized
+- implementation not started
+
+Ready after Layer 5A:
+
+- implement full deterministic rebuild over validated signal files
+- write canonical profile JSON and rendered briefing Markdown into immutable generations
+- implement the separate derivation ledger, atomic current-generation index, and input fingerprinting
+- implement `playbook update`, `playbook show`, and concise briefing surfaces
+- aggregate tracked asks and commitments, priorities, concerns, rationales, preferences, behaviors, interaction responses, freshness, and mechanical contradiction candidates
+- implement append-only review controls for rejecting entries, resolving tracked items, suppressing bad observations, and correcting identity
+- add stale/missing/failed playbook state to `status` and `doctor`
+
+Acceptance criteria:
+
+- every briefing entry cites qualified source observations
+- full rebuilds are deterministic and identity corrections require no signal rewrite
+- absent closure evidence is presented as unknown rather than `open`
+- new eligible signals make the current generation visibly stale
+- playbook failure never changes primary ingest success
+
+#### Layer 5C: Playbook Guidance V1.1
+
+Goal:
+
+- add reviewable provider-assisted semantic judgment without allowing the provider to mint or upgrade source facts.
+
+Status:
+
+- accepted design exists
+- derivation provider contract and implementation have not started
+
+Preconditions before implementation:
+
+- Stakeholder Briefing V1 and its review controls are working
+- freeze the derivation request/response contract and approach-tag vocabulary
+- add dedicated default-false API-backed and session-backed playbook-synthesis privacy gates
+
+Ready after prerequisites:
+
+- implement two-phase provider derivation with input fingerprint revalidation
+- add semantic clustering, contextual scope, contradiction confirmation, positive-response patterns, and practical communication cues
+- implement accept, reject, and tombstone review controls for guidance
+- preserve deterministic briefings when synthesis is unavailable, denied, stale, or invalid
+
+Acceptance criteria:
+
+- one weak observation cannot become guidance
+- provider output cannot invent facts, raise confidence, assign reviewed identity, hide contradictions, or resurrect disqualified evidence
+- every cue has evidence, scope, caveats, confidence rationale, and review state
+- failed synthesis leaves the deterministic briefing usable
 
 ### Layer 6: Migration And Existing Corpus Adoption
 
@@ -898,26 +984,58 @@ Status:
 
 - not started
 
-Ready after artifact-contract updates:
+The accepted design sequences broader communication sources by provenance and privacy complexity.
 
-- define artifact-type routing for emails, memos, Teams messages, screenshots, and attachments
-- add source extractors only after the artifact contract distinguishes meeting artifacts from communication artifacts
-- reuse signal validation and playbook aggregation where the signal contract fits
-- keep non-meeting outputs out of the top-level generated meeting markdown namespace unless explicitly configured
+#### Layer 7A: Plain-Text Communication Pilot
 
-Needs design decision:
+Ready after Stakeholder Briefing V1:
 
-- artifact taxonomy and directory layout for non-meeting communication inputs
-- whether communication artifacts produce markdown summaries, signal-only records, or both
-- source-specific provenance requirements for screenshots and copied message threads
-- privacy rules for remote provider use on emails and client communications
+- define a communication-neutral ingest surface for an email body or pasted message
+- preserve sender, recipients, subject, sent time, thread boundaries, acquisition provenance, and privacy class
+- emit generalized schema 1.1 observations without using the meeting artifact namespace
+- rebuild stakeholder profiles across meeting and plain-text communication evidence
 
 Acceptance criteria:
 
-- non-meeting communication ingest cannot be confused with meeting ingest in ledger, status, filenames, or output directories
-- communication-derived signals preserve source provenance and artifact type
-- playbook aggregation can consume both meeting and communication signals while preserving source distinctions
-- unsupported communication formats fail with typed, recoverable errors
+- meeting and plain-text evidence remain distinguishable
+- both source kinds may support one qualified pattern without losing provenance
+- remote/session permission for communication ingest is independent from meeting extraction permission
+- non-meeting outputs never appear as generated meeting Markdown
+
+#### Layer 7B: Image-Based Communication Ingest
+
+Ready after Layer 7A evidence handling is trusted:
+
+- add Teams-thread and text-message screenshots
+- add OCR provenance and region-addressable evidence locators
+- distinguish visible text, OCR output, and inferred thread structure
+- define communication-event identity so screenshots and forwarded copies do not double-count one event
+
+Acceptance criteria:
+
+- every screenshot-derived observation links to an image region and records OCR/inference uncertainty
+- duplicated representations of one communication event do not inflate recurrence thresholds
+- privacy gates are source-kind specific
+
+#### Layer 7C: Public And Social Sources
+
+Ready only after policy review:
+
+- define allowed uses for social posts and social profiles
+- distinguish public self-description from inferred stakeholder traits
+- preserve URL, capture time, visible content, and source volatility
+- prohibit protected-trait, personality, vulnerability, and persuasion profiling
+
+Needs design decision:
+
+- exact Phase 7A email/message metadata and artifact contract
+- source-specific OCR and evidence-location requirements for Phase 7B
+- public-source retention, refresh, consent, and acceptable-use policy for Phase 7C
+
+Acceptance criteria:
+
+- public/social evidence remains visibly sourced, time-bounded, reviewable, and removable
+- social-profile ingest cannot silently produce personality or persuasion guidance
 
 ### Layer 8: iQ Context Integration
 
@@ -963,29 +1081,30 @@ Acceptance criteria:
 
 ## User Guidance Needed
 
-The roadmap layer-specific design-decision lists above supersede this older V1 checklist where they overlap.
+The roadmap layer-specific decision lists above are authoritative. Ask the user before deciding:
 
-Ask the user before deciding:
+- whether existing Hearst/Spelman corpora should be migrated, adopted read-only, or left outside the new ledger
+- which host wrapper or API-backed provider should receive the next productization investment
+- whether Layer 2 output modes should interrupt the active Layer 1 → 5A → 5B sequence
+- exact deterministic cleanup or date-resolution rules when fixtures expose genuine ambiguity
+- public/social-source retention, consent, and acceptable-use policy before Layer 7C
 
-- whether `ingest` should auto-init or require explicit `init`
-- which real provider should be first
-- whether existing Hearst/Spelman corpora should be migrated, adopted read-only, or ignored for v1
-- exact deterministic cleanup rules if the first fixtures expose ambiguity
-- whether file modified date is acceptable as the v1 fallback effective date
-- whether duplicate/no-op should complete unfinished archive/reconcile work automatically
-- whether path discovery should use config walk-up from current working directory
+Already settled and no longer user questions:
 
-## Suggested First Coding Session
+- duplicate/no-op may complete unfinished archive/reconcile work
+- file modification time is a low-confidence acquisition-oriented fallback, not a trustworthy meeting-occurrence source for downloaded historical transcripts
+- Stakeholder Briefing V1 uses explicit deterministic rebuilds rather than running inside primary ingest
+- reviewed project-local identity is required for stakeholder profiles
 
-Start with Milestone 1.
+## Suggested Next Coding Session
 
-Concrete first tasks:
+After the current artifact-contract review is resolved and committed:
 
-1. create Python packaging scaffold
-2. add CLI with `init`, `ingest`, `doctor`, `status` stubs
-3. add `pipeline.py` stub called by `cli.py`
-4. add `errors.py` and `clock.py`
-5. implement config model and path layout creation
-6. add tests for `init`, error mapping, and deterministic clock behavior
+1. freeze the manual meeting-date override and controlled date-repair contract
+2. add sanitized fixtures for the observed July 10/13 Teams VTT failure and explicit-header controls
+3. implement occurrence candidate selection before meeting ID and provider-request minting
+4. implement `--meeting-date` as the safe ambiguity escape hatch
+5. add the controlled repair path for already-ingested artifacts
+6. update `status`, `doctor`, run summaries, and documentation for low-confidence modification-time fallbacks
 
-Do not implement provider calls or artifact rendering before the package/config/path foundation is working.
+Then begin Layer 5A with schema 1.1 tolerant readers/writers and the reviewed identity registry.

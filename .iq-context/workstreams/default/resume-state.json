@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation. Start from docs/product-status.md and docs/artifact-contract.md; update contracts before code."
+    "Commit the frozen design-and-contract checkpoint. Next, freeze the effective-date override/repair contract, add sanitized July 10/13 Teams VTT fixtures, and implement occurrence reliability before Layer 5A schema and identity work."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Next slice: begin Layer 2 by finalizing summary/verbatim artifact contracts and repair/regenerate UX before implementation. Start from docs/product-status.md and docs/artifact-contract.md; update contracts before code.",
-  "updated_at": "2026-07-09T03:35:53.327Z"
+  "resume_from": "Resume with: Commit the frozen design-and-contract checkpoint. Next, freeze the effective-date override/repair contract, add sanitized July 10/13 Teams VTT fixtures, and implement occurrence reliability before Layer 5A schema and identity work.",
+  "updated_at": "2026-07-18T16:23:06.991Z"
 }

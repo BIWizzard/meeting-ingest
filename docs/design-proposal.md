@@ -316,6 +316,8 @@ Future performance enhancement:
 
 ## Rolling Stakeholder Playbook
 
+Status: superseded for playbook architecture and delivery sequencing by `docs/stakeholder-playbook-design.md`. The source-grounded product intent below remains useful background, but the accepted design now governs identity, provenance, storage, derivation, review controls, locking, privacy, and the Stakeholder Briefing V1 / Playbook Guidance V1.1 split.
+
 Per-meeting communication signals should feed a rolling stakeholder playbook.
 
 The playbook should accumulate:
@@ -342,6 +344,8 @@ Suggested approach:
 This remains inside the artifact-producer boundary. It should not become a full messaging assistant in this repo.
 
 ## Proposed Communication Signal Schema
+
+Status: superseded for new playbook signal work by the schema 1.1 direction in `docs/stakeholder-playbook-design.md` and the corresponding artifact-contract amendments. The example below documents the original v1 meeting-signal rationale; it is not the authoritative generalized source, timing, identity, or signal-ID contract.
 
 Per-meeting signal records should be structured enough for a rolling playbook while still carrying readable text.
 
@@ -459,6 +463,8 @@ generated_by: meeting-ingest 0.1.0
 ```
 
 ## Future Communication Artifact Ingest
+
+Status: superseded for sequencing and source-model design by `docs/stakeholder-playbook-design.md`. The accepted plan builds meeting-derived Stakeholder Briefing V1 first, then pilots plain-text communication ingest before image-based and public/social sources.
 
 Stakeholder voice and commitments often appear outside meetings.
 
