@@ -29,3 +29,6 @@ docs/open-mind.yaml
 # Meeting Ingest runtime cache
 /_local/
 /_local/project-context/meetings/_cache/
+
+# Python build metadata
+src/*.egg-info/
