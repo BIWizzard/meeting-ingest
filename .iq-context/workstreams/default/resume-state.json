@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Push main to origin when ready. Next engineering work: Layer 5A schema 1.1 and reviewed identity. Outstanding: repair-date for the three low-confidence artifacts when dates are confirmed."
+    "Next work block (before Layer 5A): (1) embed the full provider-response contract - filled example or JSON schema - in the phase-1 request payload and skill docs; (2) aggregate provider-response validation errors into one report and add a validate-response pre-flight command; (3) add a skill/AGENTS.md protocol step to confirm the occurrence date via --meeting-date when phase-1 date_confidence is low. Then Layer 5A schema 1.1 and reviewed identity. Backlog: stale-handoff cleanup command, word-boundary slug truncation, repair-date for the three flagged artifacts plus mtg-20260718-aa2fd13f in HTV repo once dates are confirmed."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Push main to origin when ready. Next engineering work: Layer 5A schema 1.1 and reviewed identity. Outstanding: repair-date for the three low-confidence artifacts when dates are confirmed.",
-  "updated_at": "2026-07-18T18:30:42.046Z"
+  "resume_from": "Resume with: Next work block (before Layer 5A): (1) embed the full provider-response contract - filled example or JSON schema - in the phase-1 request payload and skill docs; (2) aggregate provider-response validation errors into one report and add a validate-response pre-flight command; (3) add a skill/AGENTS.md protocol step to confirm the occurrence date via --meeting-date when phase-1 date_confidence is low. Then Layer 5A schema 1.1 and reviewed identity. Backlog: stale-handoff cleanup command, word-boundary slug truncation, repair-date for the three flagged artifacts plus mtg-20260718-aa2fd13f in HTV repo once dates are confirmed.",
+  "updated_at": "2026-07-18T22:02:00.927Z"
 }
