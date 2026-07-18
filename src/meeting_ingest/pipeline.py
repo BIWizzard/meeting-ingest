@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 import re
 
@@ -114,9 +115,15 @@ def ingest(
     provider: str | None = None,
     quality: str | None = None,
     provider_response: Path | None = None,
+    meeting_date: str | None = None,
     clock: Clock | None = None,
 ) -> RunSummary:
     config, paths = load_project(start or source)
+    if provider_response is not None and meeting_date is not None:
+        raise ConfigError(
+            "--meeting-date is not valid with --provider-response; the persisted request already fixes the date.",
+            code="invalid_meeting_date_phase",
+        )
     selected_mode = mode or config.default_mode
     selected_provider = provider or ("session" if provider_response else config.default_provider)
     selected_quality = quality or config.default_quality
@@ -148,6 +155,7 @@ def ingest(
             selected_mode=selected_mode,
             selected_provider=selected_provider,
             selected_quality=selected_quality,
+            meeting_date=meeting_date,
             clock=clock,
         )
 
@@ -159,6 +167,7 @@ def provider_request(
     mode: str | None = None,
     provider: str | None = None,
     quality: str | None = None,
+    meeting_date: str | None = None,
     clock: Clock | None = None,
 ) -> RunSummary:
     config, paths = load_project(start or source)
@@ -175,6 +184,7 @@ def provider_request(
             paths=paths,
             selected_mode=selected_mode,
             selected_quality=selected_quality,
+            meeting_date=meeting_date,
             clock=clock,
         )
 
@@ -378,10 +388,11 @@ def _ingest_locked(
     selected_mode: str,
     selected_provider: str,
     selected_quality: str,
+    meeting_date: str | None,
     clock: Clock | None,
 ) -> RunSummary:
     try:
-        prepared = _prepare_ingest(source, paths=paths, clock=clock)
+        prepared = _prepare_ingest(source, paths=paths, clock=clock, meeting_date=meeting_date)
     except _PreparedNoOp as no_op:
         return no_op.summary
 
@@ -450,10 +461,11 @@ def _provider_request_locked(
     paths: ProjectPaths,
     selected_mode: str,
     selected_quality: str,
+    meeting_date: str | None,
     clock: Clock | None,
 ) -> RunSummary:
     try:
-        prepared = _prepare_ingest(source, paths=paths, clock=clock)
+        prepared = _prepare_ingest(source, paths=paths, clock=clock, meeting_date=meeting_date)
     except _PreparedNoOp as no_op:
         return no_op.summary
     request_payload = {
@@ -482,6 +494,7 @@ def _provider_request_locked(
         source_sha256=prepared.source_sha256,
         meeting_id=prepared.meeting_id,
         ingest_run_id=prepared.ingest_run_id,
+        warnings=_date_warnings(prepared.extraction),
         details={
             "command": "provider-request",
             "provider": "session",
@@ -686,6 +699,7 @@ def _finish_ingest(
     warnings: list[str] = []
     if artifact_destination.collision:
         warnings.append(f"artifact filename collision; wrote {relative_artifact_path}")
+    warnings.extend(_date_warnings(extraction))
     return RunSummary(
         status="success",
         exit_code=0,
@@ -725,7 +739,15 @@ def _finish_ingest(
     )
 
 
-def _prepare_ingest(source: Path, *, paths: ProjectPaths, clock: Clock | None) -> _PreparedIngest:
+def _prepare_ingest(
+    source: Path,
+    *,
+    paths: ProjectPaths,
+    clock: Clock | None,
+    meeting_date: str | None = None,
+) -> _PreparedIngest:
+    if meeting_date is not None:
+        meeting_date = _validate_meeting_date(meeting_date)
     source = source.resolve()
     source_sha256 = sha256_file(source)
     existing_record = latest_record_for_source(paths.ledger, source_sha256)
@@ -733,7 +755,7 @@ def _prepare_ingest(source: Path, *, paths: ProjectPaths, clock: Clock | None) -
         raise _PreparedNoOp(_no_op_summary(source, paths, source_sha256, existing_record, clock=clock))
 
     try:
-        extraction = extract_source(source)
+        extraction = extract_source(source, meeting_date=meeting_date)
     except (UnsupportedSourceFormatError, SourceExtractionError) as exc:
         _record_source_failure(paths, source=source, source_sha256=source_sha256, error=exc, clock=clock)
         raise
@@ -919,6 +941,45 @@ def _validate_ingest_options(config: MeetingIngestConfig, mode: str, provider: s
             raise ConfigError("Remote provider use is disabled by config.", code="remote_provider_disabled")
         return
     raise ConfigError(f"Provider is not implemented yet: {provider}", code="provider_not_implemented")
+
+
+_MEETING_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_meeting_date(value: str) -> str:
+    if _MEETING_DATE.match(value):
+        try:
+            datetime.strptime(value, "%Y-%m-%d")
+        except ValueError:
+            pass
+        else:
+            return value
+    raise ConfigError(
+        f"--meeting-date must be a real calendar date in YYYY-MM-DD form, got: {value}",
+        code="invalid_meeting_date",
+    )
+
+
+def _date_warnings(extraction: object) -> list[str]:
+    warnings: list[str] = []
+    effective = extraction.effective_date
+    if effective.source == "file_mtime":
+        warnings.append(
+            f"effective date {effective.value} was inferred from file modification time and may be a "
+            "download date rather than the meeting occurrence; re-run with --meeting-date YYYY-MM-DD "
+            "or fix later with repair-date"
+        )
+    selection = getattr(extraction, "date_selection", None)
+    if selection is not None and selection.conflict:
+        listing = ", ".join(
+            f"{candidate.source}={candidate.value}"
+            for candidate in selection.candidates
+            if candidate.source != "file_mtime"
+        )
+        warnings.append(
+            f"conflicting meeting date evidence ({listing}); selected {effective.source}={effective.value}"
+        )
+    return warnings
 
 
 def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> _ArtifactPath:

@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -188,6 +189,86 @@ def test_ingest_warns_when_artifact_filename_collides(tmp_path: Path) -> None:
     assert summary.warnings == ["artifact filename collision; wrote 2026-07-03-kushali-sync-2.md"]
     assert existing.read_text(encoding="utf-8") == "# Existing\n"
     assert (paths.meetings_root / "2026-07-03-kushali-sync-2.md").exists()
+
+
+def test_ingest_warns_when_effective_date_comes_from_file_mtime(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "Daily Stand Up - Post-MVP (41).vtt"
+    source.write_text(
+        (Path(__file__).parent / "fixtures" / "teams-vtt" / "Daily Stand Up - Post-MVP (41).vtt").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    os.utime(source, (1784160000, 1784160000))
+
+    summary = pipeline_module.ingest(source, start=tmp_path, provider="mock")
+
+    assert summary.status == "success"
+    assert any("file modification time" in warning for warning in summary.warnings)
+    assert summary.meeting_id is not None and summary.meeting_id.startswith("mtg-20260716-")
+
+
+def test_ingest_meeting_date_override_mints_ids_from_override(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "Daily Stand Up - Post-MVP (41).vtt"
+    source.write_text(
+        (Path(__file__).parent / "fixtures" / "teams-vtt" / "Daily Stand Up - Post-MVP (41).vtt").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    os.utime(source, (1784160000, 1784160000))
+
+    summary = pipeline_module.ingest(
+        source,
+        start=tmp_path,
+        provider="mock",
+        meeting_date="2026-07-10",
+    )
+
+    assert summary.status == "success"
+    assert summary.meeting_id is not None and summary.meeting_id.startswith("mtg-20260710-")
+    assert not any("file modification time" in warning for warning in summary.warnings)
+    artifact_path = tmp_path / "_local/project-context/meetings" / summary.artifacts[0]["path"]
+    front_matter = artifact_path.read_text(encoding="utf-8")
+    assert "date: 2026-07-10" in front_matter
+    assert "date_confidence: manual" in front_matter
+    assert "date_source: override" in front_matter
+
+
+def test_ingest_rejects_invalid_meeting_date(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "meeting.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError) as excinfo:
+        pipeline_module.ingest(
+            source,
+            start=tmp_path,
+            provider="mock",
+            meeting_date="2026-13-40",
+        )
+
+    assert excinfo.value.code == "invalid_meeting_date"
+
+
+def test_provider_request_warns_when_effective_date_comes_from_file_mtime(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "Daily Stand Up - Post-MVP (42).vtt"
+    source.write_text(
+        (Path(__file__).parent / "fixtures" / "teams-vtt" / "Daily Stand Up - Post-MVP (42).vtt").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    os.utime(source, (1784160000, 1784160000))
+
+    summary = pipeline_module.provider_request(source, start=tmp_path)
+
+    assert summary.status == "success"
+    assert any("file modification time" in warning for warning in summary.warnings)
 
 
 def test_ingest_inbox_processes_direct_inbox_sources_and_continues_after_failures(tmp_path: Path) -> None:

@@ -1,7 +1,15 @@
 import json
 from pathlib import Path
 
-from meeting_ingest.cli import main
+from meeting_ingest.cli import build_parser, main
+
+
+def test_cli_parses_meeting_date_for_ingest_and_provider_request() -> None:
+    parser = build_parser()
+    ingest_args = parser.parse_args(["ingest", "meeting.vtt", "--meeting-date", "2026-07-10"])
+    assert ingest_args.meeting_date == "2026-07-10"
+    request_args = parser.parse_args(["provider-request", "meeting.vtt", "--meeting-date", "2026-07-13"])
+    assert request_args.meeting_date == "2026-07-13"
 
 
 def test_init_json_outputs_run_summary(tmp_path: Path, capsys) -> None:
