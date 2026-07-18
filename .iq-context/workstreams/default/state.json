@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Closed the final Stakeholder Briefing V1 artifact-contract review. Added source-safe entry IDs hashed from the full person/kind/source/signal anchor tuple and earliest-qualifying lineage for deterministic multi-observation rollups, with explicit remint/orphan/successor behavior. Resolved all review minors and nits: commit-time index status versus live freshness, explicitly_outstanding review state, eligible signal-file definition, provider-contract dependency, meeting acquisition requirements, signal-set fingerprinting, Recent Changes behavior, collision ordering, response valence guidance, and derivation trigger enums. Reconciled implementation plan, product status, current questions, context primer, and README; removed generated egg-info. Verification: 133 tests pass, 28 JSON examples parse, Markdown fences balance, and git diff check passes.",
+  "status_summary": "Froze and shipped the Stakeholder Briefing V1 design and artifact contracts. Resolved final Claude review findings by defining source-safe entry IDs, earliest-qualifying deterministic-rollup lineage, orphan/successor behavior, eligible signal inputs, lifecycle controls, fingerprints, index freshness, provider dependencies, Recent Changes, and remaining precision rules. Reconciled the roadmap and product status into Layer 1 effective-date reliability, Layers 5A/5B/5C, and Layers 7A/7B/7C; refreshed README, context primer, current questions, decisions, and design proposal. Captured the observed July 10/13 Teams VTT date failure. Verification passed with 133 tests, 28 parsed JSON examples, verified anchor hashes, balanced Markdown fences, and clean diffs. Commit b6c1e9d was pushed to origin/main.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
@@ -17,16 +17,16 @@
   "blockers": [],
   "open_questions": [],
   "next_actions": [
-    "Commit the frozen design-and-contract checkpoint. Next, freeze the effective-date override/repair contract, add sanitized July 10/13 Teams VTT fixtures, and implement occurrence reliability before Layer 5A schema and identity work."
+    "Start Layer 1 effective-date reliability: freeze the --meeting-date and controlled repair-date contract, add sanitized July 10/13 Teams VTT fixtures, implement occurrence candidate selection before meeting ID/provider-request minting, warn on file-mtime occurrence fallback, and repair the affected existing artifacts through the engine. Then begin Layer 5A schema 1.1 and reviewed identity implementation."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Commit the frozen design-and-contract checkpoint. Next, freeze the effective-date override/repair contract, add sanitized July 10/13 Teams VTT fixtures, and implement occurrence reliability before Layer 5A schema and identity work.",
+  "continuation_hint": "Froze and shipped the Stakeholder Briefing V1 design and artifact contracts. Resolved final Claude review findings by defining source-safe entry IDs, earliest-qualifying deterministic-rollup lineage, orphan/successor behavior, eligible signal inputs, lifecycle controls, fingerprints, index freshness, provider dependencies, Recent Changes, and remaining precision rules. Reconciled the roadmap and product status into Layer 1 effective-date reliability, Layers 5A/5B/5C, and Layers 7A/7B/7C; refreshed README, context primer, current questions, decisions, and design proposal. Captured the observed July 10/13 Teams VTT date failure. Verification passed with 133 tests, 28 parsed JSON examples, verified anchor hashes, balanced Markdown fences, and clean diffs. Commit b6c1e9d was pushed to origin/main.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
   "last_saved_at": "2026-07-18T16:23:06.991Z",
-  "last_wrapped_at": "2026-07-10T21:58:35.379Z",
+  "last_wrapped_at": "2026-07-18T16:30:35.548Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-18T16:23:06.991Z"
+  "updated_at": "2026-07-18T16:30:35.548Z"
 }
