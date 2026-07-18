@@ -1002,6 +1002,146 @@ Minimum `title_repaired` ledger fields:
 }
 ```
 
+## Meeting Occurrence And Date Repair Contract
+
+### Occurrence Candidate Selection
+
+Effective-date inference is candidate-based and deterministic. Before minting
+`meeting_id`, `ingest_run_id`, or a provider request, the engine gathers every
+available occurrence candidate and selects by fixed precedence:
+
+1. operator override via `--meeting-date` — confidence `manual`, source `override`
+2. transcript content export stamp or human date header — confidence `high`, source `content`
+3. filename date — confidence `high`, source `filename`
+4. file modification time — confidence `low`, source `file_mtime`
+
+Rules:
+
+- Selection is precedence-ordered, never content-weighted. The first available
+  candidate wins.
+- Contextual date evidence (weekday names, relative-date phrases, nearby
+  absolute-date references inside dialogue) is explicitly out of scope for v1
+  candidate selection and must not influence the chosen date.
+- When two or more non-`file_mtime` candidates disagree, the engine still
+  selects by precedence and appends a run-summary warning listing every
+  non-`file_mtime` candidate as `source=value` pairs.
+- An operator override always wins, including over conflicting high-confidence
+  evidence; the conflict warning still fires so the operator sees the
+  disagreement.
+- Whenever the selected source is `file_mtime`, `ingest` and `provider-request`
+  must append a prominent run-summary warning stating that the date may be a
+  download/acquisition time rather than the meeting occurrence, and naming both
+  escape hatches: `--meeting-date` before ingest, `repair-date` after.
+
+### Manual Meeting-Date Override
+
+CLI shape:
+
+```text
+meeting-ingest ingest <source> --meeting-date YYYY-MM-DD [...]
+meeting-ingest provider-request <source> --meeting-date YYYY-MM-DD [...]
+```
+
+Rules:
+
+- `--meeting-date` accepts only a real calendar date in `YYYY-MM-DD` form.
+  Anything else fails with config error code `invalid_meeting_date` and the
+  usage/config exit code before any extraction or minting happens.
+- The override participates in candidate selection as the highest-precedence
+  candidate; the chosen effective date records confidence `manual` and source
+  `override` in artifacts, provider requests, and run summaries.
+- Batch commands (`ingest-inbox`, `session-inbox`) do not accept
+  `--meeting-date` in v1: one date across many sources is an error amplifier,
+  not an escape hatch. Per-source overrides go through single-source `ingest`
+  or `provider-request`.
+- For session-provider work the override applies at phase 1: the persisted
+  provider request carries the overridden `effective_date`,
+  `date_confidence`, and `date_source`, and phase 2 adopts them through the
+  normal persisted-request rebinding rules.
+
+### Date Repair Contract
+
+Controlled date repair uses this CLI shape:
+
+```text
+meeting-ingest repair-date <meeting-id-or-source-sha> --date YYYY-MM-DD [--root <path>] [--json]
+```
+
+Rules:
+
+- `<meeting-id-or-source-sha>` is an exact `meeting_id` or an exact full
+  `source_sha256`. Prefix matching is not supported in v1.
+- `repair-date` updates mutable occurrence metadata only: artifact filename
+  date prefixes (file renames), artifact front-matter `date`,
+  `date_confidence`, and `date_source` fields, and signal-record
+  `effective_at` values.
+- Repaired metadata records confidence `manual` and source `repair`.
+- It must not change `meeting_id`, `ingest_run_id` values on existing records,
+  `signal_id` values, signal counts, `source_sha256`, the processed archive
+  path, original source identity, or transcript content. The date segments
+  embedded in `meeting_id` and `signal_id` are minting provenance, not current
+  occurrence, and are documented as such.
+- The signal JSONL file path is keyed by `meeting_id` and therefore does not
+  move; its records are rewritten in place with only `effective_at` changed.
+- Artifact renames replace the leading `YYYY-MM-DD` filename prefix and keep
+  the existing slug. Filename collisions use the same numeric suffix rule as
+  initial ingest and must be reported in warnings.
+- The repair applies to all ready markdown mode artifacts for the selected
+  source.
+- The command appends a complete `date_repaired` ledger snapshot containing
+  every known mode artifact entry with repaired path metadata, only after all
+  file renames and rewrites have succeeded.
+- A `date_repaired` snapshot carries current primary-artifact state: duplicate
+  detection, no-op summaries, and doctor current-state checks must treat it
+  exactly like `ingest_completed` when it is the latest record for a source.
+- The command returns `status: "success"` and exit `0` when at least one date
+  field or artifact path changed.
+- If the requested date already matches current state, the command returns
+  `status: "no_op"` and exit `0` without appending a ledger record.
+- If the target cannot be resolved from the ledger, the command fails with
+  error code `repair_target_not_found`. If an expected artifact or signal file
+  is missing or cannot be moved, it fails with `repair_artifact_missing` (or
+  the underlying write error) without appending `date_repaired`; partial
+  states are surfaced by `doctor` as missing-path issues rather than silently
+  normalized.
+
+Minimum `date_repaired` ledger fields:
+
+```json
+{
+  "schema_version": "1.0",
+  "event": "date_repaired",
+  "source_sha256": "63d2e8690b7ba09d51e80cc1d3be40fa530c5479b15e33bd2535e0881bccaf55",
+  "meeting_id": "mtg-20260703-63d2e869",
+  "ingest_run_id": null,
+  "artifacts": {
+    "summary-plus-verbatim": {
+      "status": "ready",
+      "path": "2026-07-10-nitesh-follow-up-interview-debrief.md",
+      "schema_version": "1.0",
+      "title": "Nitesh Follow-Up Interview Debrief",
+      "slug": "nitesh-follow-up-interview-debrief"
+    }
+  },
+  "repair": {
+    "previous_date": "2026-07-03",
+    "previous_date_confidence": "low",
+    "previous_date_source": "file_mtime",
+    "date": "2026-07-10",
+    "changed_modes": ["summary-plus-verbatim"]
+  },
+  "recorded_at": "2026-07-18T12:00:00Z"
+}
+```
+
+### Low-Confidence Date Doctor Check
+
+- `doctor` reports advisory issue code `low_confidence_meeting_date` for every
+  current ready artifact whose front matter records `date_source: file_mtime`.
+- The check is read-only and never mutates project files.
+- A successful `repair-date` clears the condition because the repaired front
+  matter records `date_source: repair`.
+
 ## Regeneration Contract
 
 Regeneration uses this CLI shape:
@@ -1078,6 +1218,7 @@ Recommended v1 event values:
 - `source_quarantined`
 - `artifact_regenerated`
 - `title_repaired`
+- `date_repaired`
 
 Write timing:
 

@@ -292,6 +292,13 @@ The playbook must not infer or store protected traits, diagnoses, intelligence r
 
 Profiles and briefings remain in ignored project-local storage. iQ Context and other capture integrations must not copy profile bodies or concentrated evidence by default.
 
+### 29. Occurrence selection and date repair preserve immutable minting provenance (2026-07-18)
+
+- Occurrence selection is precedence-based (override > content > filename > file mtime); contextual dialogue evidence deferred from v1.
+- `--meeting-date` exists on single-source commands only; batch commands excluded deliberately.
+- `meeting_id` and `signal_id` date segments are immutable minting provenance; `repair-date` rewrites only mutable occurrence metadata (artifact filename prefix, front-matter date fields, signal `effective_at`).
+- Signal files are rewritten in place because downstream briefing layers sequence on `effective_at`; leaving stale values would poison Layer 5+.
+
 ## Working Assumptions
 
 - The deterministic parts of the current engine are worth preserving.
