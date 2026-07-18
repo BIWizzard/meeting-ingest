@@ -684,24 +684,27 @@ Done:
 - enrich duplicate/no-op summaries with current source, existing artifact, archive/reconcile, and repair state
 - extract explicit dates from supported filename shapes and Teams export headers
 - record date source and confidence, including low-confidence file-modification fallback
+- separate meeting occurrence from acquisition/download time throughout the engine-facing contract
+- select occurrence candidates deterministically before minting IDs and provider requests, with precedence `override` > `content` > `filename` > `file_mtime`
+- support an explicit `--meeting-date YYYY-MM-DD` override for known dates on single-source ingest and provider requests
+- implement controlled `repair-date` updates for already-ingested artifacts without changing immutable `meeting_id` or `signal_id` values
+- warn prominently whenever file modification time is used as the meeting occurrence fallback
 
 Remaining:
 
 - tighten title and filename inference so `generic-<hash>` is rare on a broader real-transcript set
 - add more real observed transcript fixtures as new edge cases appear
-- separate meeting occurrence from acquisition/download time throughout the engine-facing contract
-- infer meeting occurrence from trustworthy source metadata and corroborated transcript evidence before minting IDs and provider requests
-- add an explicit `--meeting-date YYYY-MM-DD` override for known dates
-- define and implement controlled effective-date repair for already-ingested artifacts without changing immutable `meeting_id`
-- warn prominently whenever file modification time is used as the meeting occurrence fallback
 
 Needs design decision:
 
 - exact confidence threshold for accepting provider-suggested titles and slugs
 - whether fallback filenames should include meeting type, counterpart, topic, or only source hash when confidence is low
 - whether `doctor` should offer machine-readable repair suggestions only, or also implement interactive repair later
-- the deterministic candidate, conflict, and confidence rules for contextual date evidence such as weekday, relative-date, and nearby absolute-date references
-- the exact `repair-date` CLI, ledger snapshot, signal timing, artifact rename, and run-summary contract
+
+Decided/frozen:
+
+- the `repair-date` CLI, ledger snapshot, signal timing, artifact rename, and run-summary contract is frozen in `docs/artifact-contract.md`
+- deferred: contextual date evidence — frozen out of v1 candidate selection
 
 Acceptance criteria:
 

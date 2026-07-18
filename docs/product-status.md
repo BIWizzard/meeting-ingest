@@ -118,9 +118,9 @@ Complete:
 
 Known limitation:
 
-- effective-date extraction recognizes explicit supported filename and Teams export-header dates, but VTT transcripts without those forms still fall back to file modification time
-- for downloaded historical Teams transcripts, that timestamp is usually acquisition time rather than the meeting occurrence date
-- there is no implemented `--meeting-date` override or controlled date-repair command yet
+- occurrence candidate selection is deterministic, with precedence `override` > `content` > `filename` > `file_mtime`
+- operators can supply a known occurrence date with `--meeting-date` before ingest or use `repair-date` for an already-ingested artifact
+- file modification time remains the low-confidence fallback when no stronger candidate exists; run summaries warn that it may be acquisition time, and `doctor` reports the advisory condition
 
 ### Artifact Generation
 
@@ -235,14 +235,15 @@ Done:
 - doctor checks for inbox residue, malformed ledger lines, missing artifacts, missing signals, missing processed copies, incomplete reconcile, stale lock, stale provider cache, and session handoff state
 - focused regression coverage for run summaries, filename fallback, doctor warnings, duplicate/no-op repair, provider failures, and archive/reconcile failures
 - done-state documentation across artifact and provider contracts
+- reliable occurrence candidate selection for transcripts downloaded after the meeting date
+- occurrence, acquisition, and processing time distinction in the engine-facing contract
+- manual meeting-date override for single-source `ingest` and `provider-request`
+- controlled `repair-date` path for already-ingested artifacts
+- prominent run-summary warnings when file modification time is used as the meeting occurrence fallback
 
 Remaining:
 
 - improve title/filename inference quality using more real transcript fixtures
-- make meeting occurrence reliable when a transcript is downloaded after the meeting date
-- distinguish occurrence, acquisition, and processing time in implemented signal provenance
-- add a manual meeting-date override and controlled repair path for already-ingested artifacts
-- warn when file modification time may be a download date rather than the meeting date
 - decide exact confidence policy for provider-suggested titles/slugs
 - decide whether doctor should only report repair suggestions or also implement repairs
 

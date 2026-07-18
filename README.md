@@ -92,7 +92,7 @@ Python CLI/library implementation with:
 - signal JSONL output
 - append-only ledger
 - archive/reconcile behavior
-- doctor/status/reconcile commands
+- doctor/status/reconcile and `repair-date` commands
 
 ## Development
 
@@ -114,6 +114,12 @@ Ingest one source:
 python3 -m meeting_ingest.cli ingest _local/project-context/meetings/_inbox/example.vtt --json
 ```
 
+When the meeting occurrence date is known, override inferred date evidence before ingest:
+
+```bash
+python3 -m meeting_ingest.cli ingest _local/project-context/meetings/_inbox/example.vtt --meeting-date 2026-07-10 --json
+```
+
 Ingest every direct file in `_inbox/`:
 
 ```bash
@@ -124,6 +130,12 @@ Prepare session-provider inbox handoffs:
 
 ```bash
 python3 -m meeting_ingest.cli session-inbox --quality balanced --json
+```
+
+Repair the occurrence date of an already-ingested meeting through the engine:
+
+```bash
+python3 -m meeting_ingest.cli repair-date mtg-20260703-abc12345 --date 2026-07-10 --json
 ```
 
 ## Providers
@@ -167,6 +179,8 @@ Use `provider-request` to create a transcript-bearing request for the active hos
 ```bash
 python3 -m meeting_ingest.cli provider-request _local/project-context/meetings/_inbox/example.vtt --provider session --quality balanced --json
 ```
+
+Add `--meeting-date YYYY-MM-DD` to `provider-request` when the occurrence date is known. The persisted request carries that override into session phase 2; phase 2 does not accept a new date override.
 
 The command returns `request_path` and `expected_response_path`. A dedicated extraction agent should read the request file and write the expected response envelope. The response envelope must use `provider.name: "session"` and place the structured meeting extraction under `response`:
 
