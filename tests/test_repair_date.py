@@ -9,7 +9,6 @@ from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.ledger import read_records
 
 
-FIXTURES = Path(__file__).parent / "fixtures" / "teams-vtt"
 MEETINGS_RELATIVE = Path("_local/project-context/meetings")
 
 
@@ -17,7 +16,13 @@ def _ingest_mtime_dated_standup(tmp_path: Path) -> tuple[Path, str]:
     pipeline.initialize(tmp_path)
     meetings_root = tmp_path / MEETINGS_RELATIVE
     source = meetings_root / "_inbox" / "Daily Stand Up - Post-MVP (41).vtt"
-    source.write_text((FIXTURES / "Daily Stand Up - Post-MVP (41).vtt").read_text(encoding="utf-8"), encoding="utf-8")
+    source.write_text(
+        "WEBVTT\n\n"
+        "7f3a2c9e-4b1d-4e8a-9c5f-1a2b3c4d5e6f/1-0\n"
+        "00:00:03.120 --> 00:00:06.480\n"
+        "<v Graham, Ken (Contractor)>Please capture this request. [mock-signal]</v>\n",
+        encoding="utf-8",
+    )
     os.utime(source, (1784160000, 1784160000))  # 2026-07-16, download date
     summary = pipeline.ingest(source, start=tmp_path, provider="mock")
     assert summary.status == "success"
@@ -59,6 +64,7 @@ def test_repair_date_renames_artifact_rewrites_metadata_and_appends_ledger(tmp_p
     signal_path = meetings_root / "_signals" / f"{meeting_id}.jsonl"
     assert signal_path.exists()
     signal_lines = [json.loads(line) for line in signal_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert signal_lines
     assert all(line["effective_at"] == "2026-07-10" for line in signal_lines)
     assert all(line["meeting_id"] == meeting_id for line in signal_lines)
 
