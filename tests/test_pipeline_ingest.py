@@ -209,6 +209,25 @@ def test_ingest_warns_when_effective_date_comes_from_file_mtime(tmp_path: Path) 
     assert summary.meeting_id is not None and summary.meeting_id.startswith("mtg-20260716-")
 
 
+def test_ingest_warns_when_content_and_filename_dates_conflict(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-02-standup.txt"
+    source.write_text(
+        "Team Standup-20260701_090000-Meeting Transcript\n"
+        "Ken: Hello team.\n",
+        encoding="utf-8",
+    )
+
+    summary = pipeline_module.ingest(source, start=tmp_path, provider="mock")
+
+    warning = next(
+        warning for warning in summary.warnings if warning.startswith("conflicting meeting date evidence (")
+    )
+    assert "content=2026-07-01" in warning
+    assert "filename=2026-07-02" in warning
+    assert summary.meeting_id is not None and summary.meeting_id.startswith("mtg-20260701-")
+
+
 def test_ingest_meeting_date_override_mints_ids_from_override(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = paths.inbox / "Daily Stand Up - Post-MVP (41).vtt"
@@ -229,6 +248,11 @@ def test_ingest_meeting_date_override_mints_ids_from_override(tmp_path: Path) ->
 
     assert summary.status == "success"
     assert summary.meeting_id is not None and summary.meeting_id.startswith("mtg-20260710-")
+    assert summary.details["effective_date"] == {
+        "value": "2026-07-10",
+        "confidence": "manual",
+        "source": "override",
+    }
     assert not any("file modification time" in warning for warning in summary.warnings)
     artifact_path = tmp_path / "_local/project-context/meetings" / summary.artifacts[0]["path"]
     front_matter = artifact_path.read_text(encoding="utf-8")

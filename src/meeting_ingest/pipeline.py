@@ -205,6 +205,19 @@ def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, cl
                 details={"mode": mode, "path": entry.get("path")},
             )
 
+    signals_state = dict(target.get("signals", {})) if isinstance(target.get("signals"), dict) else {}
+    if signals_state.get("path"):
+        signal_path = paths.meetings_root / str(signals_state["path"])
+        if not signal_path.exists():
+            raise MeetingIngestError(
+                phase="repair",
+                code="repair_artifact_missing",
+                message=f"Signal file is missing: {signals_state['path']}",
+                exit_code=EXIT_ARTIFACT_WRITE,
+                recoverable=False,
+                details={"path": signals_state["path"]},
+            )
+
     first_entry = next(iter(artifacts.values()))
     previous = _front_matter_date_fields(paths.meetings_root / str(first_entry["path"]))
     paths_already_repaired = all(
@@ -236,7 +249,6 @@ def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, cl
         entry["path"] = str(destination.path.relative_to(paths.meetings_root))
         changed_modes.append(mode)
 
-    signals_state = dict(target.get("signals", {})) if isinstance(target.get("signals"), dict) else {}
     if signals_state.get("path"):
         _rewrite_signal_effective_at(paths.meetings_root / str(signals_state["path"]), new_date=new_date)
 
@@ -852,6 +864,11 @@ def _finish_ingest(
             "provider": selected_provider,
             "quality": selected_quality,
             **({"provider_host": provider_host} if provider_host else {}),
+            "effective_date": {
+                "value": extraction.effective_date.value,
+                "confidence": extraction.effective_date.confidence,
+                "source": extraction.effective_date.source,
+            },
             "title": {
                 "value": title_metadata.value,
                 "slug": title_metadata.slug,
