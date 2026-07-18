@@ -6,7 +6,11 @@
   "default_briefing_mode": "standard",
   "tracked_artifacts": [
     "README.md",
-    "docs/**/*.md"
+    "docs/**/*.md",
+    "_local/project-context/meetings/*.md",
+    "_local/project-context/meetings/_derived/**/*.md",
+    "_local/project-context/meetings/_signals/*.jsonl",
+    "_local/project-context/meetings/_ledger.jsonl"
   ],
   "global_assumptions": [],
   "stale_warnings": [],
@@ -14,5 +18,5 @@
     "default"
   ],
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-03T18:02:26.396Z"
+  "updated_at": "2026-07-18T18:30:20.498Z"
 }

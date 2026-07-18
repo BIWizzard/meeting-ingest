@@ -158,6 +158,18 @@ Omit uncertain claims instead of inventing them.
 
 The `meeting-ingest` CLI owns final side effects.
 
+## Post-Ingest Capture
+
+After each successfully processed meeting (ledger and signal writes confirmed), record it in iQ Context from the repo root — one capture per meeting, not per intermediate artifact:
+
+```bash
+iq-context capture \
+  --file _local/project-context/meetings/<final-meeting-doc>.md \
+  --note "Processed meeting: <title> (<meeting date>). Key outcomes: <1-2 line takeaways>. Decisions: <ids or 'none'>."
+```
+
+Lead the note with the meeting title and effective date, summarize outcomes in one or two lines, and name decisions or action items explicitly — those are what future sessions search for.
+
 ## Completion Message
 
 After processing, report:

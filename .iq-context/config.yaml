@@ -6,6 +6,10 @@ default_workstream: default
 tracked_artifacts:
   - README.md
   - docs/**/*.md
+  - _local/project-context/meetings/*.md
+  - _local/project-context/meetings/_derived/**/*.md
+  - _local/project-context/meetings/_signals/*.jsonl
+  - _local/project-context/meetings/_ledger.jsonl
 durable_artifact_dirs:
   sessions: docs/sessions
   decisions: docs/decisions

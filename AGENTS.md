@@ -111,7 +111,16 @@ If the config is missing or still defaults to `mock`, update it for this local w
 3. Produce the expected provider response JSON at `details.expected_response_path`.
 4. Run `uv run meeting-ingest ingest <source> --provider session --provider-response <expected_response_path> --json`.
 5. Confirm the run summary reports `status: "success"`, `provider: "session"`, a markdown artifact path, signal artifact path, archive path, and completed reconcile path.
-6. Continue until no direct files remain in `_inbox/` except files under `_inbox/_done/`.
+6. Record the meeting in iQ Context — one capture per successfully processed meeting, after ledger/signal writes succeed (not per intermediate artifact):
+
+   ```bash
+   iq-context capture \
+     --file _local/project-context/meetings/<final-meeting-doc>.md \
+     --note "Processed meeting: <title> (<meeting date>). Key outcomes: <1-2 line takeaways>. Decisions: <ids or 'none'>."
+   ```
+
+   Lead the note with the meeting title and effective date, summarize outcomes in one or two lines, and name decisions or action items explicitly — those are what future sessions search for.
+7. Continue until no direct files remain in `_inbox/` except files under `_inbox/_done/`.
 
 The agent may act as the session extraction agent when no dedicated sub-agent is available, but the response must still be provider-level JSON only. The engine must remain responsible for validation, markdown rendering, signal enrichment, ledger writes, archive, and reconcile.
 
