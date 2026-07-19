@@ -956,6 +956,43 @@ def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> N
     assert request_payload["quality"] == "balanced"
     assert request_payload["output_mode"] == "summary-plus-verbatim"
     assert request_payload["normalized_transcript"] == "Ken: Hello\n"
+    response_schema = request_payload["response_contract"]["json_schema"]
+    assert request_payload["response_contract"]["identity_copy_fields"] == [
+        "meeting_id",
+        "ingest_run_id",
+        "source_sha256",
+        "normalized_transcript_sha256",
+    ]
+    assert response_schema["properties"]["meeting_id"] == {"const": summary.meeting_id}
+    assert response_schema["properties"]["provider"]["properties"]["model_alias"] == {"const": "balanced"}
+    risk_schema = response_schema["properties"]["response"]["properties"]["dependencies_risks"]["items"]
+    assert "owner_related_party" in risk_schema["required"]
+    signal_schema = response_schema["properties"]["response"]["properties"]["communication_signals"]["items"]
+    assert "stakeholder_name" in signal_schema["required"]
+    assert signal_schema["not"] == {
+        "anyOf": [
+            {"required": ["signal_id"]},
+            {"required": ["meeting_id"]},
+            {"required": ["ingest_run_id"]},
+            {"required": ["recorded_at"]},
+            {"required": ["effective_at"]},
+            {"required": ["schema_version"]},
+        ]
+    }
+    assert set(response_schema["properties"]["response"]["required"]) == {
+        "title",
+        "tl_dr",
+        "meeting_type",
+        "attendees",
+        "topics",
+        "decisions",
+        "action_items",
+        "stakeholder_asks",
+        "dependencies_risks",
+        "communication_signals",
+        "open_questions",
+        "cross_references",
+    }
     assert summary.details["source"] == {
         "path": "_inbox/2026-07-03-team-sync.txt",
         "source_type": "txt",
@@ -1461,6 +1498,102 @@ def test_cli_session_provider_response_returns_exit_6_for_validation_failure(
     assert summary["status"] == "failed"
     assert summary["errors"][0]["phase"] == "provider_validation"
     assert summary["errors"][0]["code"] == "invalid_provider_output"
+
+
+def test_cli_validate_response_preflight_succeeds_without_side_effects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(
+        ["validate-response", str(response_path), "--source", str(source), "--root", str(tmp_path), "--json"]
+    )
+    summary = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert summary["status"] == "success"
+    assert summary["command"] == "validate-response"
+    assert summary["provider_response"]["status"] == "valid"
+    assert summary["side_effects"] == "none"
+    assert request_path.exists()
+    assert response_path.exists()
+    assert source.exists()
+    assert read_records(paths.ledger) == []
+
+
+def test_cli_validate_response_reports_all_payload_errors_without_ledger_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(
+        request_path,
+        response_path,
+        response_overrides={
+            "topics": [{"id": "T1"}],
+            "dependencies_risks": [{"id": "R1", "type": "risk"}],
+        },
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(
+        ["validate-response", str(response_path), "--source", str(source), "--root", str(tmp_path), "--json"]
+    )
+    summary = json.loads(capsys.readouterr().out)
+
+    assert exit_code == EXIT_PROVIDER_VALIDATION
+    issues = summary["errors"][0]["details"]["issues"]
+    assert "response.topics[0].topic is required and must be a string." in issues
+    assert "response.dependencies_risks[0].owner_related_party is required and must be a string." in issues
+    assert read_records(paths.ledger) == []
+
+
+def test_cli_validate_response_reports_structured_source_read_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    missing_source = paths.inbox / "missing.txt"
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(
+        [
+            "validate-response",
+            str(response_path),
+            "--source",
+            str(missing_source),
+            "--root",
+            str(tmp_path),
+            "--json",
+        ]
+    )
+    summary = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 4
+    assert summary["status"] == "failed"
+    assert summary["errors"][0]["phase"] == "source_read"
+    assert summary["errors"][0]["code"] == "source_extraction_failed"
+    assert summary["errors"][0]["details"]["path"] == str(missing_source)
+    assert read_records(paths.ledger) == []
 
 
 def test_ingest_quarantines_unsupported_inbox_source_and_records_failure(tmp_path: Path) -> None:

@@ -78,9 +78,16 @@ Required fields:
   "effective_date": "2026-06-12",
   "quality": "balanced",
   "output_mode": "summary-plus-verbatim",
-  "normalized_transcript": "Speaker: Transcript text..."
+  "normalized_transcript": "Speaker: Transcript text...",
+  "response_contract": {
+    "identity_copy_fields": ["meeting_id", "ingest_run_id", "source_sha256", "normalized_transcript_sha256"],
+    "json_schema": {"title": "Meeting Ingest session provider response"},
+    "preflight_command": "meeting-ingest validate-response RESPONSE --source SOURCE --json"
+  }
 }
 ```
+
+The abbreviated `json_schema` above is fully expanded in the generated request. It is a Draft 2020-12 schema containing the complete envelope and nested response payload, request-bound `const` identity values, required field names, and allowed enum values. Extraction agents should treat that embedded schema as the authoritative response-writing contract instead of discovering fields through validation failures.
 
 Rules:
 
@@ -91,9 +98,19 @@ Rules:
 - The request file should be treated as sensitive transcript-bearing runtime data.
 - A provider request is runtime state only. It should not append a ledger record by itself.
 
+If phase 1 reports `date_confidence: low`, the wrapper must stop before extraction, confirm the occurrence date, and create a fresh provider request with `--meeting-date YYYY-MM-DD`. Phase 2 must not finalize an unconfirmed low-confidence date.
+
 ## Response File
 
 The sub-agent writes a provider response JSON file. The engine reads this file, parses it into `ProviderResponse`, and runs the same validation used for API-backed providers.
+
+Before phase 2, wrappers should run the side-effect-free preflight:
+
+```bash
+meeting-ingest validate-response RESPONSE --source SOURCE --json
+```
+
+The preflight verifies the persisted request, request/response identity, current source hash, payload shape, and semantic provider rules. Success reports `provider_response.status: valid`. Provider-validation failures use exit code `6` and return all independently detectable issues in `errors[0].details.issues`; an unreadable or missing `--source` uses the existing `source_read` taxonomy and exit code `4`. The command does not write ledger records or artifacts, archive/reconcile the source, or delete handoff files.
 
 Recommended path shape:
 
@@ -312,6 +329,7 @@ Recommended CLI shape:
 
 ```text
 meeting-ingest provider-request SOURCE --provider session --json
+meeting-ingest validate-response RESPONSE --source SOURCE --json
 meeting-ingest ingest SOURCE --provider session --provider-response PATH --json
 ```
 

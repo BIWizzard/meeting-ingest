@@ -54,6 +54,14 @@ uv run meeting-ingest session-inbox --quality balanced --json
 
 For each result with `status: "pending_provider_response"`, read the returned `details.request_path` and `details.expected_response_path`. They are relative to the meetings root.
 
+Before extraction, inspect `details.effective_date` (or the request's `date_confidence`). If confidence is `low`, do not write a response or run phase 2. Confirm the occurrence date with the user, then create a fresh request for that source with:
+
+```bash
+uv run meeting-ingest provider-request "$SOURCE" --provider session --quality balanced --meeting-date YYYY-MM-DD --json
+```
+
+Use only the fresh request and response paths. Never allow an unconfirmed low-confidence date to mint the final meeting artifact.
+
 ## Session Provider Extraction
 
 The session-provider extraction step must produce provider-level JSON only.
@@ -74,6 +82,8 @@ The provider response must echo the request identity fields:
 - `source_sha256`
 - `normalized_transcript_sha256`
 
+Every request contains `response_contract.json_schema`, which is the complete request-bound response contract. Follow it directly: its `const` values contain the exact identity fields and model alias for this handoff, and its nested schemas list required field names and allowed enum values.
+
 The provider envelope must use:
 
 ```json
@@ -81,12 +91,16 @@ The provider envelope must use:
   "schema_version": "1.0",
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
+  "meeting_id": "copy from request",
+  "ingest_run_id": "copy from request",
+  "source_sha256": "copy from request",
+  "normalized_transcript_sha256": "copy from request",
   "provider": {
     "name": "session",
     "host": "codex",
-    "model_alias": "balanced",
-    "model_id": "codex-session",
-    "generated_at": "2026-07-03T12:00:00Z"
+    "model_alias": "copy request quality",
+    "model_id": "actual model ID or codex-session",
+    "generated_at": "current UTC timestamp"
   },
   "response": {
     "title": "Required title",
@@ -105,7 +119,27 @@ The provider envelope must use:
 }
 ```
 
+Exact array item fields:
+
+- `attendees`: `person_id`, `display_name`, `raw_labels`, `role_context`, `confidence`
+- `topics`: `id`, `topic`, `summary`, `evidence`
+- `decisions`: `id`, `decision`, `owner_decider`, `evidence`, optional `status`
+- `action_items`: `id`, `owner`, `action`, `due_timing`, `evidence`, optional `status`
+- `stakeholder_asks`: `id`, `stakeholder`, `ask`, `directed_to`, `evidence`, optional `status`
+- `dependencies_risks`: `id`, `type`, `description`, `owner_related_party`, `impact`, optional `status`
+- `communication_signals`: `signal_type`, optional `stakeholder_id`, `stakeholder_name`, `summary`, `evidence`, `inference_level`, `confidence`, optional `topics`, `project_refs`, `recurrence`, `status`; `evidence` uses `kind`, `text`, optional `speaker`, `timestamp`
+- `open_questions`: `id`, `question`, `owner_next_step`, `evidence`, optional `status`
+- `cross_references`: strings
+
 Use `provider.host: "codex"` when running inside Codex. Use the actual model ID if available; otherwise use `codex-session`.
+
+Validate the completed response before phase 2:
+
+```bash
+uv run meeting-ingest validate-response "$RESPONSE_PATH" --source "$SOURCE" --json
+```
+
+Proceed only when it reports `status: "success"` and `provider_response.status: "valid"`. For provider-validation failures, correct every entry in `errors[0].details.issues`; for a `source_read` failure, correct the `--source` path. Then re-run the preflight. The preflight has no ledger, artifact, archive, reconcile, or cache-cleanup side effects.
 
 Phase 2:
 

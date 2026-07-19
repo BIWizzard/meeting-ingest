@@ -106,6 +106,10 @@ _local/project-context/meetings
 
 For each pending result, read the provider request file. It contains the normalized transcript and identity fields the response must echo.
 
+First inspect `details.effective_date` or the request's `date_confidence`. When confidence is `low`, stop before extraction and phase 2, confirm the occurrence date with the user, and create a fresh request with `provider-request SOURCE --provider session --meeting-date YYYY-MM-DD --json`. Use only the fresh handoff paths.
+
+The request also contains `response_contract.json_schema`. This is the complete request-bound contract, including exact nested field names, allowed enums, and `const` values for identity and model alias. Use it as the authoritative response shape.
+
 Write one provider response JSON file at the returned `expected_response_path`. The response must use:
 
 ```json
@@ -115,10 +119,10 @@ Write one provider response JSON file at the returned `expected_response_path`. 
   "provider_contract": "meeting-ingest-provider-response-v1",
   "provider": {
     "name": "session",
-    "host": "codex",
-    "model_alias": "balanced",
-    "model_id": "codex-session",
-    "generated_at": "2026-07-03T12:00:00Z"
+    "host": "current host",
+    "model_alias": "copy request quality",
+    "model_id": "actual model ID or <host>-session",
+    "generated_at": "current UTC timestamp"
   },
   "response": {
     "title": "Required title",
@@ -138,6 +142,14 @@ Write one provider response JSON file at the returned `expected_response_path`. 
 ```
 
 Also include the exact `meeting_id`, `ingest_run_id`, `source_sha256`, and `normalized_transcript_sha256` from the request.
+
+Run the side-effect-free response preflight:
+
+```bash
+uv run meeting-ingest validate-response "$RESPONSE_PATH" --source "$SOURCE" --json
+```
+
+For provider-validation failures, correct every reported `errors[0].details.issues` entry before continuing. A `source_read` failure means the `--source` path must be corrected. A successful preflight reports `provider_response.status: "valid"` and does not write ledger/artifact state or consume handoff files.
 
 Use the current host in `provider.host`:
 

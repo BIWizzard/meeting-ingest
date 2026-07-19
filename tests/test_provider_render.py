@@ -5,6 +5,7 @@ import pytest
 
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.provider import ProviderRequest
+from meeting_ingest.provider_json import provider_response_from_payload
 from meeting_ingest.providers.mock import MockProvider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.schema import (
@@ -37,6 +38,80 @@ def test_mock_provider_returns_valid_deterministic_response() -> None:
 def test_validate_provider_response_rejects_missing_title() -> None:
     with pytest.raises(ProviderValidationError):
         validate_provider_response(ProviderResponse(title="", tl_dr="Summary"))
+
+
+def test_provider_response_parser_aggregates_independent_payload_errors() -> None:
+    with pytest.raises(ProviderValidationError) as caught:
+        provider_response_from_payload(
+            {
+                "title": 42,
+                "topics": [{"id": "T1"}],
+                "dependencies_risks": [{"id": "R1", "type": "risk"}],
+                "communication_signals": [{"signal_type": "explicit_ask", "evidence": {}}],
+            }
+        )
+
+    issues = caught.value.details["issues"]
+    assert "response.title must be a string." in issues
+    assert "response.tl_dr is required and must be a string." in issues
+    assert "response.meeting_type is required and must be a string." in issues
+    assert "response.attendees is required and must be an array." in issues
+    assert "response.topics[0].topic is required and must be a string." in issues
+    assert "response.dependencies_risks[0].owner_related_party is required and must be a string." in issues
+    assert "response.communication_signals[0].stakeholder_name is required and must be a string." in issues
+    assert "response.communication_signals[0].evidence.kind is required and must be a string." in issues
+
+
+def test_provider_response_parser_accepts_documented_nullable_identity_fields() -> None:
+    response = provider_response_from_payload(
+        {
+            "title": "Team Sync",
+            "tl_dr": "Summary",
+            "meeting_type": "team-sync",
+            "attendees": [{"person_id": None, "display_name": None, "raw_labels": []}],
+            "topics": [],
+            "decisions": [],
+            "action_items": [],
+            "stakeholder_asks": [],
+            "dependencies_risks": [],
+            "communication_signals": [],
+            "open_questions": [],
+            "cross_references": [],
+        }
+    )
+
+    assert response.attendees[0].person_id is None
+    assert response.attendees[0].display_name is None
+
+
+def test_provider_response_semantic_validation_aggregates_independent_errors() -> None:
+    response = ProviderResponse(
+        title="",
+        tl_dr="",
+        topics=[Topic(id="T1", topic="First", summary="Summary", evidence="Evidence"), Topic(id="T1", topic="Second", summary="Summary", evidence="Evidence")],
+        communication_signals=[
+            ProviderSignal(
+                signal_type="unsupported",
+                stakeholder_id=None,
+                stakeholder_name="",
+                summary="",
+                evidence=SignalEvidence(kind="unsupported", text=""),
+                inference_level="unsupported",
+                confidence="unsupported",
+                recurrence="unsupported",
+            )
+        ],
+    )
+
+    with pytest.raises(ProviderValidationError) as caught:
+        validate_provider_response(response)
+
+    issues = caught.value.details["issues"]
+    assert "response.title is required." in issues
+    assert "response.tl_dr is required." in issues
+    assert "response.topics contains duplicate ID 'T1'." in issues
+    assert "communication_signals[0].stakeholder_name is required." in issues
+    assert len(issues) == 11
 
 
 def test_validate_provider_response_accepts_lightweight_provider_signals() -> None:

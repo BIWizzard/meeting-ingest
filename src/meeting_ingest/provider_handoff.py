@@ -11,11 +11,11 @@ from typing import Any
 
 from meeting_ingest.errors import ProviderError
 from meeting_ingest.paths import ProjectPaths
+from meeting_ingest.provider_contract import PROVIDER_CONTRACT
 from meeting_ingest.provider_json import provider_response_from_payload
 from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, SUPPORTED_QUALITIES, ProviderResponse, ProviderValidationError
 
 
-PROVIDER_CONTRACT = "meeting-ingest-provider-response-v1"
 REQUEST_DIR = "provider-requests"
 RESPONSE_DIR = "provider-responses"
 INGEST_RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]+")

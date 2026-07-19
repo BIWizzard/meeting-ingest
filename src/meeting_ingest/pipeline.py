@@ -30,8 +30,8 @@ from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
+from meeting_ingest.provider_contract import PROVIDER_CONTRACT, response_contract_for_request
 from meeting_ingest.provider_handoff import (
-    PROVIDER_CONTRACT,
     SessionProviderEnvelope,
     cleanup_session_provider_files,
     normalized_transcript_sha256,
@@ -161,6 +161,43 @@ def ingest(
             meeting_date=meeting_date,
             clock=clock,
         )
+
+
+def validate_response(provider_response: Path, *, source: Path, start: Path | None = None) -> RunSummary:
+    """Validate a session response without producing ingest side effects."""
+    _, paths = load_project(start or source)
+    resolved_source = source.resolve()
+    response_path = _resolve_provider_response_path(provider_response, paths)
+    try:
+        current_source_sha256 = sha256_file(resolved_source)
+    except OSError as exc:
+        raise SourceExtractionError(
+            str(resolved_source),
+            f"Source file could not be read: {resolved_source}: {exc}",
+        ) from exc
+    envelope = read_session_provider_envelope(
+        response_path,
+        paths=paths,
+        current_source_sha256=current_source_sha256,
+    )
+    validate_provider_response(envelope.response)
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        source_sha256=str(envelope.request["source_sha256"]),
+        meeting_id=str(envelope.request["meeting_id"]),
+        ingest_run_id=str(envelope.request["ingest_run_id"]),
+        details={
+            "command": "validate-response",
+            "provider": "session",
+            "source": {"path": _relative_to_meetings(paths, resolved_source)},
+            "provider_response": {
+                "status": "valid",
+                "path": _relative_to_meetings(paths, response_path),
+            },
+            "side_effects": "none",
+        },
+    )
 
 
 def repair_date(
@@ -623,6 +660,7 @@ def _provider_request_locked(
         "date_source": prepared.extraction.effective_date.source,
         "duration": prepared.extraction.duration,
     }
+    request_payload["response_contract"] = response_contract_for_request(request_payload)
     transcript_sha256 = request_payload["normalized_transcript_sha256"]
     request_path, response_path = write_provider_request(paths, request_payload)
     return RunSummary(

@@ -46,6 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     provider_request_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
+    validate_response_parser = subparsers.add_parser("validate-response")
+    validate_response_parser.add_argument("response", help="Provider response JSON path to validate.")
+    validate_response_parser.add_argument("--source", required=True, help="Original source file bound to the request.")
+    validate_response_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    validate_response_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+
     ingest_inbox_parser = subparsers.add_parser("ingest-inbox")
     ingest_inbox_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     ingest_inbox_parser.add_argument("--mode")
@@ -94,6 +100,12 @@ def run(args: argparse.Namespace) -> RunSummary:
             provider=args.provider,
             quality=args.quality,
             meeting_date=args.meeting_date,
+        )
+    if args.command == "validate-response":
+        return pipeline.validate_response(
+            Path(args.response),
+            source=Path(args.source),
+            start=Path(args.root),
         )
     if args.command == "ingest-inbox":
         return pipeline.ingest_inbox(

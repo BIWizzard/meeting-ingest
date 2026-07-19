@@ -182,7 +182,7 @@ python3 -m meeting_ingest.cli provider-request _local/project-context/meetings/_
 
 Add `--meeting-date YYYY-MM-DD` to `provider-request` when the occurrence date is known. The persisted request carries that override into session phase 2; phase 2 does not accept a new date override.
 
-The command returns `request_path` and `expected_response_path`. A dedicated extraction agent should read the request file and write the expected response envelope. The response envelope must use `provider.name: "session"` and place the structured meeting extraction under `response`:
+The command returns `request_path` and `expected_response_path`. The request embeds the complete request-bound JSON Schema at `response_contract.json_schema`, including exact nested fields, enum values, and identity `const` values. A dedicated extraction agent should follow that schema and write the expected response envelope. The response envelope must use `provider.name: "session"` and place the structured meeting extraction under `response`:
 
 ```json
 {
@@ -216,6 +216,14 @@ The command returns `request_path` and `expected_response_path`. A dedicated ext
   }
 }
 ```
+
+Validate the response without producing ingest side effects:
+
+```bash
+python3 -m meeting_ingest.cli validate-response _local/project-context/meetings/_cache/provider-responses/ingest-20260703-20260703T120000Z-abcd.response.json --source _local/project-context/meetings/_inbox/example.vtt --json
+```
+
+Validation exit `6` reports all independently detectable payload issues under `errors[0].details.issues`. Correct them before phase 2. If phase 1 reports low date confidence, confirm the occurrence date and create a fresh request with `--meeting-date` before extraction.
 
 Complete the ingest with the response file:
 
