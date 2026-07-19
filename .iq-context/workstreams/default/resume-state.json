@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity."
+    "Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity.",
-  "updated_at": "2026-07-19T05:27:59.024Z"
+  "resume_from": "Resume with: Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation.",
+  "updated_at": "2026-07-19T16:04:59.388Z"
 }

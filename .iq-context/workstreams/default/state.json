@@ -5,31 +5,40 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Applied Claude review findings to response-contract hardening. Embedded communication-signal schema now explicitly prohibits engine-enriched fields while retaining forward-compatible additional properties. validate-response now maps missing/unreadable source paths to source_read/source_extraction_failed exit 4 instead of unexpected_error. Updated contract/workflow/skills for the source-read branch and synced installed skill copies. Verification: 157 tests passed, py_compile passed, diff check clean.",
+  "status_summary": "Committed the reviewed Layer 5A generalized signal identity foundation as 53de840; the post-commit hook refreshed the global meeting-ingest tool and only durable iQ Context files remain uncommitted.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "src/meeting_ingest/provider_contract.py"
+    "src/meeting_ingest/schema.py",
+    "src/meeting_ingest/ids.py",
+    "src/meeting_ingest/pipeline.py",
+    "src/meeting_ingest/doctor.py",
+    "tests/test_signals.py",
+    "tests/test_pipeline_ingest.py",
+    "tests/test_repair_date.py",
+    "tests/test_doctor_status.py",
+    "docs/artifact-contract.md",
+    "docs/stakeholder-playbook-design.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
   ],
   "blockers": [],
   "open_questions": [
-    "What are the true occurrence dates for the three low_confidence_meeting_date artifacts (nitesh follow-up, wide-orbit orchestration, fable-5 workflow review)?",
-    "Should doctor distinguish advisory issues from failures so low_confidence_meeting_date does not force exit 1 (final-review finding)?"
+    "Should doctor distinguish advisory issues from failures so low_confidence_meeting_date does not force exit 1?",
+    "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, and fable-5 workflow review artifacts?"
   ],
   "next_actions": [
-    "Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity."
+    "Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity.",
+  "continuation_hint": "Next: Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-19T05:27:59.024Z",
-  "last_wrapped_at": "2026-07-18T22:42:21.805Z",
+  "last_saved_at": "2026-07-19T16:04:59.388Z",
+  "last_wrapped_at": "2026-07-19T06:11:35.228Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-19T05:27:59.024Z"
+  "updated_at": "2026-07-19T16:04:59.388Z"
 }
