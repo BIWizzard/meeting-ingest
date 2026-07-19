@@ -356,11 +356,11 @@ Implemented foundation:
 - failed derivation records that preserve the prior usable index
 - live current/stale/missing/failed status plus derivation, profile, review, orphan, and uncommitted-generation doctor diagnostics
 - explicit index repair and alias-aware `playbook show` and concise `playbook brief` readers
+- evidence index with source artifact, evidence kind, excerpt, speaker, and locator detail
+- validated project-configurable briefing thresholds with frozen effective ruleset fingerprints
 
 Remaining:
 
-- enrich the evidence index with source artifact, evidence kind, excerpt, speaker, and locator detail
-- add project-configurable briefing thresholds and frozen override validation
 - report suppression re-emergence after signal regeneration and nearest-successor hints for orphaned entry reviews
 - add explicit uncommitted-generation cleanup and broader corrupted-index repair fixtures
 - add mechanical contradiction candidates when a source schema exposes structured mutually exclusive values; same-type or same-topic collisions remain non-contradictory

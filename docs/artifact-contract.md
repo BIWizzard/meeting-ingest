@@ -1430,7 +1430,19 @@ Default values:
 - priority or concern stale-after interval: `60` days
 - communication preference, behavior, or interaction response stale-after interval: `90` days
 
-Project config may override permitted numeric values. The effective values and ruleset fingerprint are stored in every derivation-ledger record and index.
+Project config may override permitted numeric values. The effective values and ruleset fingerprint are stored in every derivation-ledger record; the index stores the effective ruleset ID and fingerprint.
+
+Overrides use the optional `[playbook]` table in `meeting-ingest.toml`:
+
+```toml
+[playbook]
+min_recurrent_source_events = 2
+tracked_verify_after_days = 30
+priority_concern_stale_after_days = 60
+preference_behavior_response_stale_after_days = 90
+```
+
+All values must be integers. `min_recurrent_source_events` must be at least `2`; each day interval must be at least `1`. Unknown keys and invalid values fail config loading before derivation begins. Omitted values retain the versioned defaults.
 
 Rules:
 
@@ -1659,9 +1671,21 @@ Top-level shape:
   "recent_changes": [],
   "contradiction_candidates": [],
   "unresolved_observations": [],
-  "stale_items": []
+  "stale_items": [],
+  "evidence_index": {
+    "src-a1b2c3d4e5f6/sig-a1b2c3d4e5f6-91aa2c80b731": {
+      "source_artifact_path": "2026-07-09-revenue-review.md",
+      "observation_id": "sig-a1b2c3d4e5f6-91aa2c80b731",
+      "evidence_kind": "paraphrase",
+      "excerpt": "Kushali emphasized source-of-truth clarity.",
+      "speaker": "Kushali G",
+      "locator": {"scheme": "timestamp", "value": "09:18"}
+    }
+  }
 }
 ```
+
+`evidence_index` is keyed by the exact compact citation used by briefing entries. Each value preserves the source artifact path, observation ID, evidence kind, evidence excerpt, speaker when known, and structured locator. Legacy observations use their ingest-ledger Markdown artifact path when available and otherwise retain an empty path. When a legacy observation has no structured locator but does have `evidence.timestamp`, the index synthesizes `{ "scheme": "timestamp", "value": "<timestamp>" }`; when neither exists, it uses `{ "scheme": "none", "value": null }`.
 
 Every deterministic entry uses:
 

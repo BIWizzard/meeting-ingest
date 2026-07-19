@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from meeting_ingest.clock import Clock, SystemClock, default_suffix, format_iso_timestamp, format_timestamp
+from meeting_ingest.config import load_config
 from meeting_ingest.errors import EXIT_ARTIFACT_WRITE, EXIT_GENERAL_FAILURE, EXIT_LEDGER_WRITE, MeetingIngestError
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import canonical_json, mint_source_id
@@ -32,13 +33,7 @@ from meeting_ingest.stakeholders import (
 DERIVATION_SCHEMA_VERSION = "1.0"
 PROFILE_SCHEMA_VERSION = "1.0"
 RULESET_ID = "briefing-rules-v1"
-RENDERER_VERSION = "briefing-markdown-v1"
-RULESET_VALUES = {
-    "min_recurrent_source_events": 2,
-    "tracked_verify_after_days": 30,
-    "priority_concern_stale_after_days": 60,
-    "preference_behavior_response_stale_after_days": 90,
-}
+RENDERER_VERSION = "briefing-markdown-v2"
 
 _CATEGORY_BY_SIGNAL = {
     "explicit_ask": ("tracked_asks", "ask"),
@@ -81,6 +76,7 @@ class DerivationInputs:
     registry_fingerprint: str
     overrides_fingerprint: str
     ruleset_fingerprint: str
+    ruleset_values: dict[str, int]
     warnings: tuple[str, ...]
 
 
@@ -182,6 +178,7 @@ def _update_locked(
             today=now.date(),
             review_state=review_state,
             previous_profile=previous_profiles.get(person_id),
+            ruleset_values=inputs.ruleset_values,
         )
         stakeholder_relative = generation_relative / "stakeholders" / person_id
         profile_relative = stakeholder_relative / "profile.json"
@@ -203,7 +200,7 @@ def _update_locked(
     ruleset = {
         "id": RULESET_ID,
         "fingerprint": inputs.ruleset_fingerprint,
-        "values": RULESET_VALUES,
+        "values": inputs.ruleset_values,
     }
     warnings = [*inputs.warnings, *(issue.message for issue in registry.issues)]
     ledger_record: dict[str, Any] = {
@@ -262,11 +259,7 @@ def _update_locked(
 
 def discover_inputs(paths: ProjectPaths) -> DerivationInputs:
     """Discover eligible signal files and compute the frozen derivation fingerprint."""
-    source_hash_by_meeting = {
-        str(record["meeting_id"]): str(record["source_sha256"])
-        for record in read_records(paths.ledger)
-        if record.get("meeting_id") and isinstance(record.get("source_sha256"), str)
-    }
+    source_by_meeting = _legacy_source_details(read_records(paths.ledger))
     eligible_files: list[dict[str, str]] = []
     observations: list[NormalizedObservation] = []
     all_signals: list[SignalRecord] = []
@@ -283,7 +276,7 @@ def discover_inputs(paths: ProjectPaths) -> DerivationInputs:
         normalized: list[NormalizedObservation] = []
         identity_error = False
         for signal in signals:
-            observation = _normalize_observation(signal, source_hash_by_meeting)
+            observation = _normalize_observation(signal, source_by_meeting)
             if observation is None:
                 identity_error = True
                 break
@@ -299,7 +292,8 @@ def discover_inputs(paths: ProjectPaths) -> DerivationInputs:
     overrides_path = paths.playbook_state / "overrides.jsonl"
     registry_fingerprint = _path_fingerprint(registry_path)
     overrides_fingerprint = _path_fingerprint(overrides_path)
-    ruleset_payload = {"id": RULESET_ID, "values": RULESET_VALUES}
+    config_values = asdict(load_config(paths.config_path).playbook)
+    ruleset_payload = {"id": RULESET_ID, "values": config_values}
     ruleset_fingerprint = _canonical_fingerprint(ruleset_payload)
     fingerprint_payload = {
         "eligible_signal_files": eligible_files,
@@ -317,6 +311,7 @@ def discover_inputs(paths: ProjectPaths) -> DerivationInputs:
         registry_fingerprint=registry_fingerprint,
         overrides_fingerprint=overrides_fingerprint,
         ruleset_fingerprint=ruleset_fingerprint,
+        ruleset_values=config_values,
         warnings=tuple(warnings),
     )
 
@@ -523,7 +518,7 @@ def _safe_artifact_path(paths: ProjectPaths, relative_path: str) -> Path:
 
 
 def _normalize_observation(
-    signal: SignalRecord, source_hash_by_meeting: dict[str, str]
+    signal: SignalRecord, source_by_meeting: dict[str, tuple[str, str]]
 ) -> NormalizedObservation | None:
     if signal.schema_version == "1.1" and signal.source is not None:
         source_id = signal.source.source_id
@@ -531,17 +526,49 @@ def _normalize_observation(
         artifact_path = signal.source.artifact_path
         occurred_at = signal.timing.occurred.value if signal.timing is not None else signal.effective_at
     else:
-        source_hash = source_hash_by_meeting.get(signal.meeting_id or "")
-        if source_hash is None:
+        source_details = source_by_meeting.get(signal.meeting_id or "")
+        if source_details is None:
             return None
+        source_hash, artifact_path = source_details
         try:
             source_id = mint_source_id(source_hash)
         except ValueError:
             return None
         source_kind = "meeting_transcript"
-        artifact_path = ""
         occurred_at = signal.effective_at
     return NormalizedObservation(signal, source_id, source_kind, artifact_path, occurred_at)
+
+
+def _legacy_source_details(records: list[dict[str, object]]) -> dict[str, tuple[str, str]]:
+    details: dict[str, tuple[str, str]] = {}
+    for record in records:
+        meeting_id = record.get("meeting_id")
+        source_hash = record.get("source_sha256")
+        if not isinstance(meeting_id, str) or not isinstance(source_hash, str):
+            continue
+        artifact_path = _markdown_artifact_path(record.get("artifacts"))
+        if not artifact_path and meeting_id in details:
+            artifact_path = details[meeting_id][1]
+        details[meeting_id] = (source_hash, artifact_path)
+    return details
+
+
+def _markdown_artifact_path(value: object) -> str:
+    artifacts: list[object]
+    if isinstance(value, dict):
+        artifacts = list(value.values())
+    elif isinstance(value, list):
+        artifacts = value
+    else:
+        return ""
+    for artifact in artifacts:
+        if (
+            isinstance(artifact, dict)
+            and artifact.get("kind") == "markdown"
+            and isinstance(artifact.get("path"), str)
+        ):
+            return artifact["path"]
+    return ""
 
 
 def _build_profile(
@@ -554,6 +581,7 @@ def _build_profile(
     today: date,
     review_state: ReviewState,
     previous_profile: dict[str, Any] | None,
+    ruleset_values: dict[str, int],
 ) -> dict[str, Any]:
     observed_dates = [value for item in observations if (value := _date_part(item.occurred_at))]
     source_kinds = Counter(item.source_kind for item in observations)
@@ -582,12 +610,19 @@ def _build_profile(
         "contradiction_candidates": [],
         "unresolved_observations": [],
         "stale_items": [],
+        "evidence_index": _build_evidence_index(observations),
     }
     grouped = _group_observations(observations)
     for group in grouped:
         signal = group[0].signal
         category, entry_kind = _CATEGORY_BY_SIGNAL[signal.signal_type]
-        entry = _entry_from_observations(person.person_id, group, entry_kind=entry_kind, today=today)
+        entry = _entry_from_observations(
+            person.person_id,
+            group,
+            entry_kind=entry_kind,
+            today=today,
+            ruleset_values=ruleset_values,
+        )
         entry["review_state"] = review_state.entry_review_states.get(entry["entry_id"], "unreviewed")
         if entry["entry_id"] in review_state.resolutions and signal.signal_type in {"explicit_ask", "commitment"}:
             entry.update(review_state.resolutions[entry["entry_id"]])
@@ -602,7 +637,12 @@ def _build_profile(
 
 
 def _entry_from_observations(
-    person_id: str, observations: list[NormalizedObservation], *, entry_kind: str, today: date
+    person_id: str,
+    observations: list[NormalizedObservation],
+    *,
+    entry_kind: str,
+    today: date,
+    ruleset_values: dict[str, int],
 ) -> dict[str, Any]:
     observation = observations[0]
     signal = observation.signal
@@ -619,12 +659,12 @@ def _entry_from_observations(
     last_observed = max(observed_dates) if observed_dates else None
     age_days = (today - date.fromisoformat(first_observed)).days if first_observed else None
     freshness_age = (today - date.fromisoformat(last_observed)).days if last_observed else None
-    freshness = _freshness_state(signal.signal_type, freshness_age)
+    freshness = _freshness_state(signal.signal_type, freshness_age, ruleset_values)
     source_count = len({item.source_id for item in observations})
     confidence = min((item.signal.confidence for item in observations), key=_confidence_rank)
     recurrence = (
         "recurring"
-        if source_count >= RULESET_VALUES["min_recurrent_source_events"]
+        if source_count >= ruleset_values["min_recurrent_source_events"]
         else "one_off"
     )
     entry: dict[str, Any] = {
@@ -663,6 +703,29 @@ def _entry_from_observations(
             }
         )
     return entry
+
+
+def _build_evidence_index(observations: list[NormalizedObservation]) -> dict[str, dict[str, Any]]:
+    evidence_index: dict[str, dict[str, Any]] = {}
+    for observation in observations:
+        signal = observation.signal
+        citation = f"{observation.source_id}/{signal.signal_id}"
+        locator = signal.evidence.locator
+        if locator is not None:
+            rendered_locator: dict[str, str | None] = {"scheme": locator.scheme, "value": locator.value}
+        elif signal.evidence.timestamp:
+            rendered_locator = {"scheme": "timestamp", "value": signal.evidence.timestamp}
+        else:
+            rendered_locator = {"scheme": "none", "value": None}
+        evidence_index[citation] = {
+            "source_artifact_path": observation.artifact_path,
+            "observation_id": signal.signal_id,
+            "evidence_kind": signal.evidence.kind,
+            "excerpt": signal.evidence.text,
+            "speaker": signal.evidence.speaker,
+            "locator": rendered_locator,
+        }
+    return dict(sorted(evidence_index.items()))
 
 
 def _group_observations(observations: list[NormalizedObservation]) -> list[list[NormalizedObservation]]:
@@ -747,14 +810,14 @@ def _load_current_profiles(paths: ProjectPaths) -> dict[str, dict[str, Any]]:
     return loaded
 
 
-def _freshness_state(signal_type: str, age_days: int | None) -> str:
+def _freshness_state(signal_type: str, age_days: int | None, ruleset_values: dict[str, int]) -> str:
     if age_days is None:
         return "verify_before_citing"
     if signal_type in {"explicit_ask", "commitment"}:
-        return "verify_before_citing" if age_days > RULESET_VALUES["tracked_verify_after_days"] else "current"
+        return "verify_before_citing" if age_days > ruleset_values["tracked_verify_after_days"] else "current"
     if signal_type in {"stakeholder_priority", "risk_or_concern", "decision_rationale"}:
-        return "stale" if age_days > RULESET_VALUES["priority_concern_stale_after_days"] else "current"
-    return "stale" if age_days > RULESET_VALUES["preference_behavior_response_stale_after_days"] else "current"
+        return "stale" if age_days > ruleset_values["priority_concern_stale_after_days"] else "current"
+    return "stale" if age_days > ruleset_values["preference_behavior_response_stale_after_days"] else "current"
 
 
 def _render_briefing(profile: dict[str, Any]) -> str:
@@ -796,14 +859,27 @@ def _render_briefing(profile: dict[str, Any]) -> str:
     lines.extend(["", "## Unresolved Or Low-Confidence Observations", ""])
     lines.extend(_render_entries(profile["unresolved_observations"]))
     lines.extend(["", "## Evidence Index", ""])
-    all_entries = [entry for key in _PROFILE_LISTS for entry in profile[key]] + profile["unresolved_observations"]
-    if not all_entries:
+    evidence_index = profile.get("evidence_index", {})
+    if not evidence_index:
         lines.append("None identified.")
     else:
-        for entry in all_entries:
-            ref = entry["supporting_observations"][0]
-            lines.append(f"- `{ref['source_id']}/{ref['signal_id']}` — `{entry['entry_id']}`")
+        for citation, evidence in evidence_index.items():
+            locator = evidence["locator"]
+            locator_text = locator["scheme"]
+            if locator["value"] is not None:
+                locator_text += f":{locator['value']}"
+            speaker = _single_line(evidence["speaker"] or "unknown speaker")
+            artifact = evidence["source_artifact_path"] or "unknown artifact"
+            excerpt = _single_line(evidence["excerpt"])
+            lines.append(
+                f"- `{citation}` — `{artifact}`; {evidence['evidence_kind']}; "
+                f"{speaker}; {locator_text}; {excerpt}"
+            )
     return "\n".join(lines) + "\n"
+
+
+def _single_line(value: str) -> str:
+    return " ".join(value.split())
 
 
 def _render_entries(entries: list[dict[str, Any]]) -> list[str]:
@@ -986,7 +1062,7 @@ def _record_failed_derivation(
             "ruleset": {
                 "id": RULESET_ID,
                 "fingerprint": inputs.ruleset_fingerprint,
-                "values": RULESET_VALUES,
+                "values": inputs.ruleset_values,
             },
             "provider": "none",
             "generation_path": None,

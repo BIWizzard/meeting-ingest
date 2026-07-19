@@ -34,6 +34,21 @@ def test_load_project_discovers_config_from_nested_directory(tmp_path: Path) -> 
     assert paths.project_root == tmp_path.resolve()
     assert paths.config_path == initialized.config_path
     assert config.privacy.allow_session_provider is False
+    assert config.playbook.min_recurrent_source_events == 2
+    assert config.playbook.tracked_verify_after_days == 30
+
+
+def test_load_config_without_playbook_table_uses_defaults(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    config = paths.config_path.read_text(encoding="utf-8")
+    paths.config_path.write_text(config.split("\n[playbook]\n", maxsplit=1)[0] + "\n", encoding="utf-8")
+
+    loaded = load_config(paths.config_path)
+
+    assert loaded.playbook.min_recurrent_source_events == 2
+    assert loaded.playbook.tracked_verify_after_days == 30
+    assert loaded.playbook.priority_concern_stale_after_days == 60
+    assert loaded.playbook.preference_behavior_response_stale_after_days == 90
 
 
 def test_discover_config_fails_clearly_without_init(tmp_path: Path) -> None:
@@ -68,3 +83,27 @@ unknown = "value"
         load_config(paths.config_path)
 
     assert exc.value.code == "unknown_config_key"
+
+
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    (
+        ("min_recurrent_source_events", "1"),
+        ("tracked_verify_after_days", "0"),
+        ("priority_concern_stale_after_days", '"soon"'),
+        ("preference_behavior_response_stale_after_days", "true"),
+    ),
+)
+def test_load_config_rejects_invalid_playbook_thresholds(
+    tmp_path: Path, setting: str, value: str
+) -> None:
+    paths = init_project(tmp_path)
+    config = paths.config_path.read_text(encoding="utf-8")
+    default = getattr(load_config(paths.config_path).playbook, setting)
+    config = config.replace(f"{setting} = {default}", f"{setting} = {value}")
+    paths.config_path.write_text(config, encoding="utf-8")
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(paths.config_path)
+
+    assert exc.value.code == "invalid_config_value"

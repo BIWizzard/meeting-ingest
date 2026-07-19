@@ -5,11 +5,14 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Completed and pushed core Layer 5B stakeholder briefing workflows in 196592d. Added review overlays, exact deterministic aggregation and recurrence, recent changes, failure records, freshness/status/doctor diagnostics, index repair, show/brief readers, and path/ledger hardening. Addressed three CodeRabbit findings. Global CLI refreshed; 204 tests pass and main matches origin.",
+  "status_summary": "Addressed Claude pre-commit review notes for Layer 5B hardening: collapsed provider-authored speaker/excerpt whitespace during evidence-index Markdown rendering, documented legacy timestamp locator fallback, and added regression coverage for configs without [playbook] plus multiline evidence rendering. Full suite: 211 passed; git diff check clean.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "src/meeting_ingest/playbook.py"
+    "src/meeting_ingest/playbook.py",
+    "tests/test_playbook.py",
+    "tests/test_config_paths.py",
+    "docs/artifact-contract.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -20,16 +23,16 @@
     "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, fable-5 workflow review, and HTV artifacts?"
   ],
   "next_actions": [
-    "Finish Layer 5B hardening: detailed evidence index, configurable thresholds, suppression re-emergence and nearest-successor diagnostics, explicit uncommitted-generation cleanup, and broader corruption recovery fixtures."
+    "Run final review if desired, then commit the completed Layer 5B evidence-index and configurable-threshold changes."
   ],
   "assumptions": [],
-  "continuation_hint": "Completed and pushed core Layer 5B stakeholder briefing workflows in 196592d. Added review overlays, exact deterministic aggregation and recurrence, recent changes, failure records, freshness/status/doctor diagnostics, index repair, show/brief readers, and path/ledger hardening. Addressed three CodeRabbit findings. Global CLI refreshed; 204 tests pass and main matches origin.",
+  "continuation_hint": "Next: Run final review if desired, then commit the completed Layer 5B evidence-index and configurable-threshold changes.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-19T16:55:01.635Z",
-  "last_wrapped_at": "2026-07-19T16:56:10.377Z",
+  "last_saved_at": "2026-07-19T22:14:46.400Z",
+  "last_wrapped_at": "2026-07-19T19:50:10.512Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-19T16:56:10.377Z"
+  "updated_at": "2026-07-19T22:14:46.400Z"
 }

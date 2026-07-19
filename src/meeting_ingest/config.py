@@ -31,6 +31,14 @@ class PrivacyConfig:
 
 
 @dataclass(frozen=True)
+class PlaybookConfig:
+    min_recurrent_source_events: int = 2
+    tracked_verify_after_days: int = 30
+    priority_concern_stale_after_days: int = 60
+    preference_behavior_response_stale_after_days: int = 90
+
+
+@dataclass(frozen=True)
 class MeetingIngestConfig:
     schema_version: str = SCHEMA_VERSION
     default_mode: str = "summary-plus-verbatim"
@@ -41,6 +49,7 @@ class MeetingIngestConfig:
     cache_normalized_transcript: bool = True
     paths: PathsConfig = field(default_factory=PathsConfig)
     privacy: PrivacyConfig = field(default_factory=PrivacyConfig)
+    playbook: PlaybookConfig = field(default_factory=PlaybookConfig)
 
 
 def default_config_text() -> str:
@@ -65,6 +74,12 @@ ledger = "_ledger.jsonl"
 [privacy]
 allow_remote_provider = false
 allow_session_provider = false
+
+[playbook]
+min_recurrent_source_events = 2
+tracked_verify_after_days = 30
+priority_concern_stale_after_days = 60
+preference_behavior_response_stale_after_days = 90
 """
 
 
@@ -89,6 +104,7 @@ def load_config(path: Path) -> MeetingIngestConfig:
 
     paths = _load_paths_config(data.get("paths", {}))
     privacy = _load_privacy_config(data.get("privacy", {}))
+    playbook = _load_playbook_config(data.get("playbook", {}))
     return MeetingIngestConfig(
         schema_version=schema_version,
         default_mode=data.get("default_mode", "summary-plus-verbatim"),
@@ -99,6 +115,7 @@ def load_config(path: Path) -> MeetingIngestConfig:
         cache_normalized_transcript=bool(data.get("cache_normalized_transcript", True)),
         paths=paths,
         privacy=privacy,
+        playbook=playbook,
     )
 
 
@@ -116,3 +133,21 @@ def _load_privacy_config(data: dict[str, object]) -> PrivacyConfig:
     if unknown:
         raise ConfigError(f"Unknown [privacy] keys: {', '.join(sorted(unknown))}", code="unknown_config_key")
     return PrivacyConfig(**{**defaults, **data})
+
+
+def _load_playbook_config(data: dict[str, object]) -> PlaybookConfig:
+    if not isinstance(data, dict):
+        raise ConfigError("[playbook] must be a TOML table.", code="invalid_config_value")
+    defaults = PlaybookConfig().__dict__
+    unknown = set(data) - set(defaults)
+    if unknown:
+        raise ConfigError(f"Unknown [playbook] keys: {', '.join(sorted(unknown))}", code="unknown_config_key")
+    values = {**defaults, **data}
+    for key, value in values.items():
+        minimum = 2 if key == "min_recurrent_source_events" else 1
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            raise ConfigError(
+                f"[playbook].{key} must be an integer greater than or equal to {minimum}.",
+                code="invalid_config_value",
+            )
+    return PlaybookConfig(**values)
