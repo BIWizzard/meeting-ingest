@@ -847,7 +847,7 @@ Status:
 
 - accepted durable design baseline exists in `docs/stakeholder-playbook-design.md`
 - schema 1.1 and Stakeholder Briefing V1 artifact-contract amendments passed focused review
-- no Layer 5 implementation has started
+- Layer 5A provenance and reviewed-identity foundation is implemented; Layer 5B and Layer 5C have not started
 
 The accepted design replaces the former monolithic playbook milestone with three independently testable increments.
 
@@ -860,22 +860,26 @@ Goal:
 Status:
 
 - schema and artifact contract finalized
-- implementation not started
+- foundation implementation complete with schema 1.0 compatibility, schema 1.1 meeting writers, deterministic observation IDs, reviewed registry resolution, identity candidates, and diagnostics
 
-Preconditions before implementation:
+Completed prerequisites:
 
 - done: focused review of the schema 1.1 and playbook artifact-contract amendments
-- freeze annotated fixtures for compatibility, date semantics, signal identity, regeneration, and identity resolution
-- coordinate provider payload, extraction prompt, and installed skill changes when the new observation taxonomy becomes user-facing
+- done: annotated fixtures freeze compatibility, timing, signal identity, regeneration behavior, and identity resolution
+- done: provider payload remains unchanged and engine enrichment owns schema 1.1; prompt and installed-skill changes are deferred until the new observation taxonomy becomes provider-facing
 
-Ready after prerequisites:
+Implemented:
 
-- implement tolerant schema 1.0 readers and schema 1.1 writers
-- implement generalized `source_id`, `source_kind`, and occurrence/acquisition/processing timing
-- implement deterministic signal identity and regeneration supersession for new records
-- implement the human-owned registry under `_playbook-state/`
-- resolve identities at derivation time and emit unresolved/ambiguous identity candidates
-- add status and doctor findings for registry conflicts and identity candidates
+- tolerant schema 1.0 readers and schema 1.1 writers
+- generalized `source_id`, `source_kind`, and occurrence/acquisition/processing timing
+- deterministic signal identity, duplicate collapse, collision suffixing, and signal-set fingerprints for new records
+- human-owned registry under `_playbook-state/`
+- derivation-time identity resolution and unresolved/ambiguous identity candidates
+- status and doctor findings for registry conflicts and identity candidates
+
+Deferred integration dependency:
+
+- the Layer 2 `regenerate` command will record `previous_fingerprint` and explicit signal-set supersession using the stable identity and fingerprint primitives implemented here
 
 Acceptance criteria:
 

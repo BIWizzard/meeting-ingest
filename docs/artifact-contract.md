@@ -1390,8 +1390,8 @@ Rules:
 - `status` is `reviewed` in V1.
 - Display-name and alias edits do not change `person_id`.
 - Alias comparison uses Unicode NFC normalization, trimmed/collapsed whitespace, and case-folding.
-- Normalized aliases must be injective. The same alias under two people is ambiguous, resolves to neither person, and is reported by `doctor`.
-- Resolution order is exact reviewed external identifier when later supported, exact reviewed alias, exact unambiguous normalized display name, candidate, then unresolved.
+- Normalized aliases and display names share one reviewed-name namespace and must be injective. The same normalized name under two people is ambiguous, resolves to neither person, and is reported by `doctor`.
+- Resolution order is exact reviewed external identifier when later supported, one unique exact match across reviewed aliases and normalized display names, candidate, then unresolved.
 - Fuzzy similarity never auto-merges people.
 - Provider-proposed IDs and stored signal IDs are advisory only. Derivation resolves raw labels through the current registry.
 - Registry redirects and external identifiers are deferred until their contract is added; merges in V1 use reviewed alias edits and rebuild.

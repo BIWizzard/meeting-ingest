@@ -23,6 +23,7 @@ class ProjectPaths:
     processed: Path
     quarantine: Path
     signals: Path
+    playbook_state: Path
     derived: Path
     cache: Path
     ledger: Path
@@ -40,6 +41,7 @@ class ProjectPaths:
             processed=meetings_root / config.paths.processed,
             quarantine=meetings_root / config.paths.quarantine,
             signals=meetings_root / config.paths.signals,
+            playbook_state=meetings_root / "_playbook-state",
             derived=meetings_root / config.paths.derived,
             cache=meetings_root / config.paths.cache,
             ledger=meetings_root / config.paths.ledger,
@@ -53,6 +55,7 @@ class ProjectPaths:
             self.processed,
             self.quarantine,
             self.signals,
+            self.playbook_state,
             self.derived,
             self.cache,
         ]

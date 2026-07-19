@@ -103,13 +103,20 @@ def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path
     markdown = artifact.read_text(encoding="utf-8")
 
     assert summary.artifacts[1]["count"] == 1
-    assert signal_payload["signal_id"] == "sig-20260703-001"
+    assert signal_payload["schema_version"] == "1.1"
+    assert signal_payload["signal_id"].startswith(f"sig-{summary.source_sha256[:12]}-")
     assert signal_payload["meeting_id"] == summary.meeting_id
     assert signal_payload["ingest_run_id"] == summary.ingest_run_id
     assert signal_payload["recorded_at"] == "2026-07-03T12:00:00Z"
     assert signal_payload["signal_type"] == "explicit_ask"
     assert signal_payload["evidence"]["kind"] == "paraphrase"
-    assert "| `sig-20260703-001` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown
+    assert f"| `{signal_payload['signal_id']}` | explicit_ask | Kushali | Asked for source clarity. | high |" in markdown
+    assert signal_payload["stakeholder_name_raw"] == "Kushali"
+    assert signal_payload["source"]["source_id"] == f"src-{summary.source_sha256[:12]}"
+    assert signal_payload["source"]["source_kind"] == "meeting_transcript"
+    assert signal_payload["source"]["channel"] is None
+    assert signal_payload["timing"]["occurred"]["value"] == "2026-07-03"
+    assert signal_payload["timing"]["recorded"]["value"] == "2026-07-03T12:00:00Z"
 
 
 def test_ingest_reports_rename_suggestion_for_low_signal_title(

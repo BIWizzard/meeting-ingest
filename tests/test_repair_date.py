@@ -67,6 +67,10 @@ def test_repair_date_renames_artifact_rewrites_metadata_and_appends_ledger(tmp_p
     assert signal_lines
     assert all(line["effective_at"] == "2026-07-10" for line in signal_lines)
     assert all(line["meeting_id"] == meeting_id for line in signal_lines)
+    assert all(line["timing"]["occurred"]["precision"] == "date" for line in signal_lines)
+    assert all(line["timing"]["occurred"]["source"] == "repair" for line in signal_lines)
+    assert all(line["source"]["artifact_path"] == mode_entry["path"] for line in signal_lines)
+    assert record["signals"]["fingerprint"].startswith("sha256:")
 
 
 def test_repair_date_accepts_source_sha_selector(tmp_path: Path) -> None:
@@ -142,3 +146,25 @@ def test_reingest_after_repair_is_still_a_no_op(tmp_path: Path) -> None:
     summary = pipeline.ingest(processed, start=tmp_path, provider="mock")
 
     assert summary.status == "no_op"
+
+
+def test_repair_date_normalizes_unknown_occurrence_to_known_date(tmp_path: Path) -> None:
+    meetings_root, meeting_id = _ingest_mtime_dated_standup(tmp_path)
+    signal_path = meetings_root / "_signals" / f"{meeting_id}.jsonl"
+    payload = json.loads(signal_path.read_text(encoding="utf-8"))
+    payload["timing"]["occurred"].update(
+        {"value": None, "precision": "unknown", "source": "unavailable", "confidence": "low"}
+    )
+    signal_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    pipeline.repair_date(meeting_id, date="2026-07-10", start=tmp_path)
+
+    repaired = json.loads(signal_path.read_text(encoding="utf-8"))
+    assert repaired["timing"]["occurred"] == {
+        "value": "2026-07-10",
+        "end_value": None,
+        "precision": "date",
+        "timezone": None,
+        "source": "repair",
+        "confidence": "manual",
+    }

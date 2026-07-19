@@ -11,8 +11,8 @@ import re
 import unicodedata
 
 
-_UNKNOWN_LABELS = {"", "unknown", "speaker", "participant", "attendee", "unidentified"}
-_GENERIC_LABEL = re.compile(r"^(speaker|participant|attendee)\s*\d+$", re.IGNORECASE)
+_UNKNOWN_LABELS = {"", "unknown", "speaker", "participant", "attendee", "presenter", "unidentified"}
+_GENERIC_LABEL = re.compile(r"^(speaker|participant|attendee|presenter)\s*\d+$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)

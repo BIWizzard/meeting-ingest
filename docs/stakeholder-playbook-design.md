@@ -507,10 +507,9 @@ Later schema versions may add reviewed source-specific identifiers. Cross-projec
 ### Resolution Order
 
 1. Exact reviewed external identifier, when available.
-2. Exact reviewed alias in the registry.
-3. Exact normalized display-name match when unambiguous.
-4. Candidate match surfaced for review.
-5. Unresolved identity.
+2. One unique exact match across reviewed aliases and normalized display names.
+3. Candidate match surfaced for review.
+4. Unresolved identity.
 
 Fuzzy similarity must never auto-merge people.
 
@@ -524,7 +523,7 @@ Fuzzy similarity must never auto-merge people.
 - Derivation always resolves through the current registry, even when an older signal contains an ID.
 - For schema 1.1, resolution uses `stakeholder_name_raw`; for schema 1.0 it uses `stakeholder_name` as the best available legacy raw label.
 - Stored `stakeholder_id` values are never authoritative derivation inputs, including existing `person-*` slugs and future registry hints.
-- An alias that appears under multiple people is ambiguous and resolves to no person until repaired.
+- A normalized alias or display name that appears under multiple people is ambiguous and resolves to no person until repaired.
 - `doctor` reports alias collisions.
 - Corrections and merges use registry aliases or redirects plus a full rebuild, not signal rewrites.
 - Group-directed observations use `audience_id` and `audience_name`, or remain unresolved; they do not mint fake people.

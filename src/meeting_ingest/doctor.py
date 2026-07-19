@@ -5,12 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import re
 
+from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.ledger import read_records, read_records_with_issues
 from meeting_ingest.locking import inspect_lock, lock_path
 from meeting_ingest.paths import ProjectPaths
 from meeting_ingest.provider_handoff import REQUEST_DIR, RESPONSE_DIR
+from meeting_ingest.signals import read_signal_jsonl
 from meeting_ingest.session_handoffs import pending_session_handoffs, session_handoff_counts
+from meeting_ingest.stakeholders import collect_identity_candidates, read_stakeholder_registry
 
 
 STALE_PROVIDER_CACHE_AGE = timedelta(days=7)
@@ -30,12 +34,18 @@ def project_status(paths: ProjectPaths) -> dict[str, object]:
     records = read_records(paths.ledger)
     current_sources = {record.get("source_sha256") for record in records if record.get("source_sha256")}
     handoffs = pending_session_handoffs(paths)
+    signal_issues = _signal_contract_issues(paths, records)
     return {
         "meetings_root": str(paths.meetings_root),
         "ledger_records": len(records),
         "known_sources": len(current_sources),
         "inbox_files": len(_inbox_files(paths)),
         "session_handoffs": session_handoff_counts(handoffs),
+        "identity_registry": _identity_registry_status(paths),
+        "signal_contract": {
+            "status": "invalid" if signal_issues else "valid",
+            "issues": [issue.to_dict() for issue in signal_issues],
+        },
     }
 
 
@@ -63,6 +73,8 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
 
     issues.extend(_stale_provider_cache_issues(paths))
     issues.extend(_session_handoff_issues(paths))
+    issues.extend(_identity_registry_issues(paths))
+    issues.extend(_signal_contract_issues(paths, records))
 
     for source in _inbox_files(paths):
         issues.append(
@@ -99,6 +111,85 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
         ):
             _append_missing_path_issue(paths, issues, "missing_processed_source", str(reconcile["processed_path"]))
     issues.extend(_low_confidence_date_issues(paths, records))
+    return issues
+
+
+def _identity_registry_status(paths: ProjectPaths) -> dict[str, object]:
+    registry_path = paths.playbook_state / "stakeholders.toml"
+    registry = read_stakeholder_registry(registry_path)
+    signals = []
+    if paths.signals.exists():
+        for signal_path in sorted(paths.signals.glob("*.jsonl")):
+            try:
+                signals.extend(read_signal_jsonl(signal_path))
+            except MeetingIngestError:
+                continue
+    candidates = collect_identity_candidates(signals, registry)
+    return {
+        "status": "missing" if not registry_path.exists() else ("invalid" if registry.issues else "valid"),
+        "people": len(registry.people),
+        "issues": len(registry.issues),
+        "identity_candidates": len(candidates),
+    }
+
+
+def _identity_registry_issues(paths: ProjectPaths) -> list[DoctorIssue]:
+    registry_path = paths.playbook_state / "stakeholders.toml"
+    if not registry_path.exists():
+        return []
+    registry = read_stakeholder_registry(registry_path)
+    relative_path = str(registry_path.relative_to(paths.meetings_root))
+    return [
+        DoctorIssue(code=issue.code, message=issue.message, path=relative_path)
+        for issue in registry.issues
+    ]
+
+
+def _signal_contract_issues(
+    paths: ProjectPaths, ledger_records: list[dict[str, object]] | None = None
+) -> list[DoctorIssue]:
+    issues: list[DoctorIssue] = []
+    source_hash_by_meeting = {
+        str(record["meeting_id"]): str(record["source_sha256"])
+        for record in (ledger_records or [])
+        if record.get("meeting_id")
+        and isinstance(record.get("source_sha256"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", str(record["source_sha256"]))
+    }
+    if not paths.signals.exists():
+        return issues
+    for path in sorted(paths.signals.glob("*.jsonl")):
+        try:
+            records = read_signal_jsonl(path)
+        except MeetingIngestError as exc:
+            issues.append(
+                DoctorIssue(
+                    code=exc.code,
+                    message=str(exc),
+                    path=str(path.relative_to(paths.meetings_root)),
+                )
+            )
+            continue
+        unmapped_meeting_ids = sorted(
+            {
+                str(record.meeting_id)
+                for record in records
+                if record.schema_version == "1.0"
+                and record.meeting_id
+                and record.meeting_id not in source_hash_by_meeting
+            }
+        )
+        if unmapped_meeting_ids:
+            issues.append(
+                DoctorIssue(
+                    code="signal_identity_invalid",
+                    message=(
+                        "Schema 1.0 signal meeting identity cannot be mapped to a valid source-ledger hash: "
+                        + ", ".join(unmapped_meeting_ids)
+                    ),
+                    path=str(path.relative_to(paths.meetings_root)),
+                )
+            )
     return issues
 
 

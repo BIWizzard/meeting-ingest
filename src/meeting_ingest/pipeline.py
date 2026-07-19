@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 import json
@@ -25,7 +25,7 @@ from meeting_ingest.errors import (
 )
 from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
-from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id
+from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id, mint_source_id
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record_for_source, read_records
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
@@ -47,10 +47,21 @@ from meeting_ingest.schema import (
     ProviderResponse,
     ProviderSignal,
     ProviderValidationError,
+    EvidenceLocator,
+    SignalEvidence,
     SignalRecord,
+    SignalSource,
+    SignalTime,
+    SignalTiming,
     validate_provider_response,
 )
-from meeting_ingest.signals import write_signal_jsonl
+from meeting_ingest.signals import (
+    SignalIdentityResult,
+    SignalWriteResult,
+    assign_deterministic_signal_ids,
+    read_signal_jsonl,
+    write_signal_jsonl,
+)
 
 
 class _PreparedNoOp(Exception):
@@ -287,7 +298,14 @@ def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, cl
         changed_modes.append(mode)
 
     if signals_state.get("path"):
-        _rewrite_signal_effective_at(paths.meetings_root / str(signals_state["path"]), new_date=new_date)
+        repaired_artifact_path = str(next(iter(artifacts.values()))["path"])
+        repaired_signal_path = paths.meetings_root / str(signals_state["path"])
+        repaired_signals = _rewrite_signal_effective_at(
+            repaired_signal_path,
+            new_date=new_date,
+            artifact_path=repaired_artifact_path,
+        )
+        signals_state["fingerprint"] = repaired_signals.fingerprint
 
     append_snapshot(
         paths.ledger,
@@ -783,13 +801,20 @@ def _finish_ingest(
     artifact_destination = _next_artifact_path(paths, extraction.effective_date.value, provider_response.title)
     artifact_path = artifact_destination.path
     signal_path = paths.signals / f"{meeting_id}.jsonl"
-    signal_records = _signal_records_from_provider(
+    recorded_at = format_iso_timestamp((clock or SystemClock()).now_utc())
+    signal_identity = _signal_records_from_provider(
         provider_response.communication_signals,
+        source=source,
+        source_sha256=source_sha256,
+        artifact_path=str(artifact_path.relative_to(paths.meetings_root)),
         meeting_id=meeting_id,
         ingest_run_id=ingest_run_id,
         effective_at=extraction.effective_date.value,
-        recorded_at=format_iso_timestamp((clock or SystemClock()).now_utc()),
+        date_confidence=extraction.effective_date.confidence,
+        date_source=extraction.effective_date.source,
+        recorded_at=recorded_at,
     )
+    signal_records = signal_identity.signals
     signal_result = write_signal_jsonl(signal_path, signal_records)
     render_response = _provider_response_with_signals(provider_response, signal_records)
     markdown = render_summary_plus_verbatim(
@@ -838,7 +863,8 @@ def _finish_ingest(
         "status": "ready",
         "path": str(relative_signal_path),
         "count": signal_result.count,
-        "schema_version": "1.0",
+        "schema_version": "1.1",
+        "fingerprint": signal_result.fingerprint,
     }
     source_state = _source_state(paths, source, extraction.source_format)
     _append_ingest_snapshot(
@@ -875,6 +901,7 @@ def _finish_ingest(
     if artifact_destination.collision:
         warnings.append(f"artifact filename collision; wrote {relative_artifact_path}")
     warnings.extend(_date_warnings(extraction))
+    warnings.extend(signal_identity.warnings)
     return RunSummary(
         status="success",
         exit_code=0,
@@ -1203,17 +1230,26 @@ def _repaired_artifact_path(paths: ProjectPaths, new_date: str, slug: str, *, cu
     return _ArtifactPath(path=candidate, collision=collision)
 
 
-def _rewrite_signal_effective_at(path: Path, *, new_date: str) -> None:
-    if not path.exists():
-        return
-    lines = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        record = json.loads(line)
-        record["effective_at"] = new_date
-        lines.append(json.dumps(record, sort_keys=True))
-    path.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+def _rewrite_signal_effective_at(path: Path, *, new_date: str, artifact_path: str) -> SignalWriteResult:
+    updated: list[SignalRecord] = []
+    for record in read_signal_jsonl(path):
+        timing = record.timing
+        if timing is not None:
+            timing = replace(
+                timing,
+                occurred=replace(
+                    timing.occurred,
+                    value=new_date,
+                    end_value=None,
+                    precision="date",
+                    timezone=None,
+                    source="repair",
+                    confidence="manual",
+                ),
+            )
+        source = replace(record.source, artifact_path=artifact_path) if record.source is not None else None
+        updated.append(replace(record, effective_at=new_date, timing=timing, source=source))
+    return write_signal_jsonl(path, updated)
 
 
 def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> _ArtifactPath:
@@ -1390,21 +1426,39 @@ def _record_has_primary_artifacts(record: dict[str, object] | None) -> bool:
 def _signal_records_from_provider(
     signals: list[ProviderSignal | SignalRecord],
     *,
+    source: Path,
+    source_sha256: str,
+    artifact_path: str,
     meeting_id: str,
     ingest_run_id: str,
     effective_at: str,
+    date_confidence: str,
+    date_source: str,
     recorded_at: str,
-) -> list[SignalRecord]:
+) -> SignalIdentityResult:
     records: list[SignalRecord] = []
-    for index, signal in enumerate(signals, start=1):
+    source_id = mint_source_id(source_sha256)
+    acquired_at = format_iso_timestamp(datetime.fromtimestamp(source.stat().st_mtime, tz=UTC))
+    for signal in signals:
         if isinstance(signal, SignalRecord):
             raise ProviderValidationError(
                 "Provider returned enriched SignalRecord; providers must return ProviderSignal candidates.",
             )
         if isinstance(signal, ProviderSignal):
+            locator = EvidenceLocator(
+                scheme="timestamp" if signal.evidence.timestamp else "none",
+                value=signal.evidence.timestamp,
+            )
+            evidence = SignalEvidence(
+                kind=signal.evidence.kind,
+                text=signal.evidence.text,
+                speaker=signal.evidence.speaker,
+                timestamp=signal.evidence.timestamp,
+                locator=locator,
+            )
             records.append(
                 SignalRecord(
-                    signal_id=f"sig-{effective_at.replace('-', '')}-{index:03d}",
+                    signal_id="pending",
                     meeting_id=meeting_id,
                     ingest_run_id=ingest_run_id,
                     effective_at=effective_at,
@@ -1412,19 +1466,56 @@ def _signal_records_from_provider(
                     signal_type=signal.signal_type,
                     stakeholder_id=signal.stakeholder_id,
                     stakeholder_name=signal.stakeholder_name,
+                    stakeholder_name_raw=signal.evidence.speaker or signal.stakeholder_name,
                     summary=signal.summary,
-                    evidence=signal.evidence,
+                    evidence=evidence,
                     inference_level=signal.inference_level,
                     confidence=signal.confidence,
+                    source=SignalSource(
+                        source_id=source_id,
+                        source_kind="meeting_transcript",
+                        source_sha256=source_sha256,
+                        meeting_id=meeting_id,
+                        artifact_path=artifact_path,
+                        channel=None,
+                        evidence_locator_scheme=locator.scheme,
+                    ),
+                    timing=SignalTiming(
+                        occurred=SignalTime(
+                            value=effective_at,
+                            end_value=None,
+                            precision="date",
+                            timezone=None,
+                            source=date_source,
+                            confidence=date_confidence,
+                        ),
+                        acquired=SignalTime(
+                            value=acquired_at,
+                            end_value=None,
+                            precision="datetime",
+                            timezone="UTC",
+                            source="filesystem_mtime",
+                            confidence="low",
+                        ),
+                        recorded=SignalTime(
+                            value=recorded_at,
+                            end_value=None,
+                            precision="datetime",
+                            timezone="UTC",
+                            source="system_clock",
+                            confidence="high",
+                        ),
+                    ),
                     topics=signal.topics,
                     project_refs=signal.project_refs,
                     recurrence=signal.recurrence,
                     status=signal.status,
+                    schema_version="1.1",
                 )
             )
             continue
         raise ProviderValidationError(f"Unsupported provider signal shape: {type(signal).__name__}")
-    return records
+    return assign_deterministic_signal_ids(records)
 
 
 def _provider_response_with_signals(response: ProviderResponse, signals: list[SignalRecord]) -> ProviderResponse:

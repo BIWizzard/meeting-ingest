@@ -314,7 +314,7 @@ Remaining:
 
 ### Layer 5: Stakeholder Briefing And Playbook Guidance
 
-Status: accepted design baseline and artifact contract; implementation not started.
+Status: Layer 5A foundation complete; Layer 5B and Layer 5C not started.
 
 Done:
 
@@ -328,13 +328,19 @@ Done:
 
 #### Layer 5A: Generalized Provenance And Identity Foundation
 
-Remaining:
+Implemented:
 
-- add annotated compatibility and adversarial fixtures
-- implement schema 1.1 tolerant readers/writers
-- implement generalized source and occurrence/acquisition/processing provenance
-- implement deterministic signal identity and regeneration supersession
-- implement the reviewed project-local identity registry, derivation-time resolution, and identity candidates
+- annotated compatibility and adversarial fixtures
+- schema 1.1 tolerant readers/writers
+- generalized source and occurrence/acquisition/processing provenance
+- deterministic locator/evidence-based signal identity, duplicate collapse, collision suffixing, and signal-set fingerprints
+- reviewed project-local identity registry, derivation-time resolution, and identity candidates
+- status visibility and doctor findings for registry conflicts and invalid schema 1.1 signal identity/locators
+
+Remaining integration:
+
+- record prior signal-set fingerprints and explicit supersession details when the Layer 2 `regenerate` command is implemented
+- consume identity-candidate artifacts from immutable Layer 5B derivation generations
 
 #### Layer 5B: Stakeholder Briefing V1
 

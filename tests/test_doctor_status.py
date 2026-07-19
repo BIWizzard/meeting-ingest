@@ -28,6 +28,8 @@ def test_status_reports_project_counts(tmp_path: Path) -> None:
             "stale": 0,
             "failed": 0,
         },
+        "identity_registry": {"status": "missing", "people": 0, "issues": 0, "identity_candidates": 0},
+        "signal_contract": {"status": "valid", "issues": []},
     }
     assert summary.details["session_handoffs"] == {
         "counts": {
@@ -212,6 +214,61 @@ def test_doctor_reports_stale_provider_handoff_cache(tmp_path: Path) -> None:
         "code": "stale_provider_response",
         "message": "Provider handoff cache file is stale.",
         "path": "_cache/provider-responses/old.response.json",
+    } in summary.details["issues"]
+
+
+def test_status_and_doctor_report_ambiguous_identity_registry(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    fixture = Path(__file__).parent / "fixtures" / "stakeholders" / "ambiguous.toml"
+    (paths.playbook_state / "stakeholders.toml").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    status_summary = status(tmp_path)
+    doctor_summary = doctor(tmp_path)
+
+    assert status_summary.details["project"]["identity_registry"] == {
+        "status": "invalid",
+        "people": 2,
+        "issues": 1,
+        "identity_candidates": 0,
+    }
+    assert {
+        "code": "identity_alias_ambiguous",
+        "message": "Reviewed alias 'alex' belongs to multiple people: person-alex-one, person-alex-two.",
+        "path": "_playbook-state/stakeholders.toml",
+    } in doctor_summary.details["issues"]
+
+
+def test_doctor_reports_invalid_schema_1_1_signal_identity(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    fixture = Path(__file__).parent / "fixtures" / "signals" / "schema-1.1-meeting.jsonl"
+    payload = fixture.read_text(encoding="utf-8").replace(
+        "sig-a1b2c3d4e5f6-91aa2c80b731", "sig-wrong-identity"
+    )
+    (paths.signals / "invalid.jsonl").write_text(payload, encoding="utf-8")
+
+    summary = doctor(tmp_path)
+
+    assert any(issue["code"] == "signal_identity_invalid" for issue in summary.details["issues"])
+
+    status_summary = status(tmp_path)
+    assert status_summary.details["project"]["signal_contract"]["status"] == "invalid"
+    assert status_summary.details["project"]["signal_contract"]["issues"][0]["code"] == "signal_identity_invalid"
+
+
+def test_doctor_reports_unmapped_schema_1_0_meeting_identity(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    fixture = Path(__file__).parent / "fixtures" / "signals" / "schema-1.0-meeting.jsonl"
+    (paths.signals / "legacy.jsonl").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    summary = doctor(tmp_path)
+
+    assert {
+        "code": "signal_identity_invalid",
+        "message": (
+            "Schema 1.0 signal meeting identity cannot be mapped to a valid source-ledger hash: "
+            "mtg-20260703-f953bbd2"
+        ),
+        "path": "_signals/legacy.jsonl",
     } in summary.details["issues"]
 
 

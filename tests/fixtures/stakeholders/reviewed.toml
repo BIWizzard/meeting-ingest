@@ -1,0 +1,13 @@
+schema_version = "1.0"
+
+[[people]]
+person_id = "person-kushali-g"
+display_name = "Kushali G"
+aliases = ["Kushali", "G, Kushali", "Kushali G"]
+status = "reviewed"
+
+[[people]]
+person_id = "person-ken-graham"
+display_name = "Ken Graham"
+aliases = ["Ken", "Graham, Ken (Contractor)"]
+status = "reviewed"

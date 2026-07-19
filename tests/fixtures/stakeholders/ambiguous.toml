@@ -1,0 +1,13 @@
+schema_version = "1.0"
+
+[[people]]
+person_id = "person-alex-one"
+display_name = "Alex One"
+aliases = ["Alex"]
+status = "reviewed"
+
+[[people]]
+person_id = "person-alex-two"
+display_name = "Alex Two"
+aliases = ["Alex"]
+status = "reviewed"
