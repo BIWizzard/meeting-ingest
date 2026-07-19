@@ -351,13 +351,19 @@ Implemented foundation:
 - explicit `playbook update` full rebuild command
 - immutable generation directories with identity candidates, canonical profile JSON, and deterministic briefing Markdown
 - append-only successful derivation records followed by an atomic current index update
+- exact-type/tag deterministic aggregation, recurrence promotion, freshness, and recent-change comparison
+- append-only reject/restore, resolve, suppress/unsuppress review controls with rebuild-time overlay application
+- failed derivation records that preserve the prior usable index
+- live current/stale/missing/failed status plus derivation, profile, review, orphan, and uncommitted-generation doctor diagnostics
+- explicit index repair and alias-aware `playbook show` and concise `playbook brief` readers
 
 Remaining:
 
-- complete recurrence rollups, cross-observation aggregation, recent-change comparison, contradiction candidates, and evidence-index detail
-- implement derivation failure records, index repair, and generation cleanup diagnostics
-- implement reject, resolve, suppress-signal, and identity-correction controls
-- implement `playbook show` and concise briefing surfaces plus status/doctor visibility
+- enrich the evidence index with source artifact, evidence kind, excerpt, speaker, and locator detail
+- add project-configurable briefing thresholds and frozen override validation
+- report suppression re-emergence after signal regeneration and nearest-successor hints for orphaned entry reviews
+- add explicit uncommitted-generation cleanup and broader corrupted-index repair fixtures
+- add mechanical contradiction candidates when a source schema exposes structured mutually exclusive values; same-type or same-topic collisions remain non-contradictory
 
 #### Layer 5C: Playbook Guidance V1.1
 

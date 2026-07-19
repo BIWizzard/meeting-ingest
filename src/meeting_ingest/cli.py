@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from meeting_ingest import pipeline, playbook
+from meeting_ingest.playbook_review import mutate_review
 from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
 from meeting_ingest.session_inbox import process_session_inbox
@@ -76,6 +77,41 @@ def build_parser() -> argparse.ArgumentParser:
     playbook_update_parser = playbook_subparsers.add_parser("update")
     playbook_update_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     playbook_update_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    reject_parser = playbook_subparsers.add_parser("reject")
+    reject_parser.add_argument("entry_id")
+    reject_parser.add_argument("--reason", required=True)
+    _add_playbook_mutation_options(reject_parser)
+    restore_parser = playbook_subparsers.add_parser("restore")
+    restore_parser.add_argument("entry_id")
+    restore_parser.add_argument("--note", required=True)
+    _add_playbook_mutation_options(restore_parser)
+    resolve_parser = playbook_subparsers.add_parser("resolve")
+    resolve_parser.add_argument("entry_id")
+    resolve_parser.add_argument(
+        "--state",
+        required=True,
+        choices=("explicitly_outstanding", "resolved", "withdrawn", "superseded"),
+    )
+    resolve_parser.add_argument("--note", required=True)
+    _add_playbook_mutation_options(resolve_parser)
+    suppress_parser = playbook_subparsers.add_parser("suppress-signal")
+    suppress_parser.add_argument("source_id")
+    suppress_parser.add_argument("signal_id")
+    suppress_parser.add_argument("--reason", required=True)
+    _add_playbook_mutation_options(suppress_parser)
+    unsuppress_parser = playbook_subparsers.add_parser("unsuppress-signal")
+    unsuppress_parser.add_argument("source_id")
+    unsuppress_parser.add_argument("signal_id")
+    unsuppress_parser.add_argument("--note", required=True)
+    _add_playbook_mutation_options(unsuppress_parser)
+    for command in ("show", "brief"):
+        read_parser = playbook_subparsers.add_parser(command)
+        read_parser.add_argument("selector")
+        read_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+        read_parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    repair_index_parser = playbook_subparsers.add_parser("repair-index")
+    repair_index_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    repair_index_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
     for command in ("doctor", "status", "reconcile"):
         command_parser = subparsers.add_parser(command)
@@ -83,6 +119,12 @@ def build_parser() -> argparse.ArgumentParser:
         command_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
     return parser
+
+
+def _add_playbook_mutation_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    parser.add_argument("--actor", default="user", help="Human or authorized agent recording the review event.")
+    parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
 
 def run(args: argparse.Namespace) -> RunSummary:
@@ -136,6 +178,41 @@ def run(args: argparse.Namespace) -> RunSummary:
         return pipeline.repair_date(args.selector, date=args.date, start=Path(args.root))
     if args.command == "playbook" and args.playbook_command == "update":
         return playbook.update(Path(args.root))
+    if args.command == "playbook" and args.playbook_command == "show":
+        return playbook.show(Path(args.root), args.selector, output_format=args.format)
+    if args.command == "playbook" and args.playbook_command == "brief":
+        return playbook.brief(Path(args.root), args.selector, output_format=args.format)
+    if args.command == "playbook" and args.playbook_command == "repair-index":
+        return playbook.repair_index(Path(args.root))
+    if args.command == "playbook" and args.playbook_command in {
+        "reject",
+        "restore",
+        "resolve",
+        "suppress-signal",
+        "unsuppress-signal",
+    }:
+        action = {
+            "reject": "reject_entry",
+            "restore": "restore_entry",
+            "resolve": "resolve_tracked_item",
+            "suppress-signal": "suppress_signal",
+            "unsuppress-signal": "unsuppress_signal",
+        }[args.playbook_command]
+        target = (
+            {"source_id": args.source_id, "signal_id": args.signal_id}
+            if args.playbook_command in {"suppress-signal", "unsuppress-signal"}
+            else {"entry_id": args.entry_id}
+        )
+        if args.playbook_command == "resolve":
+            target["resolution_state"] = args.state
+        return mutate_review(
+            Path(args.root),
+            action=action,
+            target=target,
+            reason=getattr(args, "reason", None),
+            note=getattr(args, "note", None),
+            actor=args.actor,
+        )
     raise AssertionError(f"Unhandled command: {args.command}")
 
 
@@ -147,6 +224,10 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
 
     if summary.status in {"success", "no_op"}:
         command = data.get("command", "command")
+        if command in {"playbook_show", "playbook_brief"}:
+            content = data["content"]
+            print(content if isinstance(content, str) else json.dumps(content, indent=2, sort_keys=True))
+            return
         print(f"{command} {summary.status}")
         if "meetings_root" in data:
             print(f"meetings_root: {data['meetings_root']}")

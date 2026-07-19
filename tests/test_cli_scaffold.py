@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
 
-from meeting_ingest.cli import build_parser, main
+from meeting_ingest.cli import build_parser, emit, main
+from meeting_ingest.run_summary import RunSummary
 
 
 def test_cli_parses_meeting_date_for_ingest_and_provider_request() -> None:
@@ -19,6 +20,27 @@ def test_cli_parses_playbook_update() -> None:
     assert args.playbook_command == "update"
     assert args.root == "/tmp/project"
     assert args.json is True
+
+
+def test_cli_parses_playbook_review_and_read_commands() -> None:
+    reject = build_parser().parse_args(
+        ["playbook", "reject", "entry-person-kushali-g-ask-123456789abc", "--reason", "Bad", "--json"]
+    )
+    show = build_parser().parse_args(["playbook", "show", "Kushali", "--format", "json"])
+
+    assert reject.playbook_command == "reject"
+    assert reject.reason == "Bad"
+    assert show.playbook_command == "show"
+    assert show.selector == "Kushali"
+    assert show.format == "json"
+
+
+def test_emit_prints_playbook_read_payload_without_summary_wrapper(capsys) -> None:
+    summary = RunSummary(details={"command": "playbook_show", "format": "markdown", "content": "# Brief\n"})
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == "# Brief\n\n"
 
 
 def test_init_json_outputs_run_summary(tmp_path: Path, capsys) -> None:

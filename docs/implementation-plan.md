@@ -899,17 +899,24 @@ Status:
 
 - accepted product and technical design exists
 - artifact contract finalized
-- implementation not started
+- core Briefing V1 rebuild, review, status/doctor, repair, show, and concise brief surfaces are implemented
 
-Ready after Layer 5A:
+Implemented:
 
 - implement full deterministic rebuild over validated signal files
 - write canonical profile JSON and rendered briefing Markdown into immutable generations
 - implement the separate derivation ledger, atomic current-generation index, and input fingerprinting
 - implement `playbook update`, `playbook show`, and concise briefing surfaces
-- aggregate tracked asks and commitments, priorities, concerns, rationales, preferences, behaviors, interaction responses, freshness, and mechanical contradiction candidates
+- aggregate tracked asks and commitments, priorities, concerns, rationales, preferences, behaviors, interaction responses, and freshness without treating same-type collisions as contradictions
 - implement append-only review controls for rejecting entries, resolving tracked items, suppressing bad observations, and correcting identity
 - add stale/missing/failed playbook state to `status` and `doctor`
+
+Remaining hardening:
+
+- enrich evidence-index detail and configurable threshold handling
+- add suppression re-emergence and nearest-successor orphan diagnostics
+- add explicit uncommitted-generation cleanup and broader corruption recovery coverage
+- materialize mechanical contradiction candidates only after structured mutually exclusive source values exist
 
 Acceptance criteria:
 

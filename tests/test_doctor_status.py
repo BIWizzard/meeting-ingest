@@ -17,7 +17,9 @@ def test_status_reports_project_counts(tmp_path: Path) -> None:
 
     assert summary.status == "success"
     assert summary.exit_code == 0
-    assert summary.details["project"] == {
+    project = summary.details["project"]
+    playbook = project.pop("playbook")
+    assert project == {
         "meetings_root": str(paths.meetings_root),
         "ledger_records": 0,
         "known_sources": 0,
@@ -31,6 +33,10 @@ def test_status_reports_project_counts(tmp_path: Path) -> None:
         "identity_registry": {"status": "missing", "people": 0, "issues": 0, "identity_candidates": 0},
         "signal_contract": {"status": "valid", "issues": []},
     }
+    assert playbook["status"] == "missing"
+    assert playbook["derivation_run_id"] is None
+    assert playbook["profile_count"] == 0
+    assert playbook["latest_attempt_status"] is None
     assert summary.details["session_handoffs"] == {
         "counts": {
             "total": 0,

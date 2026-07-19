@@ -11,6 +11,7 @@ from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.ledger import read_records, read_records_with_issues
 from meeting_ingest.locking import inspect_lock, lock_path
 from meeting_ingest.paths import ProjectPaths
+from meeting_ingest.playbook_status import live_playbook_status, playbook_issues
 from meeting_ingest.provider_handoff import REQUEST_DIR, RESPONSE_DIR
 from meeting_ingest.signals import read_signal_jsonl
 from meeting_ingest.session_handoffs import pending_session_handoffs, session_handoff_counts
@@ -46,6 +47,7 @@ def project_status(paths: ProjectPaths) -> dict[str, object]:
             "status": "invalid" if signal_issues else "valid",
             "issues": [issue.to_dict() for issue in signal_issues],
         },
+        "playbook": live_playbook_status(paths),
     }
 
 
@@ -75,6 +77,7 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
     issues.extend(_session_handoff_issues(paths))
     issues.extend(_identity_registry_issues(paths))
     issues.extend(_signal_contract_issues(paths, records))
+    issues.extend(DoctorIssue(**issue) for issue in playbook_issues(paths))
 
     for source in _inbox_files(paths):
         issues.append(

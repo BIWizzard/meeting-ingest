@@ -4,19 +4,20 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime
 import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable
 
 from meeting_ingest.clock import Clock, SystemClock, default_suffix, format_iso_timestamp, format_timestamp
-from meeting_ingest.errors import EXIT_ARTIFACT_WRITE, EXIT_LEDGER_WRITE, MeetingIngestError
+from meeting_ingest.errors import EXIT_ARTIFACT_WRITE, EXIT_GENERAL_FAILURE, EXIT_LEDGER_WRITE, MeetingIngestError
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import canonical_json, mint_source_id
 from meeting_ingest.ledger import read_records
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, load_project
+from meeting_ingest.playbook_review import ReviewState, read_review_state
 from meeting_ingest.run_summary import RunSummary
 from meeting_ingest.schema import SUPPORTED_SIGNAL_SCHEMA_VERSIONS, SignalRecord
 from meeting_ingest.signals import read_signal_jsonl
@@ -96,26 +97,33 @@ def update(
     _, paths = load_project(start)
     active_clock = clock or SystemClock()
     with ProjectLock(lock_path(paths.cache), clock=active_clock):
-        return _update_locked(paths, clock=active_clock, suffix_factory=suffix_factory, trigger=trigger)
+        now = active_clock.now_utc()
+        suffix = suffix_factory()[:4]
+        run_id = f"derive-{now:%Y%m%d}-{format_timestamp(now)}-{suffix}"
+        try:
+            return _update_locked(paths, now=now, run_id=run_id, trigger=trigger)
+        except MeetingIngestError as exc:
+            if not _derivation_is_committed(paths, run_id):
+                _record_failed_derivation(paths, run_id=run_id, now=now, trigger=trigger, error=exc)
+            raise
 
 
 def _update_locked(
     paths: ProjectPaths,
     *,
-    clock: Clock,
-    suffix_factory: Callable[[], str],
+    now: datetime,
+    run_id: str,
     trigger: str,
 ) -> RunSummary:
-    now = clock.now_utc()
     recorded_at = format_iso_timestamp(now)
-    suffix = suffix_factory()[:4]
-    run_id = f"derive-{now:%Y%m%d}-{format_timestamp(now)}-{suffix}"
     derived_relative = _relative_to_meetings_root(paths, paths.derived)
     generation_relative = derived_relative / "generations" / run_id
     generation_path = paths.meetings_root / generation_relative
     ledger_path = paths.playbook_state / "derivation-ledger.jsonl"
 
     inputs = discover_inputs(paths)
+    review_state = read_review_state(paths.playbook_state / "overrides.jsonl")
+    previous_profiles = _load_current_profiles(paths)
     registry_path = paths.playbook_state / "stakeholders.toml"
     registry = read_stakeholder_registry(registry_path)
     invalid_registry = [issue for issue in registry.issues if issue.code == "identity_registry_invalid"]
@@ -152,6 +160,9 @@ def _update_locked(
     observations_by_person: dict[str, list[NormalizedObservation]] = defaultdict(list)
     people_by_id = {person.person_id: person for person in registry.people}
     for observation in inputs.observations:
+        reference = (observation.source_id, observation.signal.signal_id)
+        if reference in review_state.suppressed_signals:
+            continue
         raw_name = _raw_stakeholder_name(observation.signal)
         resolution = registry.resolve(raw_name)
         if resolution.status == "reviewed" and resolution.person_id is not None:
@@ -169,6 +180,8 @@ def _update_locked(
             generated_at=recorded_at,
             input_fingerprint=inputs.input_fingerprint,
             today=now.date(),
+            review_state=review_state,
+            previous_profile=previous_profiles.get(person_id),
         )
         stakeholder_relative = generation_relative / "stakeholders" / person_id
         profile_relative = stakeholder_relative / "profile.json"
@@ -308,6 +321,207 @@ def discover_inputs(paths: ProjectPaths) -> DerivationInputs:
     )
 
 
+def show(start: Path, selector: str, *, output_format: str = "markdown") -> RunSummary:
+    if output_format not in {"markdown", "json"}:
+        raise ValueError(f"Unsupported playbook output format: {output_format}")
+    _, paths = load_project(start)
+    person_id, record = _resolve_current_profile(paths, selector)
+    relative = record["briefing_path"] if output_format == "markdown" else record["profile_path"]
+    path = _safe_artifact_path(paths, relative)
+    try:
+        content: object = path.read_text(encoding="utf-8")
+        if output_format == "json":
+            content = json.loads(str(content))
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        raise _playbook_read_error(f"Current playbook artifact could not be read: {relative}") from exc
+    if output_format == "json" and (
+        not isinstance(content, dict) or content.get("profile_kind") != "stakeholder_briefing"
+    ):
+        raise _playbook_read_error("Current stakeholder profile is invalid.")
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        details={
+            "command": "playbook_show",
+            "person_id": person_id,
+            "format": output_format,
+            "content": content,
+        },
+    )
+
+
+def brief(start: Path, selector: str, *, output_format: str = "markdown") -> RunSummary:
+    if output_format not in {"markdown", "json"}:
+        raise ValueError(f"Unsupported playbook output format: {output_format}")
+    _, paths = load_project(start)
+    person_id, record = _resolve_current_profile(paths, selector)
+    try:
+        profile = json.loads(_safe_artifact_path(paths, record["profile_path"]).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        raise _playbook_read_error("Current stakeholder profile could not be read.") from exc
+    if not isinstance(profile, dict) or profile.get("profile_kind") != "stakeholder_briefing":
+        raise _playbook_read_error("Current stakeholder profile is invalid.")
+    projection = _brief_projection(profile)
+    content: object = projection if output_format == "json" else _render_brief_projection(projection)
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        details={
+            "command": "playbook_brief",
+            "person_id": person_id,
+            "format": output_format,
+            "content": content,
+        },
+    )
+
+
+def repair_index(start: Path, *, clock: Clock | None = None) -> RunSummary:
+    _, paths = load_project(start)
+    active_clock = clock or SystemClock()
+    with ProjectLock(lock_path(paths.cache), clock=active_clock):
+        records, _ = read_derivation_records(paths.playbook_state / "derivation-ledger.jsonl")
+        committed = next((record for record in reversed(records) if record.get("status") == "success"), None)
+        if committed is None:
+            raise _playbook_read_error("No successfully committed derivation exists for index repair.")
+        generation_relative = Path(str(committed["generation_path"]))
+        generation_path = _safe_artifact_path(paths, generation_relative.as_posix())
+        if not generation_path.is_dir():
+            raise _playbook_read_error("Latest committed derivation generation is missing.")
+        profiles: dict[str, dict[str, str]] = {}
+        for record in committed["profiles"]:
+            if not isinstance(record, dict) or not all(
+                isinstance(record.get(key), str) for key in ("person_id", "profile_path", "briefing_path")
+            ):
+                raise _playbook_read_error("Latest derivation ledger profile manifest is invalid.")
+            profile_path = _safe_artifact_path(paths, record["profile_path"])
+            briefing_path = _safe_artifact_path(paths, record["briefing_path"])
+            _validate_generation_profile(profile_path, briefing_path)
+            profiles[record["person_id"]] = {
+                "profile_path": record["profile_path"],
+                "briefing_path": record["briefing_path"],
+            }
+        ruleset = committed.get("ruleset", {})
+        index = {
+            "schema_version": DERIVATION_SCHEMA_VERSION,
+            "status": "current",
+            "derivation_run_id": committed["derivation_run_id"],
+            "generation_path": committed["generation_path"],
+            "input_fingerprint": committed["input_fingerprint"],
+            "registry_fingerprint": committed["registry_fingerprint"],
+            "overrides_fingerprint": committed["overrides_fingerprint"],
+            "ruleset_id": ruleset.get("id"),
+            "ruleset_fingerprint": ruleset.get("fingerprint"),
+            "profiles": profiles,
+            "identity_candidates_path": (generation_relative / "identity-candidates.json").as_posix(),
+            "unresolved_identity_count": committed.get("unresolved_identity_count", 0),
+            "committed_at": committed["recorded_at"],
+        }
+        index_relative = _relative_to_meetings_root(paths, paths.derived) / "playbook-index.json"
+        _write_json_atomic(paths.meetings_root / index_relative, index)
+    return RunSummary(
+        status="success",
+        exit_code=0,
+        artifacts=[{"kind": "playbook_index", "status": "ready", "path": index_relative.as_posix()}],
+        details={
+            "command": "playbook_repair_index",
+            "derivation_run_id": committed["derivation_run_id"],
+            "changed": True,
+        },
+    )
+
+
+def _resolve_current_profile(paths: ProjectPaths, selector: str) -> tuple[str, dict[str, str]]:
+    index_path = paths.derived / "playbook-index.json"
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        raise _playbook_read_error("No readable current playbook index exists; run `playbook update`.") from exc
+    if not isinstance(index, dict):
+        raise _playbook_read_error("Current playbook index is invalid.")
+    profiles = index.get("profiles")
+    if not isinstance(profiles, dict):
+        raise _playbook_read_error("Current playbook index is invalid.")
+    person_id = selector if selector in profiles else None
+    if person_id is None:
+        resolution = read_stakeholder_registry(paths.playbook_state / "stakeholders.toml").resolve(selector)
+        person_id = resolution.person_id if resolution.status == "reviewed" else None
+    record = profiles.get(person_id) if person_id is not None else None
+    if not isinstance(record, dict) or not all(
+        isinstance(record.get(key), str) for key in ("profile_path", "briefing_path")
+    ):
+        raise _playbook_read_error(f"No current stakeholder profile matches {selector!r}.")
+    return person_id, record
+
+
+def _brief_projection(profile: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "tracked_asks",
+        "tracked_commitments_by_stakeholder",
+        "tracked_commitments_to_stakeholder",
+        "priorities",
+        "concerns_and_risks",
+        "communication_preferences",
+        "communication_behaviors",
+        "interaction_responses",
+        "recent_changes",
+        "stale_items",
+    )
+    return {
+        "schema_version": "1.0",
+        "profile_kind": "stakeholder_brief",
+        "stakeholder": profile["stakeholder"],
+        "coverage": profile["coverage"],
+        **{key: profile.get(key, []) for key in keys},
+    }
+
+
+def _render_brief_projection(projection: dict[str, Any]) -> str:
+    stakeholder = projection["stakeholder"]
+    coverage = projection["coverage"]
+    sections = (
+        ("Tracked Asks", "tracked_asks"),
+        ("Commitments By The Stakeholder", "tracked_commitments_by_stakeholder"),
+        ("Commitments To The Stakeholder", "tracked_commitments_to_stakeholder"),
+        ("Current Priorities", "priorities"),
+        ("Concerns And Risks", "concerns_and_risks"),
+        ("Explicit Communication Preferences", "communication_preferences"),
+        ("Observed Communication Behaviors", "communication_behaviors"),
+        ("Interaction Responses", "interaction_responses"),
+    )
+    lines = [
+        f"# Stakeholder Brief: {stakeholder['display_name']}",
+        "",
+        f"Evidence coverage: {coverage['source_count']} source(s), "
+        f"{coverage['first_observed_at'] or 'unknown'} to {coverage['last_observed_at'] or 'unknown'}.",
+    ]
+    for heading, key in sections:
+        lines.extend(["", f"## {heading}", ""])
+        entries = [entry for entry in projection[key] if entry.get("review_state") != "rejected"]
+        lines.extend(_render_entries(entries))
+    if projection["stale_items"]:
+        lines.extend(["", "## Freshness Warnings", ""])
+        lines.extend(f"- `{entry_id}` requires freshness review." for entry_id in projection["stale_items"])
+    return "\n".join(lines) + "\n"
+
+
+def _playbook_read_error(message: str) -> MeetingIngestError:
+    return MeetingIngestError(
+        phase="playbook_read",
+        code="playbook_not_available",
+        message=message,
+        exit_code=EXIT_GENERAL_FAILURE,
+        recoverable=True,
+    )
+
+
+def _safe_artifact_path(paths: ProjectPaths, relative_path: str) -> Path:
+    candidate = (paths.meetings_root / relative_path).resolve()
+    root = paths.meetings_root.resolve()
+    if candidate != root and root not in candidate.parents:
+        raise _playbook_read_error("Playbook artifact path escapes the meetings root.")
+    return candidate
+
+
 def _normalize_observation(
     signal: SignalRecord, source_hash_by_meeting: dict[str, str]
 ) -> NormalizedObservation | None:
@@ -338,6 +552,8 @@ def _build_profile(
     generated_at: str,
     input_fingerprint: str,
     today: date,
+    review_state: ReviewState,
+    previous_profile: dict[str, Any] | None,
 ) -> dict[str, Any]:
     observed_dates = [value for item in observations if (value := _date_part(item.occurred_at))]
     source_kinds = Counter(item.source_kind for item in observations)
@@ -367,30 +583,50 @@ def _build_profile(
         "unresolved_observations": [],
         "stale_items": [],
     }
-    for observation in observations:
-        signal = observation.signal
+    grouped = _group_observations(observations)
+    for group in grouped:
+        signal = group[0].signal
         category, entry_kind = _CATEGORY_BY_SIGNAL[signal.signal_type]
-        entry = _entry_from_observation(person.person_id, observation, entry_kind=entry_kind, today=today)
-        if signal.inference_level == "weak_inference" or signal.confidence == "low":
+        entry = _entry_from_observations(person.person_id, group, entry_kind=entry_kind, today=today)
+        entry["review_state"] = review_state.entry_review_states.get(entry["entry_id"], "unreviewed")
+        if entry["entry_id"] in review_state.resolutions and signal.signal_type in {"explicit_ask", "commitment"}:
+            entry.update(review_state.resolutions[entry["entry_id"]])
+        if any(item.signal.inference_level == "weak_inference" for item in group) or entry["confidence"] == "low":
             profile["unresolved_observations"].append(entry)
         else:
             profile[category].append(entry)
         if entry["freshness_state"] != "current":
             profile["stale_items"].append(entry["entry_id"])
+    profile["recent_changes"] = _recent_changes(profile, previous_profile)
     return profile
 
 
-def _entry_from_observation(
-    person_id: str, observation: NormalizedObservation, *, entry_kind: str, today: date
+def _entry_from_observations(
+    person_id: str, observations: list[NormalizedObservation], *, entry_kind: str, today: date
 ) -> dict[str, Any]:
+    observation = observations[0]
     signal = observation.signal
-    reference = {"source_id": observation.source_id, "signal_id": signal.signal_id}
+    references = [
+        {"source_id": item.source_id, "signal_id": item.signal.signal_id}
+        for item in observations
+    ]
+    reference = references[0]
     anchor = hashlib.sha256(
         canonical_json({"person_id": person_id, "entry_kind": entry_kind, **reference}).encode("utf-8")
     ).hexdigest()[:12]
-    occurred = _date_part(observation.occurred_at)
-    age_days = (today - date.fromisoformat(occurred)).days if occurred else None
-    freshness = _freshness_state(signal.signal_type, age_days)
+    observed_dates = [value for item in observations if (value := _date_part(item.occurred_at))]
+    first_observed = min(observed_dates) if observed_dates else None
+    last_observed = max(observed_dates) if observed_dates else None
+    age_days = (today - date.fromisoformat(first_observed)).days if first_observed else None
+    freshness_age = (today - date.fromisoformat(last_observed)).days if last_observed else None
+    freshness = _freshness_state(signal.signal_type, freshness_age)
+    source_count = len({item.source_id for item in observations})
+    confidence = min((item.signal.confidence for item in observations), key=_confidence_rank)
+    recurrence = (
+        "recurring"
+        if source_count >= RULESET_VALUES["min_recurrent_source_events"]
+        else "one_off"
+    )
     entry: dict[str, Any] = {
         "entry_id": f"entry-{person_id}-{entry_kind}-{anchor}",
         "entry_kind": entry_kind,
@@ -400,13 +636,17 @@ def _entry_from_observation(
             "topics": sorted(signal.topics),
             "channel": signal.source.channel if signal.source is not None else None,
         },
-        "confidence": signal.confidence,
-        "confidence_rationale": f"One {signal.inference_level.replace('_', ' ')} observation from one source.",
-        "supporting_observations": [reference],
+        "confidence": confidence,
+        "confidence_rationale": (
+            f"{len(observations)} compatible observation(s) from {source_count} distinct source(s); "
+            "confidence does not exceed the lowest-confidence observation."
+        ),
+        "supporting_observations": references,
         "contradicting_observations": [],
-        "distinct_source_count": 1,
-        "first_observed_at": occurred,
-        "last_observed_at": occurred,
+        "distinct_source_count": source_count,
+        "first_observed_at": first_observed,
+        "last_observed_at": last_observed,
+        "recurrence": recurrence,
         "lifecycle_state": "active",
         "review_state": "unreviewed",
         "freshness_state": freshness,
@@ -415,14 +655,96 @@ def _entry_from_observation(
         entry.update(
             {
                 "originating_observation": reference,
-                "observed_at": occurred,
+                "observed_at": first_observed,
                 "age_days": age_days,
-                "last_lifecycle_evidence_at": occurred,
+                "last_lifecycle_evidence_at": last_observed,
                 "resolution_state": "unknown",
                 "resolution_source": None,
             }
         )
     return entry
+
+
+def _group_observations(observations: list[NormalizedObservation]) -> list[list[NormalizedObservation]]:
+    groups: dict[tuple[object, ...], list[NormalizedObservation]] = defaultdict(list)
+    for observation in observations:
+        signal = observation.signal
+        if signal.signal_type in {"explicit_ask", "commitment", "decision_rationale"}:
+            key: tuple[object, ...] = (signal.signal_type, observation.source_id, signal.signal_id)
+        else:
+            key = (
+                signal.signal_type,
+                " ".join(signal.summary.split()).casefold(),
+                tuple(sorted(signal.topics)),
+                tuple(sorted(signal.project_refs)),
+                signal.source.channel if signal.source is not None else None,
+            )
+        groups[key].append(observation)
+    return [sorted(group, key=_observation_sort_key) for _, group in sorted(groups.items(), key=lambda item: repr(item[0]))]
+
+
+def _confidence_rank(value: str) -> int:
+    return {"low": 0, "medium": 1, "high": 2}[value]
+
+
+def _recent_changes(profile: dict[str, Any], previous_profile: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if previous_profile is None:
+        return []
+    previous_entries = {entry["entry_id"]: entry for entry in _all_profile_entries(previous_profile)}
+    changes: list[dict[str, Any]] = []
+    for entry in _all_profile_entries(profile):
+        prior = previous_entries.get(entry["entry_id"])
+        if prior is None:
+            changes.append({"entry_id": entry["entry_id"], "change_kinds": ["first_observed"]})
+            continue
+        item: dict[str, Any] = {"entry_id": entry["entry_id"], "change_kinds": []}
+        for field, kind in (
+            ("lifecycle_state", "lifecycle_state_changed"),
+            ("review_state", "review_state_changed"),
+            ("freshness_state", "freshness_state_changed"),
+        ):
+            if prior.get(field) != entry.get(field):
+                item["change_kinds"].append(kind)
+                item[field] = {"prior": prior.get(field), "current": entry.get(field)}
+        if item["change_kinds"]:
+            changes.append(item)
+    return changes
+
+
+def _all_profile_entries(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for key in (*_PROFILE_LISTS, "unresolved_observations"):
+        value = profile.get(key, [])
+        if isinstance(value, list):
+            entries.extend(item for item in value if isinstance(item, dict) and "entry_id" in item)
+    return entries
+
+
+def _load_current_profiles(paths: ProjectPaths) -> dict[str, dict[str, Any]]:
+    index_path = paths.derived / "playbook-index.json"
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(index, dict):
+        return {}
+    profiles = index.get("profiles")
+    if not isinstance(profiles, dict):
+        return {}
+    loaded: dict[str, dict[str, Any]] = {}
+    for person_id, record in profiles.items():
+        if not isinstance(person_id, str) or not isinstance(record, dict):
+            continue
+        relative_path = record.get("profile_path")
+        if not isinstance(relative_path, str):
+            continue
+        try:
+            payload = json.loads(_safe_artifact_path(paths, relative_path).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError, MeetingIngestError):
+            continue
+        if isinstance(payload, dict):
+            loaded[person_id] = payload
+    return loaded
 
 
 def _freshness_state(signal_type: str, age_days: int | None) -> str:
@@ -460,11 +782,16 @@ def _render_briefing(profile: dict[str, Any]) -> str:
     ]
     for heading, key in headings:
         lines.extend(["", f"## {heading}", ""])
-        entries = profile[key]
+        entries = [entry for entry in profile[key] if entry.get("review_state") != "rejected"]
         lines.extend(_render_entries(entries))
     lines.extend(["", "## Communication Cues", "", "Not available in Briefing V1."])
     lines.extend(["", "## Emerging And Established Patterns", "", "Not available in Briefing V1."])
-    lines.extend(["", "## Recent Changes", "", "None identified."])
+    lines.extend(["", "## Recent Changes", ""])
+    if profile["recent_changes"]:
+        for change in profile["recent_changes"]:
+            lines.append(f"- `{change['entry_id']}`: {', '.join(change['change_kinds'])}")
+    else:
+        lines.append("None identified.")
     lines.extend(["", "## Contradictions And Cautions", "", "None identified."])
     lines.extend(["", "## Unresolved Or Low-Confidence Observations", ""])
     lines.extend(_render_entries(profile["unresolved_observations"]))
@@ -573,6 +900,106 @@ def _append_derivation_record(path: Path, record: dict[str, Any]) -> None:
             recoverable=True,
             details={"path": str(path)},
         ) from exc
+
+
+def read_derivation_records(path: Path) -> tuple[list[dict[str, Any]], list[tuple[int, str]]]:
+    records: list[dict[str, Any]] = []
+    issues: list[tuple[int, str]] = []
+    if not path.exists():
+        return records, issues
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        return records, [(0, f"Derivation ledger could not be read: {exc}")]
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            issues.append((line_number, f"Derivation ledger line is not valid JSON: {exc.msg}"))
+            continue
+        if not _valid_derivation_record(record):
+            issues.append((line_number, "Derivation ledger line is missing required contract fields."))
+            continue
+        records.append(record)
+    return records, issues
+
+
+def _valid_derivation_record(value: object) -> bool:
+    if not isinstance(value, dict) or value.get("schema_version") != DERIVATION_SCHEMA_VERSION:
+        return False
+    if value.get("event") not in {"briefing_derivation_completed", "briefing_derivation_failed"}:
+        return False
+    if value.get("status") not in {"success", "failed"}:
+        return False
+    common_fields_valid = all(isinstance(value.get(key), expected) for key, expected in (
+        ("derivation_run_id", str),
+        ("input_fingerprint", str),
+        ("registry_fingerprint", str),
+        ("overrides_fingerprint", str),
+        ("ruleset", dict),
+        ("profiles", list),
+        ("warnings", list),
+        ("errors", list),
+        ("recorded_at", str),
+    ))
+    if not common_fields_valid:
+        return False
+    ruleset = value["ruleset"]
+    if not all(isinstance(ruleset.get(key), expected) for key, expected in (
+        ("id", str),
+        ("fingerprint", str),
+        ("values", dict),
+    )):
+        return False
+    if value["status"] == "failed":
+        return value.get("generation_path") is None and value["event"] == "briefing_derivation_failed"
+    if value["event"] != "briefing_derivation_completed" or not isinstance(value.get("generation_path"), str):
+        return False
+    return all(
+        isinstance(profile, dict)
+        and all(isinstance(profile.get(key), str) for key in ("person_id", "profile_path", "briefing_path"))
+        for profile in value["profiles"]
+    )
+
+
+def _derivation_is_committed(paths: ProjectPaths, run_id: str) -> bool:
+    records, _ = read_derivation_records(paths.playbook_state / "derivation-ledger.jsonl")
+    return any(record["derivation_run_id"] == run_id and record["status"] == "success" for record in records)
+
+
+def _record_failed_derivation(
+    paths: ProjectPaths, *, run_id: str, now: datetime, trigger: str, error: MeetingIngestError
+) -> None:
+    try:
+        inputs = discover_inputs(paths)
+        record = {
+            "schema_version": DERIVATION_SCHEMA_VERSION,
+            "event": "briefing_derivation_failed",
+            "derivation_run_id": run_id,
+            "status": "failed",
+            "trigger": trigger,
+            "input_fingerprint": inputs.input_fingerprint,
+            "registry_fingerprint": inputs.registry_fingerprint,
+            "overrides_fingerprint": inputs.overrides_fingerprint,
+            "ruleset": {
+                "id": RULESET_ID,
+                "fingerprint": inputs.ruleset_fingerprint,
+                "values": RULESET_VALUES,
+            },
+            "provider": "none",
+            "generation_path": None,
+            "profiles": [],
+            "unresolved_identity_count": 0,
+            "warnings": list(inputs.warnings),
+            "errors": [error.to_error_block()],
+            "recorded_at": format_iso_timestamp(now),
+        }
+        _append_derivation_record(paths.playbook_state / "derivation-ledger.jsonl", record)
+    except Exception:
+        # Preserve the original derivation failure when the failure audit cannot be written.
+        return
 
 
 def _validate_generation_profile(profile_path: Path, briefing_path: Path) -> None:

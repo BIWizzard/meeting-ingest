@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Pushed prior Layer 5A commits and implemented the first Layer 5B foundation. Added deterministic eligible-input fingerprints, schema 1.0/1.1 source normalization, playbook update, immutable generations, canonical profile/briefing artifacts, successful derivation ledger commits, atomic current index advancement, configured derived-path support, roadmap updates, and tests. Commit d996992 is pushed; 187 tests pass and main matches origin/main.",
+  "status_summary": "Completed the core Layer 5B continuation: append-only review overlays and mutations, exact deterministic aggregation with recurrence and confidence ceilings, recent-change comparison, failed derivation records, live playbook freshness, doctor diagnostics, safe index repair, alias-aware show, and concise brief. Hardened indexed path containment and malformed ledger/profile handling. CodeRabbit findings on Unicode errors, ledger validation, and aggregate confidence routing were fixed. Verification: 204 tests pass.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
@@ -20,16 +20,16 @@
     "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, fable-5 workflow review, and HTV artifacts?"
   ],
   "next_actions": [
-    "Complete aggregation, recurrence, recent-change and contradiction logic; add overrides, failed derivation records, status/doctor freshness, index repair, playbook show, and concise brief."
+    "Finish Layer 5B hardening: detailed evidence index, configurable thresholds, suppression re-emergence and nearest-successor diagnostics, explicit uncommitted-generation cleanup, and broader corruption recovery fixtures."
   ],
   "assumptions": [],
-  "continuation_hint": "Pushed prior Layer 5A commits and implemented the first Layer 5B foundation. Added deterministic eligible-input fingerprints, schema 1.0/1.1 source normalization, playbook update, immutable generations, canonical profile/briefing artifacts, successful derivation ledger commits, atomic current index advancement, configured derived-path support, roadmap updates, and tests. Commit d996992 is pushed; 187 tests pass and main matches origin/main.",
+  "continuation_hint": "Next: Finish Layer 5B hardening: detailed evidence index, configurable thresholds, suppression re-emergence and nearest-successor diagnostics, explicit uncommitted-generation cleanup, and broader corruption recovery fixtures.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-19T16:18:41.973Z",
+  "last_saved_at": "2026-07-19T16:55:01.635Z",
   "last_wrapped_at": "2026-07-19T16:19:20.420Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-19T16:19:20.420Z"
+  "updated_at": "2026-07-19T16:55:01.635Z"
 }
