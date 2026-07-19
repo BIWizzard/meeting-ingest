@@ -5,11 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Execute the response-contract hardening block before Layer 5A: embed the full provider-response contract in phase-1 requests and skill docs; aggregate validation errors and add a validate-response pre-flight; add the low-date-confidence escalation step to the skill protocol.",
-    "Begin Layer 5A: schema 1.1 and reviewed identity implementation.",
-    "Run repair-date for the three flagged local artifacts and confirm mtg-20260718-aa2fd13f in the HTV repo once occurrence dates are confirmed."
+    "Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Execute the response-contract hardening block before Layer 5A: embed the full provider-response contract in phase-1 requests and skill docs; aggregate validation errors and add a validate-response pre-flight; add the low-date-confidence escalation step to the skill protocol.",
-  "updated_at": "2026-07-18T22:42:21.805Z"
+  "resume_from": "Resume with: Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity.",
+  "updated_at": "2026-07-19T05:27:59.024Z"
 }

@@ -5,11 +5,11 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Shipped Layer 1 effective-date reliability end-to-end: planned with a TDD task plan, executed via Codex implementer subagents with Claude reviewers per task, final whole-branch review ready-to-merge, merged to main and pushed (151 tests green). Delivered: frozen occurrence/override/repair contract in artifact-contract.md, deterministic occurrence candidate selection with sanitized Teams VTT fixtures, --meeting-date override with mtime/conflict warnings, repair-date command with date_repaired ledger snapshots, doctor low_confidence_meeting_date check, and reconciled status docs. Also executed the iQ Context integration brief (tracked_artifacts globs, post-ingest capture protocol in AGENTS.md and both installed skills, doctor clean), automated global uv-tool refresh via versioned git hooks on main, and reviewed the first external consumer UAT run (HTV repo) - engine contract held; response-envelope friction captured as cap_20260718T220148Z_a28fa2b4 and queued as the next work block.",
+  "status_summary": "Applied Claude review findings to response-contract hardening. Embedded communication-signal schema now explicitly prohibits engine-enriched fields while retaining forward-compatible additional properties. validate-response now maps missing/unreadable source paths to source_read/source_extraction_failed exit 4 instead of unexpected_error. Updated contract/workflow/skills for the source-read branch and synced installed skill copies. Verification: 157 tests passed, py_compile passed, diff check clean.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "docs/plans/2026-07-18-layer1-effective-date-reliability.md"
+    "src/meeting_ingest/provider_contract.py"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -20,18 +20,16 @@
     "Should doctor distinguish advisory issues from failures so low_confidence_meeting_date does not force exit 1 (final-review finding)?"
   ],
   "next_actions": [
-    "Execute the response-contract hardening block before Layer 5A: embed the full provider-response contract in phase-1 requests and skill docs; aggregate validation errors and add a validate-response pre-flight; add the low-date-confidence escalation step to the skill protocol.",
-    "Begin Layer 5A: schema 1.1 and reviewed identity implementation.",
-    "Run repair-date for the three flagged local artifacts and confirm mtg-20260718-aa2fd13f in the HTV repo once occurrence dates are confirmed."
+    "Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity."
   ],
   "assumptions": [],
-  "continuation_hint": "Shipped Layer 1 effective-date reliability end-to-end: planned with a TDD task plan, executed via Codex implementer subagents with Claude reviewers per task, final whole-branch review ready-to-merge, merged to main and pushed (151 tests green). Delivered: frozen occurrence/override/repair contract in artifact-contract.md, deterministic occurrence candidate selection with sanitized Teams VTT fixtures, --meeting-date override with mtime/conflict warnings, repair-date command with date_repaired ledger snapshots, doctor low_confidence_meeting_date check, and reconciled status docs. Also executed the iQ Context integration brief (tracked_artifacts globs, post-ingest capture protocol in AGENTS.md and both installed skills, doctor clean), automated global uv-tool refresh via versioned git hooks on main, and reviewed the first external consumer UAT run (HTV repo) - engine contract held; response-envelope friction captured as cap_20260718T220148Z_a28fa2b4 and queued as the next work block.",
+  "continuation_hint": "Next: Working tree is ready for a final review-before-commit decision. Then commit the response-contract hardening block and begin Layer 5A schema 1.1/reviewed identity.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-18T22:02:00.927Z",
+  "last_saved_at": "2026-07-19T05:27:59.024Z",
   "last_wrapped_at": "2026-07-18T22:42:21.805Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-18T22:42:21.805Z"
+  "updated_at": "2026-07-19T05:27:59.024Z"
 }
