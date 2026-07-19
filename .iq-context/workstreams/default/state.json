@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Started Layer 5B with deterministic eligible-input fingerprinting, schema 1.0/1.1 source normalization, explicit playbook update, immutable generations, canonical profile and briefing artifacts, append-only successful derivation commits, and an atomic current index. Added commit-order, fingerprint stability, legacy mapping, failure-boundary, configured-path, and CLI tests; 187 tests pass.",
+  "status_summary": "Pushed prior Layer 5A commits and implemented the first Layer 5B foundation. Added deterministic eligible-input fingerprints, schema 1.0/1.1 source normalization, playbook update, immutable generations, canonical profile/briefing artifacts, successful derivation ledger commits, atomic current index advancement, configured derived-path support, roadmap updates, and tests. Commit d996992 is pushed; 187 tests pass and main matches origin/main.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
@@ -20,16 +20,16 @@
     "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, fable-5 workflow review, and HTV artifacts?"
   ],
   "next_actions": [
-    "Complete Layer 5B aggregation and review overlays; add failure ledger records, status/doctor freshness diagnostics, index repair, playbook show, and concise brief."
+    "Complete aggregation, recurrence, recent-change and contradiction logic; add overrides, failed derivation records, status/doctor freshness, index repair, playbook show, and concise brief."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Complete Layer 5B aggregation and review overlays; add failure ledger records, status/doctor freshness diagnostics, index repair, playbook show, and concise brief.",
+  "continuation_hint": "Pushed prior Layer 5A commits and implemented the first Layer 5B foundation. Added deterministic eligible-input fingerprints, schema 1.0/1.1 source normalization, playbook update, immutable generations, canonical profile/briefing artifacts, successful derivation ledger commits, atomic current index advancement, configured derived-path support, roadmap updates, and tests. Commit d996992 is pushed; 187 tests pass and main matches origin/main.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
   "last_saved_at": "2026-07-19T16:18:41.973Z",
-  "last_wrapped_at": "2026-07-19T16:05:46.515Z",
+  "last_wrapped_at": "2026-07-19T16:19:20.420Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-19T16:18:41.973Z"
+  "updated_at": "2026-07-19T16:19:20.420Z"
 }
