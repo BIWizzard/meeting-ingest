@@ -12,6 +12,15 @@ def test_cli_parses_meeting_date_for_ingest_and_provider_request() -> None:
     assert request_args.meeting_date == "2026-07-13"
 
 
+def test_cli_parses_playbook_update() -> None:
+    args = build_parser().parse_args(["playbook", "update", "--root", "/tmp/project", "--json"])
+
+    assert args.command == "playbook"
+    assert args.playbook_command == "update"
+    assert args.root == "/tmp/project"
+    assert args.json is True
+
+
 def test_init_json_outputs_run_summary(tmp_path: Path, capsys) -> None:
     exit_code = main(["init", "--root", str(tmp_path), "--json"])
 

@@ -314,7 +314,7 @@ Remaining:
 
 ### Layer 5: Stakeholder Briefing And Playbook Guidance
 
-Status: Layer 5A foundation complete; Layer 5B and Layer 5C not started.
+Status: Layer 5A foundation complete; Layer 5B implementation started; Layer 5C not started.
 
 Done:
 
@@ -344,14 +344,20 @@ Remaining integration:
 
 #### Layer 5B: Stakeholder Briefing V1
 
+Implemented foundation:
+
+- deterministic eligible-input discovery and fingerprinting across signals, reviewed identity, overrides, rules, schemas, and renderer version
+- schema 1.0 source-ledger identity normalization plus schema 1.1 generalized source identity
+- explicit `playbook update` full rebuild command
+- immutable generation directories with identity candidates, canonical profile JSON, and deterministic briefing Markdown
+- append-only successful derivation records followed by an atomic current index update
+
 Remaining:
 
-- implement deterministic full rebuilds
-- materialize canonical profile JSON and human/agent-readable briefing Markdown
-- implement immutable generations, derivation ledger, current index, and input fingerprints
-- implement tracked asks and commitments, priorities, concerns, rationales, preferences, behaviors, interaction responses, freshness, and contradiction candidates
+- complete recurrence rollups, cross-observation aggregation, recent-change comparison, contradiction candidates, and evidence-index detail
+- implement derivation failure records, index repair, and generation cleanup diagnostics
 - implement reject, resolve, suppress-signal, and identity-correction controls
-- implement `playbook update`, `show`, and briefing surfaces plus status/doctor visibility
+- implement `playbook show` and concise briefing surfaces plus status/doctor visibility
 
 #### Layer 5C: Playbook Guidance V1.1
 

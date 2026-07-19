@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation."
+    "Complete Layer 5B aggregation and review overlays; add failure ledger records, status/doctor freshness diagnostics, index repair, playbook show, and concise brief."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation.",
-  "updated_at": "2026-07-19T16:04:59.388Z"
+  "resume_from": "Resume with: Complete Layer 5B aggregation and review overlays; add failure ledger records, status/doctor freshness diagnostics, index repair, playbook show, and concise brief.",
+  "updated_at": "2026-07-19T16:18:41.973Z"
 }

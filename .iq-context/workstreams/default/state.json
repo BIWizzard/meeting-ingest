@@ -5,20 +5,11 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Committed the reviewed Layer 5A generalized signal identity foundation as 53de840; the post-commit hook refreshed the global meeting-ingest tool and only durable iQ Context files remain uncommitted.",
+  "status_summary": "Started Layer 5B with deterministic eligible-input fingerprinting, schema 1.0/1.1 source normalization, explicit playbook update, immutable generations, canonical profile and briefing artifacts, append-only successful derivation commits, and an atomic current index. Added commit-order, fingerprint stability, legacy mapping, failure-boundary, configured-path, and CLI tests; 187 tests pass.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "src/meeting_ingest/schema.py",
-    "src/meeting_ingest/ids.py",
-    "src/meeting_ingest/pipeline.py",
-    "src/meeting_ingest/doctor.py",
-    "tests/test_signals.py",
-    "tests/test_pipeline_ingest.py",
-    "tests/test_repair_date.py",
-    "tests/test_doctor_status.py",
-    "docs/artifact-contract.md",
-    "docs/stakeholder-playbook-design.md"
+    "src/meeting_ingest/playbook.py"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -26,19 +17,19 @@
   "blockers": [],
   "open_questions": [
     "Should doctor distinguish advisory issues from failures so low_confidence_meeting_date does not force exit 1?",
-    "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, and fable-5 workflow review artifacts?"
+    "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, fable-5 workflow review, and HTV artifacts?"
   ],
   "next_actions": [
-    "Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation."
+    "Complete Layer 5B aggregation and review overlays; add failure ledger records, status/doctor freshness diagnostics, index repair, playbook show, and concise brief."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Begin Layer 5B deterministic full rebuild, immutable generations, derivation ledger, and current-index implementation.",
+  "continuation_hint": "Next: Complete Layer 5B aggregation and review overlays; add failure ledger records, status/doctor freshness diagnostics, index repair, playbook show, and concise brief.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-19T16:04:59.388Z",
-  "last_wrapped_at": "2026-07-19T06:11:35.228Z",
+  "last_saved_at": "2026-07-19T16:18:41.973Z",
+  "last_wrapped_at": "2026-07-19T16:05:46.515Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-19T16:04:59.388Z"
+  "updated_at": "2026-07-19T16:18:41.973Z"
 }

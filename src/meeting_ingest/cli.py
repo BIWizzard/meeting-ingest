@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import sys
 
-from meeting_ingest import pipeline
+from meeting_ingest import pipeline, playbook
 from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
 from meeting_ingest.session_inbox import process_session_inbox
@@ -71,6 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
     repair_date_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     repair_date_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
+    playbook_parser = subparsers.add_parser("playbook")
+    playbook_subparsers = playbook_parser.add_subparsers(dest="playbook_command", required=True)
+    playbook_update_parser = playbook_subparsers.add_parser("update")
+    playbook_update_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    playbook_update_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+
     for command in ("doctor", "status", "reconcile"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--root", default=".", help="Path used for project discovery.")
@@ -128,6 +134,8 @@ def run(args: argparse.Namespace) -> RunSummary:
         return pipeline.reconcile(Path(args.root))
     if args.command == "repair-date":
         return pipeline.repair_date(args.selector, date=args.date, start=Path(args.root))
+    if args.command == "playbook" and args.playbook_command == "update":
+        return playbook.update(Path(args.root))
     raise AssertionError(f"Unhandled command: {args.command}")
 
 

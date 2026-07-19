@@ -847,7 +847,7 @@ Status:
 
 - accepted durable design baseline exists in `docs/stakeholder-playbook-design.md`
 - schema 1.1 and Stakeholder Briefing V1 artifact-contract amendments passed focused review
-- Layer 5A provenance and reviewed-identity foundation is implemented; Layer 5B and Layer 5C have not started
+- Layer 5A provenance and reviewed-identity foundation is implemented; the initial Layer 5B immutable rebuild and commit foundation is implemented; Layer 5C has not started
 
 The accepted design replaces the former monolithic playbook milestone with three independently testable increments.
 
