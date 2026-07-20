@@ -2,6 +2,8 @@
 
 Use this prompt when asking Claude Code to review the current repository state. The reviewer is a read-only reviewer by default: it may inspect the working tree and report findings, but it must not modify files or update iQ Context state unless the human explicitly hands off writer ownership.
 
+This is the repository's only active external-review workflow. Do not invoke third-party review CLIs or wait for automated PR-review services; generate the prompt for the human to give Claude Code.
+
 When the next action is review before commit, the implementation agent should generate a ready-to-paste Claude Code review prompt for the human instead of making the human reconstruct the context manually.
 
 ## Prompt Generator
@@ -42,6 +44,7 @@ Context:
 - Treat AGENTS.md as the repository-specific review policy.
 - Review for correctness, regressions, missing tests, unsafe persistence behavior, CLI contract drift, and documentation mismatches.
 - Do not modify files unless explicitly asked. Report findings only.
+- Do not invoke third-party review tools or install review software.
 - Respect the single-writer rule: the implementation agent owns .iq-context state updates unless the human explicitly hands off writer ownership.
 
 Project-specific review focus:

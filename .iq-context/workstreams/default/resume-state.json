@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Run final review if desired, then commit the completed Layer 5B evidence-index and configurable-threshold changes."
+    "Run the generated Claude Code follow-up review prompt against the current working tree; if accepted, commit and push the diagnostics and review-workflow retirement changes."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Run final review if desired, then commit the completed Layer 5B evidence-index and configurable-threshold changes.",
-  "updated_at": "2026-07-19T22:14:46.400Z"
+  "resume_from": "Resume with: Run the generated Claude Code follow-up review prompt against the current working tree; if accepted, commit and push the diagnostics and review-workflow retirement changes.",
+  "updated_at": "2026-07-19T23:24:23.221Z"
 }

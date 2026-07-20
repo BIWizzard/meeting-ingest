@@ -5,14 +5,15 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Addressed Claude pre-commit review notes for Layer 5B hardening: collapsed provider-authored speaker/excerpt whitespace during evidence-index Markdown rendering, documented legacy timestamp locator fallback, and added regression coverage for configs without [playbook] plus multiline evidence rendering. Full suite: 211 passed; git diff check clean.",
+  "status_summary": "Addressed all Claude review findings for suppression re-emergence and nearest-successor diagnostics. Group-directed schema 1.1 signals now use normalized audience identity for suppression matching and remain excluded from person profiles; playbook doctor reuses one discovery result, only recovers snapshot-less suppressions, lazily loads only targeted orphan history, stops scans once targets resolve, and no longer swallows discovery exceptions. Added actor/type/source/locator negative cases, incompatible-successor cases, deterministic tie-break coverage, and audience-directed coverage. Focused tests: 26 passed; full suite: 222 passed; diff check clean. Review workflow remains human-mediated Claude Code prompts only.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
     "src/meeting_ingest/playbook.py",
-    "tests/test_playbook.py",
-    "tests/test_config_paths.py",
-    "docs/artifact-contract.md"
+    "src/meeting_ingest/playbook_review.py",
+    "src/meeting_ingest/playbook_status.py",
+    "tests/test_playbook_review.py",
+    "tests/test_playbook_status.py"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -23,16 +24,16 @@
     "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, fable-5 workflow review, and HTV artifacts?"
   ],
   "next_actions": [
-    "Run final review if desired, then commit the completed Layer 5B evidence-index and configurable-threshold changes."
+    "Run the generated Claude Code follow-up review prompt against the current working tree; if accepted, commit and push the diagnostics and review-workflow retirement changes."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Run final review if desired, then commit the completed Layer 5B evidence-index and configurable-threshold changes.",
+  "continuation_hint": "Next: Run the generated Claude Code follow-up review prompt against the current working tree; if accepted, commit and push the diagnostics and review-workflow retirement changes.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-19T22:14:46.400Z",
+  "last_saved_at": "2026-07-19T23:24:23.221Z",
   "last_wrapped_at": "2026-07-19T19:50:10.512Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-19T22:14:46.400Z"
+  "updated_at": "2026-07-19T23:24:23.221Z"
 }

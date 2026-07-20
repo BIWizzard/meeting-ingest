@@ -45,6 +45,8 @@ Use `save` for checkpoints, `capture` for useful facts or artifacts, `wrap` when
 
 Use [docs/claude-code-review-prompt.md](docs/claude-code-review-prompt.md) when asking Claude Code to review the working tree.
 
+The former CodeRabbit review and autofix workflow is retired. Do not invoke CodeRabbit, check its authentication, or wait for its PR feedback. At every review-before-commit checkpoint, generate a ready-to-paste Claude Code prompt for the human using the maintained prompt document.
+
 Claude Code review is read-only by default. It may inspect the current working tree and report findings, but it must not edit files, stage changes, commit changes, or update `.iq-context/` state unless the human explicitly hands off writer ownership.
 
 ## Source Control
