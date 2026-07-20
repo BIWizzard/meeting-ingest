@@ -59,6 +59,12 @@ def test_review_mutation_appends_valid_event_and_duplicate_is_no_op(tmp_path: Pa
     assert first.details["review_event_id"] == "review-20260719T170000Z-a1b2"
     assert second.status == "no_op"
     assert state.suppressed_signals == {(target["source_id"], target["signal_id"])}
+    assert state.suppressed_signal_matches[(target["source_id"], target["signal_id"])] == {
+        "signal_type": "explicit_ask",
+        "raw_actor": "g, kushali",
+        "locator_scheme": "timestamp",
+        "locator_value": "09:18",
+    }
     assert len(state.valid_events) == 1
 
 
@@ -70,6 +76,60 @@ def test_malformed_review_events_are_ignored_and_reported(tmp_path: Path) -> Non
 
     assert state.valid_events == []
     assert [issue.code for issue in state.issues] == ["review_event_malformed", "review_event_malformed"]
+
+
+def test_unsuppress_removes_signal_match_snapshot_from_folded_state(tmp_path: Path) -> None:
+    paths = _configured_project(tmp_path)
+    target = {"source_id": "src-a1b2c3d4e5f6", "signal_id": "sig-a1b2c3d4e5f6-91aa2c80b731"}
+    mutate_review(
+        tmp_path,
+        action="suppress_signal",
+        target=target,
+        reason="Bad extraction",
+        clock=FrozenClock(NOW),
+        suffix_factory=lambda: "1111aaaa",
+    )
+    mutate_review(
+        tmp_path,
+        action="unsuppress_signal",
+        target=target,
+        note="Extraction was valid",
+        clock=FrozenClock(NOW),
+        suffix_factory=lambda: "2222bbbb",
+    )
+
+    state = read_review_state(paths.playbook_state / "overrides.jsonl")
+
+    assert state.suppressed_signals == set()
+    assert state.suppressed_signal_matches == {}
+
+
+def test_group_directed_signal_uses_audience_for_suppression_match_without_person_profile(
+    tmp_path: Path,
+) -> None:
+    paths = _configured_project(tmp_path)
+    signal_path = paths.signals / "signal.jsonl"
+    signal = json.loads(signal_path.read_text(encoding="utf-8"))
+    signal["stakeholder_id"] = None
+    signal["stakeholder_name"] = "Revenue Team"
+    signal["stakeholder_name_raw"] = None
+    signal["audience_id"] = "group-revenue-team"
+    signal["audience_name"] = "Revenue Team"
+    signal_path.write_text(json.dumps(signal) + "\n", encoding="utf-8")
+
+    summary = update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "1111aaaa")
+    mutate_review(
+        tmp_path,
+        action="suppress_signal",
+        target={"source_id": signal["source"]["source_id"], "signal_id": signal["signal_id"]},
+        reason="Bad extraction",
+        clock=FrozenClock(NOW),
+        suffix_factory=lambda: "2222bbbb",
+    )
+    state = read_review_state(paths.playbook_state / "overrides.jsonl")
+
+    assert summary.details["profiles_written"] == 0
+    assert next(iter(state.suppressed_signal_matches.values()))["raw_actor"] == "revenue team"
 
 
 def test_review_mutation_validates_required_reason_note_and_resolution_state(tmp_path: Path) -> None:

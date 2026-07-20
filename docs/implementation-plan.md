@@ -911,10 +911,10 @@ Implemented:
 - implement append-only review controls for rejecting entries, resolving tracked items, suppressing bad observations, and correcting identity
 - add stale/missing/failed playbook state to `status` and `doctor`
 - enrich evidence-index detail and configurable threshold handling
+- add suppression re-emergence and nearest-successor orphan diagnostics
 
 Remaining hardening:
 
-- add suppression re-emergence and nearest-successor orphan diagnostics
 - add explicit uncommitted-generation cleanup and broader corruption recovery coverage
 - materialize mechanical contradiction candidates only after structured mutually exclusive source values exist
 

@@ -901,7 +901,9 @@ def _observation_sort_key(observation: NormalizedObservation) -> tuple[str, str,
 
 
 def _raw_stakeholder_name(signal: SignalRecord) -> str:
-    return signal.stakeholder_name_raw if signal.schema_version == "1.1" else signal.stakeholder_name
+    if signal.schema_version == "1.1":
+        return signal.stakeholder_name_raw or ""
+    return signal.stakeholder_name
 
 
 def _date_part(value: str | None) -> str | None:

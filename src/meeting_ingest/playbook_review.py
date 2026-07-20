@@ -10,9 +10,11 @@ from typing import Any, Callable
 
 from meeting_ingest.clock import Clock, SystemClock, default_suffix, format_iso_timestamp, format_timestamp
 from meeting_ingest.errors import EXIT_LEDGER_WRITE, MeetingIngestError
+from meeting_ingest.ids import normalize_identity_actor, normalize_identity_evidence
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, load_project
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.schema import SignalRecord
 
 
 REVIEW_SCHEMA_VERSION = "1.0"
@@ -39,6 +41,7 @@ class ReviewState:
     entry_review_states: dict[str, str] = field(default_factory=dict)
     resolutions: dict[str, dict[str, str]] = field(default_factory=dict)
     suppressed_signals: set[tuple[str, str]] = field(default_factory=set)
+    suppressed_signal_matches: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)
     valid_events: list[dict[str, Any]] = field(default_factory=list)
     issues: list[ReviewIssue] = field(default_factory=list)
 
@@ -136,6 +139,10 @@ def _mutate_review_locked(
         "actor": actor,
         "recorded_at": format_iso_timestamp(now),
     }
+    if action == "suppress_signal":
+        suppression_match = _current_suppression_match(paths, target)
+        if suppression_match is not None:
+            event["suppression_match"] = suppression_match
     _append_review_event(ledger_path, event)
     return RunSummary(
         status="success",
@@ -180,6 +187,9 @@ def _validate_event(value: object) -> str | None:
         )
     except ValueError as exc:
         return str(exc)
+    suppression_match = value.get("suppression_match")
+    if suppression_match is not None and not _valid_suppression_match(suppression_match):
+        return "Review event suppression_match is invalid."
     return None
 
 
@@ -218,9 +228,15 @@ def _fold_event(state: ReviewState, event: dict[str, Any]) -> None:
             "resolution_source": str(event["review_event_id"]),
         }
     elif action == "suppress_signal":
-        state.suppressed_signals.add((str(target["source_id"]), str(target["signal_id"])))
+        reference = (str(target["source_id"]), str(target["signal_id"]))
+        state.suppressed_signals.add(reference)
+        suppression_match = event.get("suppression_match")
+        if _valid_suppression_match(suppression_match):
+            state.suppressed_signal_matches[reference] = dict(suppression_match)
     elif action == "unsuppress_signal":
-        state.suppressed_signals.discard((str(target["source_id"]), str(target["signal_id"])))
+        reference = (str(target["source_id"]), str(target["signal_id"]))
+        state.suppressed_signals.discard(reference)
+        state.suppressed_signal_matches.pop(reference, None)
 
 
 def _is_no_op(state: ReviewState, action: str, target: dict[str, str]) -> bool:
@@ -235,6 +251,50 @@ def _is_no_op(state: ReviewState, action: str, target: dict[str, str]) -> bool:
     if action == "suppress_signal":
         return reference in state.suppressed_signals
     return reference not in state.suppressed_signals
+
+
+def suppression_match(signal: SignalRecord) -> dict[str, str]:
+    raw_actor = (
+        signal.stakeholder_name_raw or signal.audience_name or ""
+        if signal.schema_version == "1.1"
+        else signal.stakeholder_name
+    )
+    locator = signal.evidence.locator
+    if locator is not None:
+        locator_scheme = normalize_identity_actor(locator.scheme)
+        locator_value = normalize_identity_evidence(locator.value) if locator.value is not None else ""
+    elif signal.evidence.timestamp:
+        locator_scheme = "timestamp"
+        locator_value = normalize_identity_evidence(signal.evidence.timestamp)
+    else:
+        locator_scheme = "none"
+        locator_value = ""
+    return {
+        "signal_type": signal.signal_type,
+        "raw_actor": normalize_identity_actor(raw_actor),
+        "locator_scheme": locator_scheme,
+        "locator_value": locator_value,
+    }
+
+
+def _current_suppression_match(paths: ProjectPaths, target: dict[str, str]) -> dict[str, str] | None:
+    # Local import avoids a module cycle: playbook derivation imports review folding.
+    from meeting_ingest.playbook import discover_inputs
+
+    reference = (target["source_id"], target["signal_id"])
+    for observation in discover_inputs(paths).observations:
+        if (observation.source_id, observation.signal.signal_id) == reference:
+            return suppression_match(observation.signal)
+    return None
+
+
+def _valid_suppression_match(value: object) -> bool:
+    return isinstance(value, dict) and set(value) == {
+        "signal_type",
+        "raw_actor",
+        "locator_scheme",
+        "locator_value",
+    } and all(isinstance(item, str) for item in value.values())
 
 
 def _append_review_event(path: Path, event: dict[str, Any]) -> None:

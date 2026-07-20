@@ -1616,6 +1616,21 @@ Resolve target:
 {"source_id": "src-a1b2c3d4e5f6", "signal_id": "sig-a1b2c3d4e5f6-91aa2c80b731"}
 ```
 
+New `suppress_signal` events also store an engine-derived match snapshot alongside the target:
+
+```json
+{
+  "suppression_match": {
+    "signal_type": "communication_preference",
+    "raw_actor": "kushali g",
+    "locator_scheme": "timestamp",
+    "locator_value": "09:18"
+  }
+}
+```
+
+The snapshot uses the same Unicode, whitespace, and case normalization as observation identity. It is immutable review-event evidence used only to detect a regenerated observation with the same source ID, signal type, actor, and locator but a different signal ID; it does not suppress or transfer review state to the regenerated observation. For older suppression events without the snapshot, `doctor` reconstructs it from a retained historical profile when the evidence index and entry lineage contain the required fields.
+
 Rules:
 
 - Reject and suppress actions require `reason`.
@@ -1757,7 +1772,7 @@ Entry lineage:
 - Tracked asks, commitments, and single-observation facts use their originating observation as the anchor.
 - Deterministic multi-observation rollups use the earliest qualifying observation as the anchor. Earliest is determined by normalized `occurred.value`, falling back to legacy `effective_at`; known times sort before unknown times, and ties are broken by sorted `(source_id, signal_id)`.
 - Later supporting, resolution, or contradicting evidence does not change an anchored Briefing V1 entry ID.
-- If the anchor observation is suppressed, superseded, or otherwise no longer qualifies, the rebuilt entry receives a new ID. Rebuild and `doctor` report orphaned review events with a nearest-successor hint based on stakeholder, entry kind, compatible scope, and overlapping observations; review state never transfers silently.
+- If the anchor observation is suppressed, superseded, or otherwise no longer qualifies, the rebuilt entry receives a new ID. Rebuild and `doctor` report orphaned review events with a nearest-successor hint when a current entry has the same stakeholder and entry kind, compatible channel/project/topic scope, and at least one overlapping supporting observation. Candidates rank by greatest observation overlap, then greatest scope overlap, then entry ID for a deterministic tie-break. Review state never transfers silently.
 - Provider wording never participates in entry identity.
 - Pattern and guidance lineage is defined in the Guidance V1.1 contract.
 
@@ -1939,6 +1954,8 @@ Additional doctor issue codes:
 - `evidence_locator_invalid`
 
 `doctor` detects and reports. It does not rebuild the index, delete generations, edit the registry, or rewrite review events. Repair commands require separate explicit contracts.
+
+`signal_suppression_reemerged` names both the suppressed and regenerated signal IDs. `review_event_orphaned` includes the deterministic nearest-current-successor entry ID when one qualifies; absence of a qualified successor produces no hint.
 
 ## JSON Run Summary Contract
 

@@ -6,13 +6,38 @@ import json
 from pathlib import Path
 from typing import Any
 
+from meeting_ingest.ids import normalize_identity_actor, normalize_identity_evidence
 from meeting_ingest.paths import ProjectPaths
-from meeting_ingest.playbook import discover_inputs, read_derivation_records
-from meeting_ingest.playbook_review import read_review_state
+from meeting_ingest.playbook import DerivationInputs, NormalizedObservation, discover_inputs, read_derivation_records
+from meeting_ingest.playbook_review import ReviewState, read_review_state, suppression_match
 
 
-def live_playbook_status(paths: ProjectPaths) -> dict[str, object]:
-    inputs = discover_inputs(paths)
+_PROFILE_ENTRY_LISTS = (
+    "tracked_asks",
+    "tracked_commitments_by_stakeholder",
+    "tracked_commitments_to_stakeholder",
+    "priorities",
+    "concerns_and_risks",
+    "decision_rationales",
+    "communication_preferences",
+    "communication_behaviors",
+    "interaction_responses",
+    "unresolved_observations",
+)
+_SIGNAL_TYPE_BY_ENTRY_KIND = {
+    "ask": "explicit_ask",
+    "commitment": "commitment",
+    "priority": "stakeholder_priority",
+    "concern": "risk_or_concern",
+    "decision-rationale": "decision_rationale",
+    "communication-preference": "communication_preference",
+    "communication-behavior": "communication_behavior",
+    "interaction-response": "interaction_response",
+}
+
+
+def live_playbook_status(paths: ProjectPaths, *, inputs: DerivationInputs | None = None) -> dict[str, object]:
+    current_inputs = inputs or discover_inputs(paths)
     records, _ = read_derivation_records(paths.playbook_state / "derivation-ledger.jsonl")
     latest_attempt = records[-1] if records else None
     index = _read_json_object(paths.derived / "playbook-index.json")
@@ -32,7 +57,7 @@ def live_playbook_status(paths: ProjectPaths) -> dict[str, object]:
         unresolved_count = 0
     else:
         stored_fingerprint = usable_index.get("input_fingerprint")
-        status = "current" if stored_fingerprint == inputs.input_fingerprint else "stale"
+        status = "current" if stored_fingerprint == current_inputs.input_fingerprint else "stale"
         derivation_run_id = usable_index.get("derivation_run_id")
         profiles = usable_index.get("profiles", {})
         profile_count = len(profiles) if isinstance(profiles, dict) else 0
@@ -42,7 +67,7 @@ def live_playbook_status(paths: ProjectPaths) -> dict[str, object]:
         "status": status,
         "derivation_run_id": derivation_run_id,
         "input_fingerprint": stored_fingerprint,
-        "current_input_fingerprint": inputs.input_fingerprint,
+        "current_input_fingerprint": current_inputs.input_fingerprint,
         "profile_count": profile_count,
         "unresolved_identity_count": unresolved_count,
         "rejected_or_suppressed_count": review_state.rejected_or_suppressed_count,
@@ -118,7 +143,8 @@ def playbook_issues(paths: ProjectPaths) -> list[dict[str, str | None]]:
             )
         )
 
-    status = live_playbook_status(paths)
+    inputs = discover_inputs(paths)
+    status = live_playbook_status(paths, inputs=inputs)
     if status["status"] == "stale":
         issues.append(
             _issue(
@@ -127,7 +153,8 @@ def playbook_issues(paths: ProjectPaths) -> list[dict[str, str | None]]:
                 str(index_path.relative_to(paths.meetings_root)),
             )
         )
-    issues.extend(_orphaned_review_issues(paths, review_state.valid_events, index))
+    issues.extend(_suppression_reemergence_issues(paths, review_state, records, inputs.observations))
+    issues.extend(_orphaned_review_issues(paths, review_state.valid_events, index, records, inputs.observations))
     return issues
 
 
@@ -165,14 +192,19 @@ def _profile_issues(paths: ProjectPaths, index: dict[str, Any]) -> list[dict[str
 
 
 def _orphaned_review_issues(
-    paths: ProjectPaths, events: list[dict[str, Any]], index: dict[str, Any] | None
+    paths: ProjectPaths,
+    events: list[dict[str, Any]],
+    index: dict[str, Any] | None,
+    records: list[dict[str, Any]],
+    observations: tuple[NormalizedObservation, ...],
 ) -> list[dict[str, str | None]]:
     entry_ids: set[str] = set()
     signal_refs: set[tuple[str, str]] = set()
+    current_entries: dict[str, tuple[str, dict[str, Any]]] = {}
     if index is not None:
         profiles = index.get("profiles", {})
         if isinstance(profiles, dict):
-            for record in profiles.values():
+            for person_id, record in profiles.items():
                 if not isinstance(record, dict) or not isinstance(record.get("profile_path"), str):
                     continue
                 profile_path = _safe_meetings_path(paths, str(record["profile_path"]))
@@ -180,26 +212,33 @@ def _orphaned_review_issues(
                 if profile is None:
                     continue
                 for entry in _profile_entries(profile):
-                    entry_ids.add(str(entry["entry_id"]))
+                    entry_id = str(entry["entry_id"])
+                    entry_ids.add(entry_id)
+                    current_entries[entry_id] = (str(person_id), entry)
                     for reference in entry.get("supporting_observations", []):
                         if isinstance(reference, dict):
                             source_id = reference.get("source_id")
                             signal_id = reference.get("signal_id")
                             if isinstance(source_id, str) and isinstance(signal_id, str):
                                 signal_refs.add((source_id, signal_id))
-    try:
-        for observation in discover_inputs(paths).observations:
-            signal_refs.add((observation.source_id, observation.signal.signal_id))
-    except Exception:
-        pass
+    for observation in observations:
+        signal_refs.add((observation.source_id, observation.signal.signal_id))
+    orphaned_entry_ids = {
+        str(event["target"]["entry_id"])
+        for event in events
+        if "entry_id" in event["target"] and event["target"]["entry_id"] not in entry_ids
+    }
+    historical_entries = _historical_entries(paths, records, orphaned_entry_ids)
     issues: list[dict[str, str | None]] = []
     for event in events:
         target = event["target"]
         if "entry_id" in target and target["entry_id"] not in entry_ids:
+            successor = _nearest_successor(target["entry_id"], historical_entries, current_entries)
+            hint = f" Nearest current successor: {successor}." if successor is not None else ""
             issues.append(
                 _issue(
                     "review_event_orphaned",
-                    f"Review event references a non-current entry: {target['entry_id']}.",
+                    f"Review event references a non-current entry: {target['entry_id']}.{hint}",
                     "_playbook-state/overrides.jsonl",
                 )
             )
@@ -214,9 +253,188 @@ def _orphaned_review_issues(
     return issues
 
 
+def _suppression_reemergence_issues(
+    paths: ProjectPaths,
+    review_state: ReviewState,
+    records: list[dict[str, Any]],
+    observations: tuple[NormalizedObservation, ...],
+) -> list[dict[str, str | None]]:
+    expected_matches = dict(review_state.suppressed_signal_matches)
+    missing_matches = review_state.suppressed_signals - expected_matches.keys()
+    if missing_matches:
+        expected_matches.update(_historical_suppression_matches(paths, records, missing_matches))
+    if not expected_matches:
+        return []
+    issues: list[dict[str, str | None]] = []
+    reported: set[tuple[tuple[str, str], tuple[str, str]]] = set()
+    for observation in observations:
+        current_reference = (observation.source_id, observation.signal.signal_id)
+        if current_reference in review_state.suppressed_signals:
+            continue
+        current_match = suppression_match(observation.signal)
+        for suppressed_reference, expected_match in expected_matches.items():
+            pair = (suppressed_reference, current_reference)
+            if (
+                current_reference != suppressed_reference
+                and observation.source_id == suppressed_reference[0]
+                and current_match == expected_match
+                and pair not in reported
+            ):
+                reported.add(pair)
+                issues.append(
+                    _issue(
+                        "signal_suppression_reemerged",
+                        "Suppressed observation re-emerged under a new signal ID: "
+                        f"{suppressed_reference[1]} -> {current_reference[1]}.",
+                        "_playbook-state/overrides.jsonl",
+                    )
+                )
+    return issues
+
+
+def _historical_suppression_matches(
+    paths: ProjectPaths,
+    records: list[dict[str, Any]],
+    suppressed_signals: set[tuple[str, str]],
+) -> dict[tuple[str, str], dict[str, str]]:
+    matches: dict[tuple[str, str], dict[str, str]] = {}
+    if not suppressed_signals:
+        return matches
+    for derivation in reversed(records):
+        if derivation.get("status") != "success":
+            continue
+        profiles = derivation.get("profiles", [])
+        if not isinstance(profiles, list):
+            continue
+        for record in profiles:
+            if not isinstance(record, dict) or not isinstance(record.get("profile_path"), str):
+                continue
+            profile_path = _safe_meetings_path(paths, record["profile_path"])
+            profile = _read_json_object(profile_path) if profile_path is not None else None
+            if profile is None:
+                continue
+            evidence_index = profile.get("evidence_index", {})
+            if not isinstance(evidence_index, dict):
+                continue
+            for entry in _profile_entries(profile):
+                signal_type = _SIGNAL_TYPE_BY_ENTRY_KIND.get(str(entry.get("entry_kind")))
+                if signal_type is None:
+                    continue
+                for reference in _entry_references(entry) & suppressed_signals:
+                    if reference in matches:
+                        continue
+                    evidence = evidence_index.get(f"{reference[0]}/{reference[1]}")
+                    match = _evidence_suppression_match(signal_type, evidence)
+                    if match is not None:
+                        matches[reference] = match
+        if suppressed_signals <= matches.keys():
+            break
+    return matches
+
+
+def _evidence_suppression_match(signal_type: str, evidence: object) -> dict[str, str] | None:
+    if not isinstance(evidence, dict) or not isinstance(evidence.get("speaker"), str):
+        return None
+    locator = evidence.get("locator")
+    if not isinstance(locator, dict) or not isinstance(locator.get("scheme"), str):
+        return None
+    value = locator.get("value")
+    if value is not None and not isinstance(value, str):
+        return None
+    return {
+        "signal_type": signal_type,
+        "raw_actor": normalize_identity_actor(evidence["speaker"]),
+        "locator_scheme": normalize_identity_actor(locator["scheme"]),
+        "locator_value": normalize_identity_evidence(value) if value is not None else "",
+    }
+
+
+def _historical_entries(
+    paths: ProjectPaths,
+    records: list[dict[str, Any]],
+    target_entry_ids: set[str],
+) -> dict[str, tuple[str, dict[str, Any]]]:
+    entries: dict[str, tuple[str, dict[str, Any]]] = {}
+    if not target_entry_ids:
+        return entries
+    for derivation in reversed(records):
+        if derivation.get("status") != "success":
+            continue
+        profiles = derivation.get("profiles", [])
+        if not isinstance(profiles, list):
+            continue
+        for record in profiles:
+            if not isinstance(record, dict):
+                continue
+            person_id = record.get("person_id")
+            relative = record.get("profile_path")
+            if not isinstance(person_id, str) or not isinstance(relative, str):
+                continue
+            profile_path = _safe_meetings_path(paths, relative)
+            profile = _read_json_object(profile_path) if profile_path is not None else None
+            if profile is None:
+                continue
+            for entry in _profile_entries(profile):
+                entry_id = str(entry["entry_id"])
+                if entry_id in target_entry_ids:
+                    entries.setdefault(entry_id, (person_id, entry))
+        if target_entry_ids <= entries.keys():
+            break
+    return entries
+
+
+def _nearest_successor(
+    orphaned_entry_id: str,
+    historical_entries: dict[str, tuple[str, dict[str, Any]]],
+    current_entries: dict[str, tuple[str, dict[str, Any]]],
+) -> str | None:
+    historical = historical_entries.get(orphaned_entry_id)
+    if historical is None:
+        return None
+    person_id, old_entry = historical
+    old_references = _entry_references(old_entry)
+    candidates: list[tuple[int, int, str]] = []
+    for entry_id, (candidate_person_id, candidate) in current_entries.items():
+        if candidate_person_id != person_id or candidate.get("entry_kind") != old_entry.get("entry_kind"):
+            continue
+        scope_score = _compatible_scope_score(old_entry.get("scope"), candidate.get("scope"))
+        overlap = len(old_references & _entry_references(candidate))
+        if scope_score is not None and overlap:
+            candidates.append((-overlap, -scope_score, entry_id))
+    return min(candidates)[2] if candidates else None
+
+
+def _entry_references(entry: dict[str, Any]) -> set[tuple[str, str]]:
+    references: set[tuple[str, str]] = set()
+    for reference in entry.get("supporting_observations", []):
+        if not isinstance(reference, dict):
+            continue
+        source_id = reference.get("source_id")
+        signal_id = reference.get("signal_id")
+        if isinstance(source_id, str) and isinstance(signal_id, str):
+            references.add((source_id, signal_id))
+    return references
+
+
+def _compatible_scope_score(old_scope: object, new_scope: object) -> int | None:
+    if not isinstance(old_scope, dict) or not isinstance(new_scope, dict):
+        return None
+    if old_scope.get("channel") != new_scope.get("channel"):
+        return None
+    score = 0
+    for field in ("project_refs", "topics"):
+        old_values = {str(value) for value in old_scope.get(field, [])}
+        new_values = {str(value) for value in new_scope.get(field, [])}
+        if old_values and new_values and not old_values & new_values:
+            return None
+        score += len(old_values & new_values)
+    return score
+
+
 def _profile_entries(profile: dict[str, Any]) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
-    for value in profile.values():
+    for key in _PROFILE_ENTRY_LISTS:
+        value = profile.get(key)
         if isinstance(value, list):
             entries.extend(item for item in value if isinstance(item, dict) and "entry_id" in item)
     return entries
