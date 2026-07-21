@@ -16,6 +16,7 @@ RESERVED_KEYS = {
     "artifacts",
     "warnings",
     "errors",
+    "runtime_provenance",
 }
 
 
@@ -30,6 +31,7 @@ class RunSummary:
     artifacts: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[dict[str, Any]] = field(default_factory=list)
+    runtime_provenance: dict[str, Any] | None = None
     details: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -44,6 +46,8 @@ class RunSummary:
             "warnings": self.warnings,
             "errors": self.errors,
         }
+        if self.runtime_provenance is not None:
+            data["runtime_provenance"] = self.runtime_provenance
         collisions = RESERVED_KEYS.intersection(self.details)
         if collisions:
             raise ValueError(f"RunSummary details cannot override reserved keys: {', '.join(sorted(collisions))}")

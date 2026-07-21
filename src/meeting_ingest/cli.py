@@ -11,12 +11,19 @@ from meeting_ingest import pipeline, playbook
 from meeting_ingest.playbook_review import mutate_review
 from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.runtime import inspect_runtime_summary
 from meeting_ingest.session_inbox import process_session_inbox
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="meeting-ingest")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    runtime_parser = subparsers.add_parser("runtime")
+    runtime_subparsers = runtime_parser.add_subparsers(dest="runtime_command", required=True)
+    runtime_inspect_parser = runtime_subparsers.add_parser("inspect")
+    runtime_inspect_parser.add_argument("--root", default=".", help="Consumer project root to inspect.")
+    runtime_inspect_parser.add_argument("--json", action="store_true", help="Emit machine-readable runtime evidence.")
 
     init_parser = subparsers.add_parser("init")
     init_parser.add_argument("--root", default=".", help="Project root to initialize.")
@@ -132,6 +139,8 @@ def _add_playbook_mutation_options(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace) -> RunSummary:
+    if args.command == "runtime" and args.runtime_command == "inspect":
+        return inspect_runtime_summary(Path(args.root))
     if args.command == "init":
         return pipeline.initialize(Path(args.root))
     if args.command == "ingest":
@@ -230,6 +239,17 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
 
     if summary.status in {"success", "no_op"}:
         command = data.get("command", "command")
+        if command == "runtime_inspect":
+            print(f"Runtime: {data['runtime_mode']}")
+            print(f"Build: {data['build']['build_id']}")
+            print(f"Install: {data['install']['mode']}")
+            print(f"Executable: {data['executable']['invoked']}")
+            print(f"Package integrity: {data['distribution']['record_integrity']}")
+            if data["findings"]:
+                print("Findings:")
+                for finding in data["findings"]:
+                    print(f"- {finding['code']}: {finding['message']}")
+            return
         if command in {"playbook_show", "playbook_brief"}:
             content = data["content"]
             print(content if isinstance(content, str) else json.dumps(content, indent=2, sort_keys=True))

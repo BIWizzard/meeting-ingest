@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import meeting_ingest.cli as cli_module
 from meeting_ingest.cli import build_parser, emit, main
 from meeting_ingest.run_summary import RunSummary
 
@@ -20,6 +21,73 @@ def test_cli_parses_playbook_update() -> None:
     assert args.playbook_command == "update"
     assert args.root == "/tmp/project"
     assert args.json is True
+
+
+def test_cli_parses_runtime_inspect() -> None:
+    args = build_parser().parse_args(["runtime", "inspect", "--root", "/tmp/consumer", "--json"])
+
+    assert args.command == "runtime"
+    assert args.runtime_command == "inspect"
+    assert args.root == "/tmp/consumer"
+    assert args.json is True
+
+
+def test_emit_prints_runtime_inspection_summary(capsys) -> None:
+    summary = RunSummary(
+        details={
+            "command": "runtime_inspect",
+            "runtime_mode": "development",
+            "build": {"build_id": "development"},
+            "install": {"mode": "editable"},
+            "executable": {"invoked": "/tmp/bin/meeting-ingest"},
+            "distribution": {"record_integrity": "valid"},
+            "findings": [
+                {
+                    "code": "runtime_editable_blocked",
+                    "message": "The running distribution is editable.",
+                }
+            ],
+        }
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == (
+        "Runtime: development\n"
+        "Build: development\n"
+        "Install: editable\n"
+        "Executable: /tmp/bin/meeting-ingest\n"
+        "Package integrity: valid\n"
+        "Findings:\n"
+        "- runtime_editable_blocked: The running distribution is editable.\n"
+    )
+
+
+def test_runtime_inspect_json_outputs_machine_readable_evidence(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "inspect_runtime_summary",
+        lambda root: RunSummary(
+            runtime_provenance={"build_id": "development", "runtime_mode": "development"},
+            details={
+                "command": "runtime_inspect",
+                "runtime_mode": "development",
+                "build": {"build_id": "development"},
+                "install": {"mode": "editable"},
+                "executable": {"invoked": "/tmp/bin/meeting-ingest"},
+                "distribution": {"record_integrity": "valid"},
+                "findings": [],
+            },
+        ),
+    )
+
+    exit_code = main(["runtime", "inspect", "--root", "/tmp/consumer", "--json"])
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert result["command"] == "runtime_inspect"
+    assert result["runtime_mode"] == "development"
+    assert result["runtime_provenance"]["build_id"] == "development"
 
 
 def test_cli_parses_playbook_review_and_read_commands() -> None:

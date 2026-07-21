@@ -297,14 +297,16 @@ uv run pytest tests/test_runtime_build.py -q
 - Test: create `tests/test_runtime.py`
 - Test: modify `tests/test_cli_scaffold.py`
 
-- [ ] Implement frozen dataclasses for build identity, install evidence, workflow evidence, consumer pin, runtime provenance, readiness finding, and readiness result.
-- [ ] Read installed distribution metadata and `direct_url.json` without assuming `pip` or `uv` generated it.
-- [ ] Verify installed files against distribution `RECORD` hashes when available; missing/invalid integrity evidence is blocked for approved mode.
-- [ ] Detect editable installs from standards metadata and confirm imported module location.
-- [ ] For editable installs, resolve the source repository, full commit, dirty state including untracked files, and inspection errors without modifying Git state.
-- [ ] Report the resolved invoked command, Python, module, distribution, receipt, pin, and workflow paths.
-- [ ] Implement `runtime inspect` as read-only and usable outside an initialized Meeting Ingest project.
-- [ ] Add tests for approved wheel, non-editable local-directory install, editable clean/dirty, missing Git, mismatched module/distribution, corrupted `RECORD`, missing receipt, unknown mode, and human/JSON output.
+- [x] Implement frozen dataclasses for build identity, install evidence, workflow evidence, consumer pin, runtime provenance, readiness finding, and readiness result.
+- [x] Read installed distribution metadata and `direct_url.json` without assuming `pip` or `uv` generated it.
+- [x] Verify installed files against distribution `RECORD` hashes when available; missing/invalid integrity evidence is blocked for approved mode.
+- [x] Detect editable installs from standards metadata and confirm imported module location.
+- [x] For editable installs, resolve the source repository, full commit, dirty state including untracked files, and inspection errors without modifying Git state.
+- [x] Report the resolved invoked command, Python, module, distribution, receipt, pin, and workflow paths.
+- [x] Implement `runtime inspect` as read-only and usable outside an initialized Meeting Ingest project.
+- [x] Add tests for approved wheel, non-editable local-directory install, editable clean/dirty, missing Git, mismatched module/distribution, corrupted `RECORD`, missing receipt, unknown mode, and human/JSON output.
+
+**Implementation verification (2026-07-21):** After independent review and follow-up hardening, focused runtime/CLI coverage passed with 32 tests and the full repository-root suite passed with 292 tests. Inspection was also exercised directly against the live editable installation and an uninitialized consumer root, returning development evidence and structured blockers without creating project state. A full-suite invocation from the `tests/` working directory reached one unrelated pre-existing cwd-sensitive golden-fixture path in `test_provider_render.py`; the normal repository-root suite remains green.
 
 ## Task 4: Load Consumer Pins, Publish Channels, And Check Updates Explicitly
 
