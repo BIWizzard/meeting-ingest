@@ -9,6 +9,8 @@ __pycache__/
 node_modules/
 dist/
 build/
+/approved-builds/
+*.whl
 
 # Agent/runtime scaffolding
 .claude-flow/
