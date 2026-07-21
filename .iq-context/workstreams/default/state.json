@@ -5,35 +5,33 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Addressed all Claude review findings for suppression re-emergence and nearest-successor diagnostics. Group-directed schema 1.1 signals now use normalized audience identity for suppression matching and remain excluded from person profiles; playbook doctor reuses one discovery result, only recovers snapshot-less suppressions, lazily loads only targeted orphan history, stops scans once targets resolve, and no longer swallows discovery exceptions. Added actor/type/source/locator negative cases, incompatible-successor cases, deterministic tie-break coverage, and audience-directed coverage. Focused tests: 26 passed; full suite: 222 passed; diff check clean. Review workflow remains human-mediated Claude Code prompts only.",
+  "status_summary": "Committed the reviewed Track 1 checkpoint in three scoped commits: 4ff85b8 hardens Layer 5B generation cleanup, 2e1fa22 freezes approved runtime/readiness contracts and product direction, and aed472e implements reproducible approval receipts. Final review verdict was commit-ready; verification remains 37 focused tests, 268 full tests, clean diff check, and a passing exact-commit build rehearsal.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "src/meeting_ingest/playbook.py",
-    "src/meeting_ingest/playbook_review.py",
-    "src/meeting_ingest/playbook_status.py",
-    "tests/test_playbook_review.py",
-    "tests/test_playbook_status.py"
+    "src/meeting_ingest/runtime_build.py"
   ],
   "active_artifacts": [
     "AGENTS.md"
   ],
-  "blockers": [],
+  "blockers": [
+    "No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval."
+  ],
   "open_questions": [
-    "Should doctor distinguish advisory issues from failures so low_confidence_meeting_date does not force exit 1?",
-    "What are the true occurrence dates for the nitesh follow-up, wide-orbit orchestration, fable-5 workflow review, and HTV artifacts?"
+    "Decide whether the bounded pre-existing Layer 5B cleanup/corruption-recovery carryover should close before Just Works Continuity implementation begins.",
+    "Later decide whether fresh ingest may report Ready with history warnings while historical continuity remains incomplete."
   ],
   "next_actions": [
-    "Run the generated Claude Code follow-up review prompt against the current working tree; if accepted, commit and push the diagnostics and review-workflow retirement changes."
+    "Begin Track 1 Task 3: implement runtime, install-mode, package-integrity, editable Git-state, receipt, pin, and workflow inspection from the frozen contract."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Run the generated Claude Code follow-up review prompt against the current working tree; if accepted, commit and push the diagnostics and review-workflow retirement changes.",
+  "continuation_hint": "Next: Begin Track 1 Task 3: implement runtime, install-mode, package-integrity, editable Git-state, receipt, pin, and workflow inspection from the frozen contract.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-19T23:24:23.221Z",
-  "last_wrapped_at": "2026-07-19T19:50:10.512Z",
+  "last_saved_at": "2026-07-21T20:35:29.415Z",
+  "last_wrapped_at": "2026-07-21T18:25:15.738Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-19T23:24:23.221Z"
+  "updated_at": "2026-07-21T20:35:29.415Z"
 }
