@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Begin Track 1 Task 3: implement runtime, install-mode, package-integrity, editable Git-state, receipt, pin, and workflow inspection from the frozen contract."
+    "Begin Track 1 Task 4: extract strict consumer pin/channel configuration into runtime_config.py, implement explicit publish/pin/update-check and rollback retention in runtime_release.py, add CLI surfaces and focused tests, then run independent review before commit."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Begin Track 1 Task 3: implement runtime, install-mode, package-integrity, editable Git-state, receipt, pin, and workflow inspection from the frozen contract.",
-  "updated_at": "2026-07-21T20:35:29.415Z"
+  "resume_from": "Resume with: Begin Track 1 Task 4: extract strict consumer pin/channel configuration into runtime_config.py, implement explicit publish/pin/update-check and rollback retention in runtime_release.py, add CLI surfaces and focused tests, then run independent review before commit.",
+  "updated_at": "2026-07-21T22:07:43.505Z"
 }
