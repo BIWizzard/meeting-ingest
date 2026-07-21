@@ -56,6 +56,67 @@ Implementation should follow these documents in order:
 
 If these documents conflict, `docs/artifact-contract.md` wins for generated artifact shape, signal JSONL, ledger events, run summaries, and exit codes.
 
+## Current Approved Milestone: Just Works Continuity
+
+The North Star Review Board reconvened on 2026-07-20 with authoritative HTV/Spelman history and consumer runtime evidence. The owner approved this product definition:
+
+> Meeting Ingest turns each meeting into a trustworthy project record and keeps accumulated meeting history usable and explainable through one approved agent workflow.
+
+The reference host is Claude Code and the initial audience is the maintainer in a maintainer-only private alpha.
+
+Implementation must sequence the milestone as:
+
+1. Approved Runtime and Pre-Meeting Readiness.
+2. Read-Only Power-User Corpus Reckoning.
+3. Fresh Claude Code Meeting Proof and Recovery.
+4. Approval-Gated Historical Qualification and Continuity Proof.
+
+The read-only corpus reckoning is complete. It does not authorize adoption or repair. No consumer-corpus mutation may occur until a deterministic, fingerprinted adoption plan is reviewed and separately approved.
+
+Until this milestone exits, Guidance V1.1, new source types, added provider/host claims, global identity, deeper iQ integration, public launch, and broad Stakeholder Briefing claims are frozen. Existing started integrity work may close only as bounded carryover.
+
+Approved Runtime policy:
+
+- each consumer pins one exact immutable build tied to a reviewed commit and packaged build;
+- a named stable channel may announce a newer approved build but never changes the consumer's build silently;
+- preflight reports running build, approved build, match state, and update availability;
+- updating and approving a replacement build are explicit actions;
+- the approved Claude Code client workflow blocks editable/development builds by default;
+- an explicit maintainer override is allowed for intentional testing and must mark readiness and generated provenance unmistakably as development execution.
+
+### Track 1 Contract Freeze
+
+The approved execution plan is `docs/plans/2026-07-20-approved-runtime-readiness.md`. Runtime implementation must follow the normative shapes in `docs/artifact-contract.md` and `docs/provider-handoff-contract.md`; this section freezes sequencing and module ownership.
+
+Frozen contracts:
+
+- embedded build identity `1.0`, external receipt `1.0`, consumer runtime pin `1.0`, and advisory private-alpha channel;
+- deterministic build ID from semantic version, commit prefix, and source-tree digest prefix;
+- source-tree hashing over the exact archived runtime and reference-workflow path manifest;
+- `runtime inspect`, `readiness`, `runtime pin`, and `runtime update-check` CLI surfaces;
+- verdicts `ready`, `ready_with_history_warnings`, `development_override`, and `blocked`, with blocked runtime readiness at exit `12`;
+- invocation-scoped development override that bypasses only eligible approval/install selection and is included in provenance;
+- canonical runtime provenance `1.0` and canonical-JSON SHA-256 fingerprint;
+- meeting artifact `1.1`, source-ledger `2.0`, signal `1.2`, run-summary `1.1`, provider handoff `1.1`, and provenance-aware playbook `2.0` cutovers;
+- producer-referenced signal `1.2` to ledger `2.0` provenance linkage: later snapshots carry the prior producer reference, while operations that rewrite signals mint a new producer record; legacy signal `1.0`/`1.1` and ledger `1.0` remain readable without mutation;
+- exact phase-1/phase-2 runtime and workflow binding;
+- portable Claude skill-template hashing plus controlled installed-skill executable rendering;
+- explicit build/publish/install/pin/update/rollback operations and no hook-driven installation.
+
+Implementation order is mandatory:
+
+1. Run a setuptools determinism spike against two isolated builds of one archived commit. If wheel bytes differ after normalization, stop and return with evidence; do not weaken the approval unit.
+2. Implement archived builds, embedded metadata, receipts, and reproducibility verification.
+3. Implement runtime/install inspection and strict pin/channel parsing.
+4. Implement readiness classification and the shared engine-level write guard.
+5. Bind runtime provenance across provider handoffs.
+6. Persist provenance in run summaries, artifacts, ledgers, signals, and derived outputs.
+7. Render/install the reference-host workflow, retire silent reinstall hooks, and cut HTV over only after disposable-consumer proof.
+
+The shared write guard runs inside every public mutating pipeline/playbook entry point before locks or writes. Read-only runtime inspection, readiness, update check, `status`, `doctor`, and `validate-response` remain usable while blocked. Production cannot recognize a test environment through an environment variable; tests inject typed runtime evidence through fixtures.
+
+The current HTV corpus is not a Track 1 migration target. Runtime cutover may record read-only inventory and remove only the explicit editable `meeting-ingest` distribution after rollback evidence exists. It may not rewrite, adopt, regenerate, clean, or backfill meeting history.
+
 ## V1 Scope
 
 V1 implements:
@@ -126,6 +187,11 @@ src/meeting_ingest/
   doctor.py
   run_summary.py
   locking.py
+  runtime_build.py
+  runtime.py
+  runtime_config.py
+  runtime_release.py
+  readiness.py
 ```
 
 Tests:
@@ -167,11 +233,13 @@ meeting-ingest session-inbox [--quality fast|balanced|deep] [--json]
 meeting-ingest doctor
 meeting-ingest status
 meeting-ingest reconcile
+meeting-ingest runtime inspect [--root path] [--json]
+meeting-ingest readiness [--root path] [--host claude-code] [--development-override reason] [--json]
+meeting-ingest runtime pin --receipt path --root path [--json]
+meeting-ingest runtime update-check --root path [--json]
 ```
 
-`ingest` may auto-init only if the behavior is explicitly configured or passed as a flag. Default v1 recommendation: `ingest` should fail with a clear message if no config/layout exists, while `init` remains easy.
-
-This auto-init decision should be confirmed before implementation.
+`ingest` does not auto-init. Approved bootstrap first runs `runtime pin --receipt ... --root ...`, which may create only the runtime-pin parent and pin, and then runs explicit `init --root ...` under the verified pin.
 
 `reconcile` is included in v1 as a narrow recovery command for sources whose primary artifacts are ready but archive/reconcile did not complete.
 
@@ -197,6 +265,7 @@ _local/project-context/meetings/
   _derived/
   _cache/
   _ledger.jsonl
+  meeting-ingest-runtime.toml
 ```
 
 Generated meeting markdown lives directly in the meetings root.
@@ -238,6 +307,16 @@ allow_session_provider = false
 Provider configuration should avoid accidentally routing sensitive client transcripts to multiple vendors.
 
 ## Module Responsibilities
+
+### Runtime modules
+
+- `runtime_build.py` owns archive validation, source-tree fingerprinting, deterministic build metadata, wheel verification, and receipt emission.
+- `runtime.py` owns embedded identity, distribution/direct-url/RECORD inspection, executable/module resolution, editable Git evidence, and canonical runtime provenance.
+- `runtime_config.py` owns strict consumer-pin and channel-manifest parsing independent of normal project config.
+- `runtime_release.py` owns explicit publish, install verification, pin, update-check, and retained rollback metadata; it never auto-updates.
+- `readiness.py` owns stable finding classification, verdict construction, and the shared typed guard used by mutating engine entry points.
+
+Runtime modules may accept injectable filesystem/process inspectors for tests, but production approval evidence must come from the actual installed distribution and workflow files.
 
 ### `cli.py`
 
@@ -912,10 +991,10 @@ Implemented:
 - add stale/missing/failed playbook state to `status` and `doctor`
 - enrich evidence-index detail and configurable threshold handling
 - add suppression re-emergence and nearest-successor orphan diagnostics
+- add explicit uncommitted-generation cleanup and broader corruption recovery coverage
 
 Remaining hardening:
 
-- add explicit uncommitted-generation cleanup and broader corruption recovery coverage
 - materialize mechanical contradiction candidates only after structured mutually exclusive source values exist
 
 Acceptance criteria:

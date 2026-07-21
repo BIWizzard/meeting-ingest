@@ -8,7 +8,7 @@ Use it before writing product briefs, planning roadmap work, or deciding what to
 
 ## Current Product Summary
 
-`meeting-ingest` is a project-local meeting transcript ingestion engine for agent-operated workflows.
+`meeting-ingest` turns each meeting into a trustworthy project record and keeps accumulated meeting history usable and explainable through one approved agent workflow.
 
 It can turn `.txt`, `.vtt`, and `.docx` meeting artifacts into durable project knowledge with:
 
@@ -21,7 +21,32 @@ It can turn `.txt`, `.vtt`, and `.docx` meeting artifacts into durable project k
 - session-provider handoffs for active agent hosts
 - doctor/status visibility into incomplete or pending state
 
-The product is currently strongest for a technical owner using Codex, Claude Code, Supa Code, T3 Code, or plain CLI automation. It is not yet a general self-serve product.
+The current reference user is the maintainer, the reference host is Claude Code, and the release posture is maintainer-only private alpha. The engine remains host-neutral by design, but other host experiences are not current release claims. It is not yet a general self-serve product.
+
+## Approved North Star Milestone
+
+The next milestone is **Just Works Continuity**:
+
+> Know which approved logic will run, process the next meeting through one normal Claude Code request, and keep accumulated history usable and explainable without silent mutation.
+
+The ordered milestone tracks are:
+
+1. Approved Runtime and Pre-Meeting Readiness.
+2. Read-Only Power-User Corpus Reckoning.
+3. Fresh Claude Code Meeting Proof and Recovery.
+4. Approval-Gated Historical Qualification and Continuity Proof.
+
+The read-only HTV/Spelman reckoning is complete. Corpus adoption remains separately approval-gated.
+
+The Approved Runtime policy is now decided:
+
+- each consumer pins one exact immutable build tied to a reviewed commit and packaged build;
+- a stable channel may announce updates but never silently changes the selected build;
+- updates and replacement-build approval are explicit;
+- approved Claude Code client work blocks editable builds by default;
+- a deliberate maintainer override is available for testing and must remain unmistakable in readiness and generated provenance.
+
+See `docs/north-star-board/reviews/2026-07-20-reconvened/`.
 
 ## Current Development State
 
@@ -359,10 +384,10 @@ Implemented foundation:
 - evidence index with source artifact, evidence kind, excerpt, speaker, and locator detail
 - validated project-configurable briefing thresholds with frozen effective ruleset fingerprints
 - suppression re-emergence diagnostics and deterministic nearest-successor hints for orphaned entry reviews
+- explicit safe cleanup for uncommitted generations plus corrupted-index and unsafe-ledger-path recovery fixtures
 
 Remaining:
 
-- add explicit uncommitted-generation cleanup and broader corrupted-index repair fixtures
 - add mechanical contradiction candidates when a source schema exposes structured mutually exclusive values; same-type or same-topic collisions remain non-contradictory
 
 #### Layer 5C: Playbook Guidance V1.1

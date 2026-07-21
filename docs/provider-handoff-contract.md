@@ -67,7 +67,7 @@ Required fields:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "handoff_type": "provider_request",
   "provider_contract": "meeting-ingest-provider-response-v1",
   "source_name": "Call with G, Kushali (5).docx",
@@ -78,9 +78,21 @@ Required fields:
   "effective_date": "2026-06-12",
   "quality": "balanced",
   "output_mode": "summary-plus-verbatim",
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
   "normalized_transcript": "Speaker: Transcript text...",
   "response_contract": {
-    "identity_copy_fields": ["meeting_id", "ingest_run_id", "source_sha256", "normalized_transcript_sha256"],
+    "identity_copy_fields": ["meeting_id", "ingest_run_id", "source_sha256", "normalized_transcript_sha256", "runtime_provenance_sha256"],
     "json_schema": {"title": "Meeting Ingest session provider response"},
     "preflight_command": "meeting-ingest validate-response RESPONSE --source SOURCE --json"
   }
@@ -93,7 +105,8 @@ Rules:
 
 - `normalized_transcript` is the engine-normalized transcript, not raw source bytes.
 - `normalized_transcript_sha256` binds the response to the exact transcript text the sub-agent received.
-- `meeting_id`, `ingest_run_id`, `source_sha256`, `normalized_transcript_sha256`, and `effective_date` are copy-through requirements for the sub-agent; the sub-agent must not remint or alter them.
+- `meeting_id`, `ingest_run_id`, `source_sha256`, `normalized_transcript_sha256`, `runtime_provenance_sha256`, and `effective_date` are copy-through requirements for the sub-agent; the sub-agent must not remint or alter them.
+- Request schema `1.1` requires canonical runtime provenance and its fingerprint. Request schema `1.0` remains visible to `status` and `doctor` but cannot complete as an approved client run.
 - The request file may include future optional helper fields such as allowed enum values, source format, duration, or date confidence.
 - The request file should be treated as sensitive transcript-bearing runtime data.
 - A provider request is runtime state only. It should not append a ledger record by itself.
@@ -124,13 +137,14 @@ Required top-level envelope:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
   "meeting_id": "mtg-20260612-71e6b28b",
   "ingest_run_id": "ingest-20260612-20260703T120000Z-a1b2",
   "source_sha256": "2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a",
   "normalized_transcript_sha256": "3d3f0f6c0d8c8b9d4b91d9e6df0c0c1f1b4e7f2a63ed5e8a2f1c0f54e3d6a7b8",
+  "runtime_provenance_sha256": "sha256:...",
   "provider": {
     "name": "session",
     "host": "codex",
@@ -165,9 +179,9 @@ Rules:
 - The sub-agent should omit uncertain facts rather than inventing them.
 - IDs inside response arrays should be short, stable local IDs such as `T1`, `D1`, `A1`, and `Q1`.
 - `communication_signals` must contain provider-level signal candidates only. The sub-agent must not include engine-enriched fields such as `signal_id`, `recorded_at`, `meeting_id`, or `ingest_run_id` inside individual signals.
-- `meeting_id`, `ingest_run_id`, `source_sha256`, and `normalized_transcript_sha256` in the envelope must match the persisted request file. A mismatch is a provider validation failure.
+- `meeting_id`, `ingest_run_id`, `source_sha256`, `normalized_transcript_sha256`, and `runtime_provenance_sha256` in the envelope must match the persisted request file. The runtime hash is an echo only; it is never trusted as runtime evidence.
 - The response envelope's identity fields are not authoritative. The engine uses them to locate and verify the persisted request file, then adopts identity only from the verified request.
-- `schema_version` governs the envelope shape. `provider_contract` governs the nested provider payload shape.
+- Request/response envelope schema `1.1` adds runtime binding. `provider_contract` remains `meeting-ingest-provider-response-v1` because the nested provider payload shape is unchanged.
 
 ## Provider Provenance
 
@@ -291,29 +305,34 @@ The host/session-backed ingest flow is two-phase. The second phase is not a stan
 
 Phase 1:
 
-1. Engine loads config, validates options, acquires the project lock, hashes source, and checks for duplicate/no-op state.
-2. Engine extracts normalized transcript and mints `meeting_id` and `ingest_run_id`.
-3. Engine writes a provider request file under `_cache/provider-requests/`.
-4. Engine releases the project lock and returns request path plus expected response path to the host wrapper.
+1. Engine evaluates the shared runtime/readiness guard before lock acquisition or side effects.
+2. Engine loads config, validates options, acquires the project lock, hashes source, and checks for duplicate/no-op state.
+3. Engine extracts normalized transcript and mints `meeting_id` and `ingest_run_id`.
+4. Engine persists the canonical runtime provenance and fingerprint in the provider request.
+5. Engine writes the provider request under `_cache/provider-requests/`.
+6. Engine releases the project lock and returns request path plus expected response path to the host wrapper.
 
 Phase 2:
 
 1. Host wrapper invokes a dedicated extraction sub-agent with the request path and expected response path.
 2. Sub-agent writes the response envelope with the `ProviderResponse` payload.
-3. Engine acquires the project lock again.
-4. Engine rehashes the source and re-runs duplicate/no-op detection before consuming the response.
-5. Engine reads the response envelope and locates the persisted request file keyed by the envelope `ingest_run_id`.
-6. Engine verifies response identity fields against the persisted request and current source hash.
-7. Engine adopts `meeting_id`, `ingest_run_id`, `effective_date`, `quality`, and `output_mode` from the verified request, not from the response.
-8. Engine parses `response` into `ProviderResponse`.
-9. Engine runs `validate_provider_response`.
-10. Engine continues through the existing pipeline: signal enrichment, signal JSONL, markdown rendering, ledger snapshots, archive, reconcile, and run summary.
+3. Engine evaluates the shared runtime/readiness guard and recomputes current runtime provenance before lock acquisition or side effects.
+4. Engine locates the persisted request and requires exact equality for build ID, source/tree identity, workflow contract, install/runtime mode, provenance fingerprint, and development-override identity.
+5. Engine acquires the project lock again.
+6. Engine rehashes the source and re-runs duplicate/no-op detection before consuming the response.
+7. Engine verifies response identity fields and echoed runtime-provenance hash against the persisted request and current source hash.
+8. Engine adopts `meeting_id`, `ingest_run_id`, `effective_date`, `quality`, `output_mode`, and runtime provenance from the verified request, not from the response.
+9. Engine parses `response` into `ProviderResponse`.
+10. Engine runs `validate_provider_response`.
+11. Engine continues through the existing pipeline: signal enrichment, signal JSONL, markdown rendering, ledger snapshots, archive, reconcile, and run summary.
 
 An externally supplied provider response must enter the pipeline before signal enrichment and rendering. It must not enter as rendered markdown or enriched signal records.
 
 If the source is already ingested by the time phase 2 starts, phase 2 should return the normal duplicate/no-op summary and must not render new artifacts from the stale response. If phase 2 fails before primary artifacts are ready, retry must start from a new phase-1 provider request with a new `ingest_run_id`; the old request/response pair must not be reused for a new ingest attempt.
 
 If phase 2 is invoked with CLI `--mode` or `--quality` values that differ from the persisted request, the engine must not reinterpret the response. It should use the verified request's `output_mode` and `quality` values, then include warnings in the run summary so callers can detect a stale or inconsistent command line. Today only `summary-plus-verbatim` is supported, so `--mode` mismatch warnings are mainly a forward-compatibility rule.
+
+If runtime equality fails, phase 2 exits `12` with `runtime_handoff_mismatch` before rendering, cleanup, archive, reconcile, or handoff deletion. The operator must restore the original bound runtime or explicitly abandon the handoff and mint a fresh request under the replacement runtime. Phase 2 never adopts a newer approved build. A schema `1.0` legacy request remains inspectable but cannot complete as an approved run.
 
 ## CLI And Library Shape
 
@@ -478,6 +497,8 @@ Failures before primary artifacts are ready should use the provider/provider-val
 - identity mismatch with request/source: provider validation failure
 - payload cannot parse into `ProviderResponse`: provider validation failure
 - `validate_provider_response` failure: provider validation failure
+
+Runtime readiness failure before phase 1 or a phase-2 runtime binding mismatch is not a provider failure. It uses exit `12` with the stable readiness/runtime code. A mismatch retains both handoff files for explicit recovery and must not append a success ledger record.
 
 The source should remain unreconciled on provider or provider-validation failure. If possible, the ledger should append `ingest_failed` with the same error block used by API-backed providers.
 

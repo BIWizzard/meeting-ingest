@@ -26,6 +26,234 @@ The first meeting-artifact implementation target was `summary-plus-verbatim`; `s
 8. Playbook guidance is derived later from signals, not embedded directly in per-meeting signal records.
 9. Stakeholder profiles are rebuildable materializations; sources, validated observations, reviewed identity, and review events are canonical inputs.
 10. Source ingest and corpus-derived playbook history use separate authoritative ledgers.
+11. Every provenance-aware write is attributable to one exact runtime build and workflow contract.
+12. Legacy readability never permits a current write to omit runtime provenance.
+
+## Approved Runtime And Readiness Contract
+
+This section is the Track 1 source of truth for immutable runtime approval, pre-meeting readiness, development overrides, and runtime provenance. It applies to the maintainer-only private alpha with Claude Code as the reference host.
+
+### Immutable approval unit
+
+An approved runtime is one embedded build identity bound by an external receipt to one exact wheel. The wheel never embeds its own digest.
+
+Embedded build identity schema `1.0`:
+
+```json
+{
+  "schema_version": "1.0",
+  "semantic_version": "0.1.0",
+  "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+  "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+  "source_tree_sha256": "sha256:...",
+  "workflow_contract_version": "claude-code-session-v1",
+  "build_kind": "approved-candidate"
+}
+```
+
+`build_id` is exactly `meeting-ingest-{semantic_version}-g{first 12 source-commit hex}-s{first 12 source-tree-sha256 hex}`. It contains no wall-clock, random, machine-local, or receipt-derived input.
+
+The committed source checkout uses the same field names with explicit development-only values. It never claims an approved commit or tree:
+
+```json
+{
+  "schema_version": "1.0",
+  "semantic_version": "0.1.0",
+  "build_id": "development",
+  "source_commit": null,
+  "source_tree_sha256": null,
+  "workflow_contract_version": "claude-code-session-v1",
+  "build_kind": "development"
+}
+```
+
+The source-tree digest is SHA-256 over these tracked regular files from `git archive <source_commit>`:
+
+- `pyproject.toml`;
+- every regular file under `src/meeting_ingest/`;
+- `docs/artifact-contract.md`;
+- `docs/provider-handoff-contract.md`;
+- `docs/claude-skills/meeting-ingest/SKILL.md`;
+- `docs/claude-agents/meeting-ingest-session-provider.md`.
+
+Paths are normalized to relative POSIX UTF-8 and sorted by their UTF-8 bytes. For each file, the hash input is `path + NUL + decimal-byte-length + NUL + exact-file-bytes`. Directories contribute no bytes. A missing required path, symlink, non-regular entry, duplicate normalized path, or unexpected path below a required directory blocks the build. Line endings and executable contents are not rewritten for this digest. Generated build metadata, `.iq-context`, tests, wheels, receipts, untracked files, timestamps, and local runtime state are excluded. `SOURCE_DATE_EPOCH` is the selected commit timestamp and affects archive/wheel normalization only.
+
+External receipt schema `1.0`:
+
+```json
+{
+  "schema_version": "1.0",
+  "build": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "wheel_filename": "meeting_ingest-0.1.0-py3-none-any.whl",
+    "wheel_sha256": "sha256:..."
+  },
+  "workflow": {
+    "contract_version": "claude-code-session-v1",
+    "claude_skill_template_sha256": "sha256:...",
+    "claude_agent_sha256": "sha256:..."
+  },
+  "verification": {
+    "source_commit_reviewed": true,
+    "full_suite_passed": true,
+    "reproducible_wheel_verified": true
+  },
+  "approved_by": "owner",
+  "approved_at": "2026-07-20T00:00:00Z"
+}
+```
+
+Approval requires two isolated normalized builds with identical wheel SHA-256, a green full suite against the archived source, matching embedded metadata, and present workflow inputs. The receipt digest is stored externally by the channel and consumer pin; the receipt does not contain its own digest.
+
+### Consumer pin and channel
+
+The consumer pin is separate from normal project config at `_local/project-context/meetings/meeting-ingest-runtime.toml`:
+
+```toml
+schema_version = "1.0"
+channel = "private-alpha"
+approved_build_id = "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab"
+approved_source_commit = "3bc917de8c6072239848ed190c4c45889d6cf227"
+approved_source_tree_sha256 = "sha256:..."
+approved_wheel_sha256 = "sha256:..."
+approved_receipt_sha256 = "sha256:..."
+approved_executable = "/Users/kmgdev/.local/bin/meeting-ingest"
+workflow_contract_version = "claude-code-session-v1"
+claude_skill_template_sha256 = "sha256:..."
+installed_claude_skill_sha256 = "sha256:..."
+claude_agent_sha256 = "sha256:..."
+approved_at = "2026-07-20T00:00:00Z"
+```
+
+The parser rejects unknown keys, relative executables, malformed digests, and partial identities. `runtime pin --receipt` may create only the runtime-pin parent and pin in an otherwise uninitialized root. Approved bootstrap then runs `init` under that pin; `init` never interprets a receipt.
+
+The durable Claude skill is a portable template with one strict approved-executable marker. Its template hash is in the receipt. Installation substitutes only that marker with the machine-local absolute path and records the rendered skill hash in the consumer pin. The installed agent remains byte-identical when it has no machine-local substitution.
+
+The private-alpha channel manifest is advisory. It identifies the latest approved receipt/build and retained rollback artifacts, but cannot install, select, or repin a consumer. Approved rollback explicitly reinstalls a retained prior wheel and reruns `runtime pin` with its receipt. Editable rollback is development-marked.
+
+Channel manifest schema `1.0`:
+
+```json
+{
+  "schema_version": "1.0",
+  "channel": "private-alpha",
+  "latest": {
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "wheel_sha256": "sha256:...",
+    "receipt_path": "releases/meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab/receipt.json",
+    "receipt_sha256": "sha256:..."
+  },
+  "previous": [
+    {
+      "build_id": "meeting-ingest-0.1.0-g111111111111-s222222222222",
+      "receipt_path": "releases/meeting-ingest-0.1.0-g111111111111-s222222222222/receipt.json",
+      "receipt_sha256": "sha256:..."
+    }
+  ],
+  "published_at": "2026-07-20T00:00:00Z"
+}
+```
+
+Channel paths are application-data-root-relative, never consumer-root-relative. Publishing atomically advances `latest` and retains prior immutable release directories; it does not rewrite receipts.
+
+### Runtime and readiness CLI
+
+```text
+meeting-ingest runtime inspect [--root <path>] [--json]
+meeting-ingest readiness [--root <path>] [--host claude-code] [--development-override <reason>] [--json]
+meeting-ingest runtime pin --receipt <path> --root <path> [--json]
+meeting-ingest runtime update-check --root <path> [--json]
+```
+
+`runtime inspect`, `readiness`, `runtime update-check`, `status`, `doctor`, and `validate-response` are read-only. They never mutate the install, pin, config, corpus, cache, ledger, or iQ state and remain available while readiness is blocked.
+
+Runtime inspection reports the resolved invoked command, Python executable, imported module, distribution and `direct_url.json`, installed `RECORD` integrity, install mode, embedded identity, receipt/pin comparisons, editable source root/commit/dirty state, workflow paths/hashes, channel state, and update availability. Install modes are `approved_frozen`, `frozen_unapproved`, `editable`, and `unknown`; runtime modes are `approved`, `development`, and `unverified`. Unknown or uninspectable identity and invalid package integrity fail closed for writes.
+
+Runtime inspection JSON schema `1.0` has this top-level shape:
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "runtime_inspect",
+  "executable": {"invoked": "/abs/path", "python": "/abs/path", "module": "/abs/path"},
+  "build": {},
+  "distribution": {"path": "/abs/path", "direct_url": {}, "record_integrity": "valid"},
+  "install": {"mode": "approved_frozen", "editable_root": null, "git_commit": null, "git_dirty": null, "inspection_status": "complete"},
+  "receipt": {"path": "/abs/path", "sha256": "sha256:...", "match": true},
+  "pin": {"path": "/abs/path", "sha256": "sha256:...", "match": true, "comparisons": []},
+  "workflow": {"contract_version": "claude-code-session-v1", "match": true},
+  "channel": {"name": "private-alpha", "available": true, "update_available": false},
+  "runtime_mode": "approved",
+  "findings": []
+}
+```
+
+Readiness verdicts are:
+
+- `ready`: all runtime, pin, receipt, workflow, config/privacy, active-handoff, path, and current-integrity gates pass with no history warnings;
+- `ready_with_history_warnings`: the same next-write gates pass and only explicitly classified legacy/adoption findings remain;
+- `development_override`: a non-empty invocation-scoped reason authorizes eligible approval/install-mode blockers, and all output is development-marked;
+- `blocked`: at least one next-write gate fails.
+
+The first three verdicts exit `0`. `blocked` exits `12`. A finding has this stable shape:
+
+```json
+{
+  "code": "runtime_pin_mismatch",
+  "category": "runtime",
+  "severity": "blocker",
+  "message": "Running build does not match the consumer pin.",
+  "path": "_local/project-context/meetings/meeting-ingest-runtime.toml",
+  "remediation": "Install and pin the approved receipt, or explicitly request a development override for eligible development work."
+}
+```
+
+Readiness JSON schema `1.0` contains `command: "readiness"`, `verdict`, `exit_code`, `running_build`, `approved_build`, `match`, `update_available`, `runtime_provenance`, grouped `finding_counts`, and the complete ordered `findings` array. Findings sort by blocker before warning before advisory, then category, code, and path. Human output may group legacy counts, but JSON never drops an independently detected finding.
+
+Finding categories are `runtime`, `project`, `history`, and `advisory`. Severities are `blocker`, `warning`, and `advisory`. Runtime/project findings are blockers unless a named rule says otherwise; history findings are warnings; channel/update information is advisory.
+
+Stable blocker codes initially include `runtime_pin_missing`, `runtime_pin_invalid`, `runtime_pin_mismatch`, `runtime_receipt_invalid`, `runtime_receipt_mismatch`, `runtime_executable_mismatch`, `runtime_install_unknown`, `runtime_editable_blocked`, `runtime_git_uninspectable`, `runtime_package_integrity_failed`, `workflow_contract_mismatch`, `workflow_hash_mismatch`, `runtime_handoff_mismatch`, `current_provenance_missing`, `current_provenance_mismatch`, `current_signal_link_invalid`, `readiness_config_invalid`, `readiness_privacy_blocked`, `readiness_path_unsafe`, and existing lock/handoff integrity codes. Initial history/advisory codes include `legacy_provenance_missing`, `legacy_signal_link_missing`, `corpus_adoption_pending`, `historical_date_low_confidence`, `optional_playbook_output_missing`, `channel_unavailable`, and `update_available`. Unknown health codes fail closed until deliberately classified. History warnings never satisfy the full Continuity exit gate.
+
+The global `--development-override <reason>` value and typed API equivalent are invocation-scoped. The reason is required and part of runtime provenance. The override may bypass only editable/unapproved install selection. It never bypasses malformed config, privacy denial, unsafe paths, source/response identity mismatch, package corruption, handoff mismatch, or current-data corruption. Production code never trusts `PYTEST_CURRENT_TEST`, a generic environment flag, or caller-supplied testing metadata; tests inject a typed runtime inspector through fixtures.
+
+Every public project/corpus mutating engine entry point calls one shared readiness guard before lock acquisition or side effects. This includes `init`, `provider-request`, `ingest`, `ingest-inbox`, `session-inbox`, `repair-date`, `reconcile`, playbook rebuild/review/repair/cleanup mutations, and future regeneration or migration commands. CLI-only enforcement is insufficient. The global `--development-override <reason>` option applies to these mutating commands as well as explicit readiness inspection. Release-store publishing, installation, and `runtime pin` are bootstrap/release mutations outside project readiness; they use strict receipt/build/workflow verification and atomic writes instead of bypassing themselves through the project guard.
+
+For `init` only, absence of normal project config is the expected bootstrap state and is not a blocker after a valid runtime pin exists. An existing malformed config, unsafe target path, runtime mismatch, or package/workflow integrity failure still blocks initialization.
+
+### Canonical runtime provenance and era boundary
+
+Runtime provenance schema `1.0` is:
+
+```json
+{
+  "semantic_version": "0.1.0",
+  "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+  "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+  "source_tree_sha256": "sha256:...",
+  "install_mode": "approved_frozen",
+  "runtime_mode": "approved",
+  "workflow_contract_version": "claude-code-session-v1",
+  "development_override_reason": null
+}
+```
+
+Its fingerprint is `sha256:` plus SHA-256 over UTF-8 canonical JSON with sorted keys and no insignificant whitespace. It is stored in every run summary, provider handoff, meeting front matter, ledger snapshot, provenance-aware playbook derivation record, generation manifest, index, profile, briefing, and later repair/regeneration snapshot. Failures and no-ops report attempted runtime provenance as well.
+
+The structural provenance-era boundary is:
+
+- meeting artifact schema `1.1` requires `runtime_provenance_schema: "1.0"`, the canonical payload and fingerprint, and its producer ledger-record ID; artifact schema `1.0` remains legacy-readable;
+- source-ledger schema `2.0` requires the same payload and fingerprint; ledger `1.0` remains legacy-readable;
+- signal schema `1.2` requires `runtime_provenance_ref` with the producing ledger-record ID and producer runtime fingerprint. Its existing ingest/source/meeting identity and producer reference must resolve to exactly one ledger `2.0` producer snapshot;
+- signal schemas `1.0` and `1.1` remain legacy-readable;
+- provenance-aware playbook derivation ledger, generation manifest, index, profile, and briefing metadata use schema `2.0`; their schema `1.0` forms remain legacy-readable.
+
+Write-time validation confirms every newly produced signal `1.2` record links to the producer ledger `2.0` snapshot before success. `doctor` starts from each source's latest valid snapshot, validates its current signal manifest, and follows the immutable producer-record reference in both directions. Later snapshots that merely carry current signal state do not become additional producers. An unlinked signal `1.2` is a current-integrity blocker; an unlinked legacy signal `1.0`/`1.1` is a history warning unless independent current-era evidence proves corruption. Existing consumer files are never rewritten merely to add provenance.
+
+Development provenance uses `runtime_mode: "development"`, preserves the exact override reason, and must be visibly labeled in rendered human artifacts. It may not claim `approved_frozen`, `Ready`, or approved-client status.
 
 ## Identity
 
@@ -174,7 +402,7 @@ Required fields for all meeting markdown artifacts:
 
 ```yaml
 ---
-schema_version: "1.0"
+schema_version: "1.1"
 artifact_type: meeting
 meeting_id: mtg-20260612-71e6b28b
 ingest_run_id: ingest-20260612-20260703T120000Z-a1b2
@@ -193,6 +421,18 @@ model_alias: balanced
 model_id: claude-sonnet-placeholder
 generated_by: meeting-ingest 0.1.0
 generated_at: 2026-07-03T12:00:00Z
+runtime_provenance_schema: "1.0"
+runtime_provenance_sha256: sha256:...
+runtime_provenance_ledger_record_id: lr-0123456789abcdef0123456789abcdef
+runtime_provenance:
+  semantic_version: 0.1.0
+  build_id: meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab
+  source_commit: 3bc917de8c6072239848ed190c4c45889d6cf227
+  source_tree_sha256: sha256:...
+  install_mode: approved_frozen
+  runtime_mode: approved
+  workflow_contract_version: claude-code-session-v1
+  development_override_reason: null
 ---
 ```
 
@@ -219,6 +459,7 @@ Rules:
 - `provider_host` is optional and should be present when `provider: session` and the active harness is known.
 - If no provider was used, set `provider: none` and `model_id: none`.
 - `schema_version` must be quoted as a string in YAML.
+- Meeting artifact schema `1.1` requires the complete runtime-provenance block, fingerprint, and producer ledger-record ID. Schema `1.0` is legacy-readable and is never silently relabeled.
 - `meeting_type` is free-form in v1, but recommended values are `one-on-one`, `small-group`, `standup`, `status`, `discovery`, `design-review`, and `unknown`.
 - `output_mode` must match the artifact mode.
 - `transcript_policy` is required for `summary-plus-verbatim` and `verbatim`; for `summary`, use `none` unless a later summary mode stores transcript excerpts under a documented policy.
@@ -876,7 +1117,30 @@ Interaction-response evidence rules:
 - `accepted_with_revision` normally maps to `mixed` unless the evidence explicitly supports another valence.
 - `requested_clarification` normally maps to `neutral` or `unclear`; it is not negative without explicit evidence.
 
-### Schema 1.1 Source And Signal Identity
+### Schema 1.2 Runtime-Provenance Reference
+
+Schema 1.2 preserves every schema 1.1 field and validation rule and adds this required object:
+
+```json
+{
+  "schema_version": "1.2",
+  "runtime_provenance_ref": {
+    "schema_version": "1.0",
+    "producer_ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+    "sha256": "sha256:..."
+  }
+}
+```
+
+The reference hash is the canonical runtime-provenance fingerprint of the operation that produced the current signal-file generation. `producer_ledger_record_id` is pre-minted before the signal file is written and identifies the one ledger `2.0` snapshot that commits that generation. The reference is not a copy of the runtime-provenance payload.
+
+For each signal `1.2` record, `(source.source_sha256, producer_ledger_record_id, runtime_provenance_ref.sha256)` must resolve to exactly one source-ledger `2.0` snapshot whose own `ledger_record_id` matches, whose signal manifest has `produced_in_this_record: true`, and whose operation runtime fingerprint and signal-file fingerprint/count match. The engine verifies this before reporting the producing operation successful.
+
+At rest, `doctor` starts with the latest valid ledger snapshot per source and validates the current signal file against that snapshot's manifest. It then follows `producer_ledger_record_id` to exactly one historical producer snapshot and verifies the producer runtime hash and the generation fingerprint/count recorded there. Historical snapshots not referenced by the latest current-state manifest are lineage, not competing current producers. Missing, ambiguous, or mismatched linkage is `current_signal_link_invalid` and blocks current writes.
+
+Schemas `1.0` and `1.1` remain legacy-readable. Their missing ledger linkage is a history warning, not proof of current corruption. New Track 1 writes use schema `1.2`.
+
+### Schema 1.1 And 1.2 Source And Signal Identity
 
 `source_id` format:
 
@@ -942,6 +1206,49 @@ Ledger paths are relative to the meetings root unless otherwise stated.
 
 Every ledger record must be a complete current-state snapshot for that `source_sha256`, not a partial delta. If a later run adds a new output mode, the new ledger record must include previously known artifact modes as well as the new mode.
 
+New Track 1 records use source-ledger schema `2.0`. In addition to every event-specific field already required by schema `1.0`, schema `2.0` requires:
+
+```json
+{
+  "schema_version": "2.0",
+  "ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+  "source_record_sequence": 1,
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
+  "signals": {
+    "status": "ready",
+    "path": "_signals/mtg-20260612-71e6b28b.jsonl",
+    "count": 5,
+    "fingerprint": "sha256:...",
+    "schema_version": "1.2",
+    "producer_ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+    "producer_runtime_provenance_sha256": "sha256:...",
+    "produced_in_this_record": true
+  }
+}
+```
+
+Every ledger `2.0` snapshot has a unique immutable `ledger_record_id` and positive `source_record_sequence`. Under the project lock, `source_record_sequence` is one greater than the highest valid sequence already appended for that source. `ledger_record_id` is `lr-` plus the first 32 lowercase hexadecimal characters of SHA-256 over canonical JSON containing `source_sha256`, `source_record_sequence`, `event`, and `ingest_run_id` (nullable). The ID and sequence are pre-minted before any signal generation that will reference them. A failed pre-append attempt may reuse its uncommitted sequence; an appended sequence is never reused. The ledger-level runtime provenance describes the operation that appended that snapshot. The signal manifest separately describes the operation that produced the current signal-file generation:
+
+- When the current operation writes or rewrites signals, it pre-mints its ledger record ID, writes that ID and its runtime hash into every signal `1.2` reference, and records `produced_in_this_record: true`; producer and ledger-level runtime hashes are equal.
+- When `reconcile`, duplicate repair, or another operation appends a complete snapshot without changing signal bytes, it copies the prior current manifest's producer ID, producer runtime hash, fingerprint, and count, and records `produced_in_this_record: false`; its ledger-level operation runtime may differ.
+- `repair-date` rewrites signal bytes in place. It therefore creates a new signal generation: it pre-mints a new producer ledger record ID, updates every signal `1.2` producer reference to the repair operation's runtime hash, writes the new file atomically, and appends the matching ledger `2.0` snapshot with `produced_in_this_record: true`. The prior generation remains historical lineage.
+- A failed operation that did not commit new signal bytes must not claim `produced_in_this_record: true`.
+
+Every ready schema `2.0` artifact entry follows the same producer distinction with `producer_ledger_record_id`, `producer_runtime_provenance_sha256`, and `produced_in_this_record`. Those values must match the artifact schema `1.1` front matter. A later complete snapshot carries them unchanged when it did not rewrite the artifact. Title/date repair that rewrites or renames an artifact updates its front-matter producer reference and records the repair snapshot as producer; a pure reconcile does not. The latest source snapshot is the current-state authority, and its materialization producer references point to the historical records that actually wrote the current bytes.
+
+Failure/quarantine snapshots that have no signal output still require ledger-level attempted runtime provenance and use the existing event-appropriate signal status. Schema `1.0` records remain legacy-readable and are never rewritten merely to add provenance.
+
 A valid record is a parseable JSON object that:
 
 - has a supported `schema_version`
@@ -967,13 +1274,14 @@ Rules:
 - If `--slug` is omitted, the engine derives a slug from `--title` using the normal filename slug rules.
 - The repair applies to all ready markdown mode artifacts for the selected source unless a future `--mode` option is explicitly added.
 - Existing markdown files are moved to their repaired filenames in place. The old path is not preserved as a stub or redirect in v1; ledger history is the source of old-path provenance.
+- A Track 1 title repair rewrites front matter and therefore updates the artifact schema `1.1` producer ledger ID/runtime provenance. Its ledger `2.0` artifact manifest marks the repair record as producer. Signal bytes are unchanged, so the signal manifest carries its prior producer reference with `produced_in_this_record: false`.
 - Filename collisions use the same numeric suffix rule as initial ingest and must be reported in warnings.
 - The command appends a complete `title_repaired` ledger snapshot containing every known mode artifact entry with repaired title/slug/path metadata.
 - The command returns `status: "success"` and exit `0` when at least one artifact path or title metadata changed.
 - If the requested title/slug already matches current state, the command returns `status: "no_op"` and exit `0` without appending a ledger record.
 - If any expected artifact file cannot be moved, the command must fail without appending `title_repaired`; partially moved files must be surfaced as a repair-required error for `doctor` rather than silently normalized.
 
-Minimum `title_repaired` ledger fields:
+Legacy schema `1.0` `title_repaired` compatibility example (new Track 1 repairs use the ledger `2.0` producer fields defined above):
 
 ```json
 {
@@ -1074,7 +1382,9 @@ Rules:
 - `repair-date` updates mutable occurrence metadata only: artifact filename
   date prefixes (file renames), artifact front-matter `date`,
   `date_confidence`, and `date_source` fields, and signal-record
-  `effective_at` values.
+  `effective_at` values. Because it rewrites current files, it also updates
+  their runtime-provenance metadata/reference to the repair operation; that is
+  mechanical write provenance, not a semantic meeting-field change.
 - Repaired metadata records confidence `manual` and source `repair`.
 - It must not change `meeting_id`, `ingest_run_id` values on existing records,
   `signal_id` values, signal counts, `source_sha256`, the processed archive
@@ -1082,7 +1392,9 @@ Rules:
   embedded in `meeting_id` and `signal_id` are minting provenance, not current
   occurrence, and are documented as such.
 - The signal JSONL file path is keyed by `meeting_id` and therefore does not
-  move; its records are rewritten in place with only `effective_at` changed.
+  move; its records are rewritten in place with `effective_at` changed and a
+  new schema `1.2` producer-ledger/runtime reference. Signal identity,
+  evidence, summary, and all other semantic fields remain unchanged.
 - Artifact renames replace the leading `YYYY-MM-DD` filename prefix and keep
   the existing slug. Filename collisions use the same numeric suffix rule as
   initial ingest and must be reported in warnings.
@@ -1109,19 +1421,46 @@ Minimum `date_repaired` ledger fields:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
+  "ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+  "source_record_sequence": 4,
   "event": "date_repaired",
   "source_sha256": "63d2e8690b7ba09d51e80cc1d3be40fa530c5479b15e33bd2535e0881bccaf55",
   "meeting_id": "mtg-20260703-63d2e869",
   "ingest_run_id": null,
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
   "artifacts": {
     "summary-plus-verbatim": {
       "status": "ready",
       "path": "2026-07-10-nitesh-follow-up-interview-debrief.md",
-      "schema_version": "1.0",
+      "schema_version": "1.1",
       "title": "Nitesh Follow-Up Interview Debrief",
-      "slug": "nitesh-follow-up-interview-debrief"
+      "slug": "nitesh-follow-up-interview-debrief",
+      "producer_ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+      "producer_runtime_provenance_sha256": "sha256:...",
+      "produced_in_this_record": true
     }
+  },
+  "signals": {
+    "status": "ready",
+    "path": "_signals/mtg-20260703-63d2e869.jsonl",
+    "count": 5,
+    "fingerprint": "sha256:...",
+    "schema_version": "1.2",
+    "producer_ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+    "producer_runtime_provenance_sha256": "sha256:...",
+    "produced_in_this_record": true
   },
   "repair": {
     "previous_date": "2026-07-03",
@@ -1227,6 +1566,10 @@ Write timing:
 3. If a duplicate/no-op run repairs a missing processed copy or reconciles a re-dropped source, append `reconcile_repaired`.
 4. If ingest fails before primary artifacts are ready, append `ingest_failed` or `source_quarantined` when possible.
 
+A `reconcile_repaired` schema `2.0` snapshot records the reconcile operation's runtime provenance at ledger level. Because reconcile does not rewrite the signal file, its complete signal manifest carries the prior current producer ledger ID, producer runtime hash, signal fingerprint, and count with `produced_in_this_record: false`.
+
+For a normal ingest, `primary_artifacts_ready` is the signal producer snapshot and uses `produced_in_this_record: true`. The subsequent `ingest_completed` snapshot carries that producer reference with `produced_in_this_record: false`, even when both snapshots share one ingest run and runtime fingerprint.
+
 `derived_updated` is deprecated as a source-ledger event. Existing records remain readable compatibility history. New playbook rebuilds append to `_playbook-state/derivation-ledger.jsonl` and never rewrite or fan out corpus-derived state into source snapshots.
 
 A source-level ledger record should include mode-specific artifacts.
@@ -1331,6 +1674,8 @@ Quarantine block shape when present:
 ## Stakeholder Briefing V1 Artifact Contract
 
 Stakeholder Briefing V1 is deterministic and uses validated signal JSONL, reviewed identity state, versioned rules, and append-only review events. It does not call a provider.
+
+Track 1 provenance-aware playbook writes increment the derivation ledger, generation manifest, playbook index, profile JSON, and briefing metadata schemas from `1.0` to `2.0`. Each schema `2.0` object requires `runtime_provenance_schema`, `runtime_provenance_sha256`, and the canonical runtime-provenance payload. Briefing Markdown carries the same fields in YAML front matter. A generation must use the same provenance fingerprint across every member and its committing derivation record. Schema `1.0` outputs remain legacy-readable; missing provenance there is a history warning. No rebuild or cleanup command upgrades legacy files implicitly.
 
 ### Storage Authority And Paths
 
@@ -1846,6 +2191,16 @@ Failure semantics:
 - Failed derivation appends a failure record when possible and does not replace the current index.
 - Full rebuild is the only V1 update mode. Targeted refresh is deferred.
 
+`playbook cleanup-uncommitted` is the only V1 generation-deletion surface. It holds the project lock and treats successful derivation-ledger records as the commit authority. Safety rules:
+
+- Any malformed derivation-ledger line blocks cleanup with `cleanup_ledger_invalid`; nothing is deleted when commit state is ambiguous.
+- A missing index does not block ledger-authoritative cleanup, but an existing unreadable or structurally invalid index blocks cleanup with `cleanup_index_invalid`; nothing is deleted while its referenced generation is unknown.
+- Only direct child directories of the configured generations directory whose names match `derive-<date>-<timestamp>-<suffix>` and have no successful commit are candidates.
+- The configured derived/generations path must resolve inside the meetings root and neither the derived directory nor generations directory may be a symlink. Candidate symlinks are never followed or deleted. Unrecognized directory names are preserved.
+- A generation still named by the current index is preserved even when no successful commit exists; `doctor` continues to report the index mismatch for explicit repair.
+- `--dry-run` returns the same sorted candidate and skipped lists without deleting anything.
+- A deletion failure returns `generation_cleanup_failed` with the exact failed path and any paths already removed. Durable `_playbook-state/` files and committed generations are never cleanup targets.
+
 ### Briefing CLI
 
 Mutating commands:
@@ -1857,6 +2212,8 @@ meeting-ingest playbook restore <entry-id> --note <text> [--json]
 meeting-ingest playbook resolve <entry-id> --state explicitly_outstanding|resolved|withdrawn|superseded --note <text> [--json]
 meeting-ingest playbook suppress-signal <source-id> <signal-id> --reason <text> [--json]
 meeting-ingest playbook unsuppress-signal <source-id> <signal-id> --note <text> [--json]
+meeting-ingest playbook repair-index [--json]
+meeting-ingest playbook cleanup-uncommitted [--dry-run] [--json]
 ```
 
 Read commands:
@@ -1869,6 +2226,8 @@ meeting-ingest playbook brief <person-id-or-alias> [--format markdown|json]
 Mutating commands use `--json` for the standard run summary. Read commands use `--format` for the returned payload and do not add a second `--json` flag.
 
 `playbook show` returns the complete committed `profile.json` or `briefing.md` payload selected through the current index. `playbook brief` returns a deterministic concise projection containing identity/coverage, tracked asks, commitments, current priorities, concerns, explicit preferences, recent behaviors/responses, freshness warnings, and compact citations. It omits the full evidence appendix but never removes the citations needed to audit a displayed statement. The concise projection is generated from the current profile and is not a separate durable artifact in V1.
+
+`playbook cleanup-uncommitted --json` returns `command: "playbook_cleanup_uncommitted"`, `dry_run`, `changed`, sorted `candidates`, successfully `removed` paths, and `skipped` objects with `path` and `reason`. A dry run uses `status: "success"`; an applied run with no removals uses `status: "no_op"`.
 
 Successful `playbook update --json` summary:
 
@@ -1959,7 +2318,7 @@ Additional doctor issue codes:
 
 ## JSON Run Summary Contract
 
-The CLI should support a machine-readable run summary for agent harnesses.
+The CLI should support a machine-readable run summary for agent harnesses. New Track 1 summaries use schema `1.1` and require `runtime_provenance_schema`, `runtime_provenance_sha256`, and `runtime_provenance` on success, no-op, pending, development, and failure results. Schema `1.0` summaries remain readable historical examples.
 
 Recommended flag:
 
@@ -1971,9 +2330,21 @@ Example successful run summary:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "status": "success",
   "exit_code": 0,
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
   "meeting_id": "mtg-20260612-71e6b28b",
   "ingest_run_id": "ingest-20260612-20260703T120000Z-a1b2",
   "source_sha256": "2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a",
@@ -2058,6 +2429,8 @@ Duplicate/no-op summary:
   }
 }
 ```
+
+The duplicate/no-op example above is schema `1.0` compatibility shape. A new schema `1.1` no-op includes the same required runtime-provenance fields as success. Readiness JSON additionally includes `verdict`, `running_build`, `approved_build`, `match`, `update_available`, grouped `findings`, and full finding details. Human output leads with the verdict and one actionable remediation.
 
 A duplicate/no-op run may still perform repair work when the ledger shows an otherwise-ingested source has incomplete archive or reconcile state. In that case, keep `status: "no_op"` and exit `0`, include the repair action in `warnings`, and append a complete `reconcile_repaired` ledger snapshot reflecting the repaired archive/reconcile state. If no archive or reconcile state changed, do not append a repair snapshot.
 
@@ -2251,6 +2624,7 @@ Recommended v1 exit codes:
 | 9 | Archive or reconcile failure |
 | 10 | Lock/concurrency conflict or stale two-phase inputs |
 | 11 | Reserved; legacy blocking-derived-work code |
+| 12 | Runtime readiness blocked or runtime handoff mismatch |
 
 Rules:
 
@@ -2260,6 +2634,7 @@ Rules:
 - An explicitly invoked playbook command is the primary operation and uses the applicable provider, validation, artifact-write, ledger-write, lock, CLI/config, or general failure code.
 - Exit `10` JSON errors must distinguish `lock_conflict` from `stale_inputs`. A lock conflict is retryable after the competing operation finishes; `stale_inputs` invalidates the old phase-1 request and requires a fresh phase 1.
 - Exit `11` is reserved and must not be emitted by new playbook behavior.
+- Exit `12` uses stable readiness/runtime codes. `runtime_handoff_mismatch` retains the request/response pair and requires the original bound runtime or an explicitly abandoned and freshly minted handoff.
 - JSON summary must include enough detail for an agent to report artifact paths to the user.
 
 ## Validation Rules

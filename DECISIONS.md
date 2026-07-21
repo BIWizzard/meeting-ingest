@@ -299,6 +299,47 @@ Profiles and briefings remain in ignored project-local storage. iQ Context and o
 - `meeting_id` and `signal_id` date segments are immutable minting provenance; `repair-date` rewrites only mutable occurrence metadata (artifact filename prefix, front-matter date fields, signal `effective_at`).
 - Signal files are rewritten in place because downstream briefing layers sequence on `effective_at`; leaving stale values would poison Layer 5+.
 
+### 30. Just Works Continuity is the approved North Star milestone (2026-07-20)
+
+The approved product definition is:
+
+> Meeting Ingest turns each meeting into a trustworthy project record and keeps accumulated meeting history usable and explainable through one approved agent workflow.
+
+The reference host is Claude Code. The initial audience is the maintainer as the sole reference user in a maintainer-only private alpha.
+
+The next milestone is **Just Works Continuity**, ordered as:
+
+1. Approved Runtime and Pre-Meeting Readiness.
+2. Read-Only Power-User Corpus Reckoning.
+3. Fresh Claude Code Meeting Proof and Recovery.
+4. Approval-Gated Historical Qualification and Continuity Proof.
+
+The HTV and Spelman corpus reckoning is read-only. No adoption, regeneration, repair, ledger backfill, or other consumer mutation may occur until a deterministic plan is reviewed and separately approved.
+
+The six redundant Meeting Ingest repository-local records are retired as evidence and removed as one complete runtime state. They are not fixtures or independent dogfood.
+
+Consumer projects pin one exact approved immutable build identity tied to a reviewed commit and packaged build. A named stable channel may announce a newer approved build, but it never silently changes what a consumer runs. Preflight reports the running build, approved build, match status, and update availability. Installation and approval of a replacement build are explicit actions.
+
+The approved Claude Code client workflow blocks editable/development builds by default. An explicit maintainer override remains available for intentional testing, but readiness and generated provenance must make development execution unmistakable. Development-generated output must not be confused with an approved client-build result.
+
+### 31. Approved Runtime uses immutable receipts, fail-closed readiness, and structural provenance eras (2026-07-20)
+
+The approval unit is an embedded build identity bound externally to one reproducible wheel SHA-256 by an owner-approved receipt. Build IDs derive only from semantic version, exact commit, and the frozen source-tree digest. A consumer pins the receipt, wheel, build, executable, and reference-host workflow. The private-alpha channel is advisory and never installs or repins automatically.
+
+Approved bootstrap is explicit `runtime pin` followed by `init`. Updates and rollback are explicit install-plus-pin operations. Git hooks, skills, readiness, and status commands may not silently change an installed or selected runtime.
+
+Readiness has four verdicts: `ready`, `ready_with_history_warnings`, `development_override`, and `blocked`. Editable or unverifiable client writes block by default. A non-empty invocation-scoped development reason can authorize eligible development selection, but it cannot bypass config, privacy, path, package-integrity, handoff-identity, or current-data corruption failures. Development provenance and rendered output must remain visibly distinguishable from approved output.
+
+One shared engine-level guard runs before every public mutation, before locks or writes. Read-only inspection, readiness, update check, status, doctor, and response validation remain available while blocked. Production does not trust test-environment variables; tests inject typed runtime evidence.
+
+Session phase 1 persists canonical runtime provenance and its fingerprint. Phase 2 must match build, source/tree identity, workflow, install/runtime mode, and development-override identity exactly. A mismatch retains the handoff and never adopts the newer runtime silently.
+
+The provenance cutover is structural: meeting artifacts `1.1`, source-ledger records `2.0`, signals `1.2`, run summaries `1.1`, provider handoffs `1.1`, and provenance-aware playbook outputs `2.0` require runtime provenance or a ledger-resolvable provenance reference. Legacy artifact/ledger/playbook schema `1.0` and signal `1.0`/`1.1` remain readable without mutation. Missing provenance on a structurally current record is a blocker; missing provenance on a structurally legacy record is a history warning.
+
+Ledger `2.0` distinguishes the runtime that appended a complete snapshot from the runtime/ledger record that produced the current signal-file generation. Later reconcile or duplicate-repair snapshots carry the existing producer reference without becoming another producer. An operation such as `repair-date` that rewrites signal bytes mints a new producer ledger record and updates signal `1.2` references. Doctor validates current linkage from the latest source snapshot and its immutable producer reference rather than treating every historical snapshot as a competing producer.
+
+The durable Claude skill is a portable template. Its only installation-time substitution is the strict marker for the consumer's absolute approved executable. The receipt hashes the template; the consumer pin hashes the rendered installed copy.
+
 ## Working Assumptions
 
 - The deterministic parts of the current engine are worth preserving.

@@ -31,6 +31,8 @@ Why it matters:
 
 ### 2. Should `ingest` auto-init missing structure, or should init be explicit?
 
+Status: resolved.
+
 Why it matters:
 - affects user friction
 - affects predictability
@@ -40,6 +42,11 @@ Good answer characteristics:
 - low-friction
 - safe
 - easy to reason about
+
+Resolved direction:
+- `ingest` does not auto-init
+- approved bootstrap is explicit `runtime pin --receipt ... --root ...` followed by `init --root ...`
+- runtime pin bootstrap may create only the pin parent and pin, not normal config or corpus state
 
 ### 3. What should the stable CLI surface be?
 
@@ -59,6 +66,7 @@ Resolved direction:
 - v1 should include a narrow `reconcile` command or equivalent duplicate/no-op repair path for incomplete archive/reconcile state
 - v1 should include a batch inbox ingest command that processes `_inbox/` sequentially and returns per-file JSON results
 - fan-out to multiple sub-agents or parallel workers for faster multi-document ingestion is a future enhancement, not the first batch-ingest implementation
+- Track 1 adds `runtime inspect`, `readiness`, `runtime pin`, and `runtime update-check`; mutating commands share one engine-level readiness guard
 
 ### 4. What should the extraction contract be?
 
@@ -145,6 +153,13 @@ Need to decide:
 Why it matters:
 - preserves momentum without freezing old architecture into place
 
+Resolved runtime direction:
+- Claude Code is the reference host for the maintainer-only private alpha
+- the durable skill is a portable template whose installed copy resolves one absolute approved executable
+- consumer runtime selection is an explicit immutable pin, never ambient `uv run`, PATH precedence, or an editable install
+- Git hooks and host workflows cannot silently install, update, or repin the runtime
+- broader host approval remains deferred; it is not an open Track 1 implementation choice
+
 ### 8a. Should existing generated corpora be adopted or left as historical artifacts?
 
 Need to decide:
@@ -156,6 +171,15 @@ Need to decide:
 Why it matters:
 - the maintainer already has real project corpora
 - migration policy affects ledger, doctor, and repair tooling
+
+Resolved direction:
+- HTV and Spelman must be inventoried and classified read-only before any adoption decision
+- redundant repository-local copies do not count as independent dogfood evidence
+- no legacy artifact may be relabeled as current-generated
+- any adoption or repair requires a deterministic, fingerprinted plan and separate owner approval
+
+Still open:
+- which classes should be adopted, mapped, regenerated, preserved as legacy, or ignored
 
 ### 9. How should tests be structured?
 
@@ -341,6 +365,15 @@ Current stance:
 - signal extraction stays factual and uses narrow source-observation types
 - communication artifact ingest follows the meeting-derived briefing foundation in plain-text, image-based, then public/social phases
 - file modification time is not considered a reliable occurrence date for downloaded historical Teams transcripts
+- approved consumers pin one exact reproducible wheel/receipt/build/executable/workflow unit
+- the private-alpha channel announces updates but never installs or repins them
+- readiness is fail-closed for ambiguous current execution and separates explicit history warnings from current blockers
+- editable client execution requires an invocation-scoped development reason and produces visibly development-marked provenance
+- meeting artifact `1.1`, ledger `2.0`, signal `1.2`, run-summary/handoff `1.1`, and playbook `2.0` are the structural runtime-provenance cutover
+- session phase 1 and phase 2 must use exactly matching runtime and workflow provenance
+- no corpus adoption, repair, or generated-output mutation is authorized by the runtime cutover
+
+Runtime identity, approval, readiness verdicts, development override scope, handoff binding, and update behavior are closed Track 1 policy. Remaining relevant questions are corpus class disposition under 8a and the bounded recovery/generated-output mutation questions under 7a; neither may be resolved by mutating HTV or Spelman history during Track 1.
 
 ## Not In Scope Right Now
 

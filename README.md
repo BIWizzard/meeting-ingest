@@ -1,8 +1,8 @@
 # meeting-ingest
 
-`meeting-ingest` is a platform-agnostic meeting and transcript ingestion tool.
+`meeting-ingest` turns each meeting into a trustworthy project record and keeps accumulated meeting history usable and explainable through one approved agent workflow.
 
-It is intended to turn raw meeting artifacts such as `.docx`, `.txt`, and `.vtt` files into structured project knowledge with a strong done process.
+It turns raw `.docx`, `.txt`, and `.vtt` meeting artifacts into structured project knowledge with a strong done process.
 
 ## Why
 
@@ -22,9 +22,9 @@ But raw transcripts are noisy and hard to reuse directly.
 
 ## Product Direction
 
-The first serious build is scoped around the maintainer's personal and professional workflows. Broader productization may come later, but early design should solve the real current workflow first.
+The current release posture is a maintainer-only private alpha. Claude Code is the reference host for the approved **Just Works Continuity** milestone. Broader productization may come later, but the current work must first prove the maintainer's real workflow and accumulated history.
 
-The long-term target is a host-neutral engine that can work cleanly with:
+The long-term architecture remains host-neutral. The following are design targets, not current support claims:
 
 - Codex
 - Claude Code
