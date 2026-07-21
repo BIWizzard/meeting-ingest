@@ -105,6 +105,32 @@ def test_repair_index_restores_latest_committed_generation(tmp_path: Path) -> No
     assert repaired == expected
 
 
+def test_repair_index_replaces_corrupted_index_json(tmp_path: Path) -> None:
+    paths = _configured_project(tmp_path)
+    update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "abcd1111")
+    expected = json.loads((paths.derived / "playbook-index.json").read_text(encoding="utf-8"))
+    (paths.derived / "playbook-index.json").write_text("{broken", encoding="utf-8")
+
+    repair_index(tmp_path, clock=FrozenClock(NOW))
+
+    assert json.loads((paths.derived / "playbook-index.json").read_text(encoding="utf-8")) == expected
+
+
+def test_repair_index_rejects_ledger_profile_path_outside_meetings_root(tmp_path: Path) -> None:
+    paths = _configured_project(tmp_path)
+    update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "abcd1111")
+    ledger_path = paths.playbook_state / "derivation-ledger.jsonl"
+    record = json.loads(ledger_path.read_text(encoding="utf-8"))
+    record["profiles"][0]["profile_path"] = "../outside/profile.json"
+    ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+    (paths.derived / "playbook-index.json").unlink()
+
+    with pytest.raises(MeetingIngestError, match="escapes the meetings root"):
+        repair_index(tmp_path, clock=FrozenClock(NOW))
+
+    assert not (paths.derived / "playbook-index.json").exists()
+
+
 def test_show_and_brief_resolve_reviewed_alias_and_return_requested_format(tmp_path: Path) -> None:
     _configured_project(tmp_path)
     update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "abcd2222")

@@ -8,6 +8,8 @@ from datetime import date, datetime
 import hashlib
 import json
 from pathlib import Path
+import re
+import shutil
 from typing import Any, Callable
 
 from meeting_ingest.clock import Clock, SystemClock, default_suffix, format_iso_timestamp, format_timestamp
@@ -34,6 +36,7 @@ DERIVATION_SCHEMA_VERSION = "1.0"
 PROFILE_SCHEMA_VERSION = "1.0"
 RULESET_ID = "briefing-rules-v1"
 RENDERER_VERSION = "briefing-markdown-v2"
+_DERIVATION_RUN_ID = re.compile(r"^derive-\d{8}-\d{8}T\d{6}Z-[a-z0-9]{4}$")
 
 _CATEGORY_BY_SIGNAL = {
     "explicit_ask": ("tracked_asks", "ask"),
@@ -423,6 +426,123 @@ def repair_index(start: Path, *, clock: Clock | None = None) -> RunSummary:
             "changed": True,
         },
     )
+
+
+def cleanup_uncommitted(
+    start: Path, *, dry_run: bool = False, clock: Clock | None = None
+) -> RunSummary:
+    """Remove only generation directories that have no successful ledger commit."""
+    _, paths = load_project(start)
+    active_clock = clock or SystemClock()
+    with ProjectLock(lock_path(paths.cache), clock=active_clock):
+        records, ledger_issues = read_derivation_records(paths.playbook_state / "derivation-ledger.jsonl")
+        if ledger_issues:
+            raise MeetingIngestError(
+                phase="playbook_cleanup",
+                code="cleanup_ledger_invalid",
+                message="Cannot clean generations while the derivation ledger contains malformed records.",
+                exit_code=EXIT_ARTIFACT_WRITE,
+                recoverable=True,
+                details={"issue_count": len(ledger_issues)},
+            )
+        committed_run_ids = {
+            str(record["derivation_run_id"])
+            for record in records
+            if record.get("status") == "success"
+        }
+        generations_path = paths.derived / "generations"
+        indexed_generation = _indexed_generation_path(paths)
+        candidates: list[Path] = []
+        skipped: list[dict[str, str]] = []
+        if generations_path.exists():
+            resolved_generations = generations_path.resolve()
+            meetings_root = paths.meetings_root.resolve()
+            if (
+                paths.derived.is_symlink()
+                or generations_path.is_symlink()
+                or meetings_root not in resolved_generations.parents
+            ):
+                raise MeetingIngestError(
+                    phase="playbook_cleanup",
+                    code="cleanup_generations_path_invalid",
+                    message="Configured generations directory is not a safe directory inside the meetings root.",
+                    exit_code=EXIT_ARTIFACT_WRITE,
+                    recoverable=True,
+                    details={"path": str(generations_path)},
+                )
+            for generation in sorted(generations_path.iterdir()):
+                relative = generation.relative_to(paths.meetings_root).as_posix()
+                if generation.is_symlink():
+                    skipped.append({"path": relative, "reason": "symlink"})
+                elif not generation.is_dir() or generation.name in committed_run_ids:
+                    continue
+                elif not _DERIVATION_RUN_ID.fullmatch(generation.name):
+                    skipped.append({"path": relative, "reason": "unrecognized_name"})
+                elif relative == indexed_generation:
+                    skipped.append({"path": relative, "reason": "referenced_by_index"})
+                else:
+                    candidates.append(generation)
+
+        candidate_paths = [path.relative_to(paths.meetings_root).as_posix() for path in candidates]
+        removed: list[str] = []
+        if not dry_run:
+            for candidate, relative in zip(candidates, candidate_paths, strict=True):
+                try:
+                    shutil.rmtree(candidate)
+                except OSError as exc:
+                    raise MeetingIngestError(
+                        phase="playbook_cleanup",
+                        code="generation_cleanup_failed",
+                        message=f"Could not remove uncommitted generation: {relative}",
+                        exit_code=EXIT_ARTIFACT_WRITE,
+                        recoverable=True,
+                        details={"path": relative, "removed": removed},
+                    ) from exc
+                removed.append(relative)
+
+    changed = bool(removed)
+    status = "success" if dry_run or changed else "no_op"
+    return RunSummary(
+        status=status,
+        exit_code=0,
+        warnings=[f"Skipped {item['path']}: {item['reason']}." for item in skipped],
+        details={
+            "command": "playbook_cleanup_uncommitted",
+            "dry_run": dry_run,
+            "changed": changed,
+            "candidates": candidate_paths,
+            "removed": removed,
+            "skipped": skipped,
+        },
+    )
+
+
+def _indexed_generation_path(paths: ProjectPaths) -> str | None:
+    index_path = paths.derived / "playbook-index.json"
+    if not index_path.exists():
+        return None
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        raise MeetingIngestError(
+            phase="playbook_cleanup",
+            code="cleanup_index_invalid",
+            message="Cannot clean generations while the current playbook index is unreadable or invalid.",
+            exit_code=EXIT_ARTIFACT_WRITE,
+            recoverable=True,
+            details={"path": str(index_path)},
+        ) from exc
+    generation_path = index.get("generation_path") if isinstance(index, dict) else None
+    if not isinstance(generation_path, str):
+        raise MeetingIngestError(
+            phase="playbook_cleanup",
+            code="cleanup_index_invalid",
+            message="Cannot clean generations while the current playbook index is unreadable or invalid.",
+            exit_code=EXIT_ARTIFACT_WRITE,
+            recoverable=True,
+            details={"path": str(index_path)},
+        )
+    return generation_path
 
 
 def _resolve_current_profile(paths: ProjectPaths, selector: str) -> tuple[str, dict[str, str]]:

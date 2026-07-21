@@ -112,6 +112,10 @@ def build_parser() -> argparse.ArgumentParser:
     repair_index_parser = playbook_subparsers.add_parser("repair-index")
     repair_index_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     repair_index_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    cleanup_parser = playbook_subparsers.add_parser("cleanup-uncommitted")
+    cleanup_parser.add_argument("--root", default=".", help="Path used for project discovery.")
+    cleanup_parser.add_argument("--dry-run", action="store_true", help="Report targets without deleting them.")
+    cleanup_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
     for command in ("doctor", "status", "reconcile"):
         command_parser = subparsers.add_parser(command)
@@ -184,6 +188,8 @@ def run(args: argparse.Namespace) -> RunSummary:
         return playbook.brief(Path(args.root), args.selector, output_format=args.format)
     if args.command == "playbook" and args.playbook_command == "repair-index":
         return playbook.repair_index(Path(args.root))
+    if args.command == "playbook" and args.playbook_command == "cleanup-uncommitted":
+        return playbook.cleanup_uncommitted(Path(args.root), dry_run=args.dry_run)
     if args.command == "playbook" and args.playbook_command in {
         "reject",
         "restore",
