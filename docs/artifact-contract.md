@@ -130,7 +130,7 @@ approved_at = "2026-07-20T00:00:00Z"
 
 The parser rejects unknown keys, relative executables, malformed digests, and partial identities. `runtime pin --receipt` may create only the runtime-pin parent and pin in an otherwise uninitialized root. Approved bootstrap then runs `init` under that pin; `init` never interprets a receipt.
 
-The durable Claude skill is a portable template with one strict approved-executable marker. Its template hash is in the receipt. Installation substitutes only that marker with the machine-local absolute path and records the rendered skill hash in the consumer pin. The installed agent remains byte-identical when it has no machine-local substitution.
+The durable Claude skill is a portable template with exactly one strict approved-executable marker, `{{MEETING_INGEST_APPROVED_EXECUTABLE}}`. Its template hash is in the receipt. Installation substitutes only that marker with the machine-local absolute path and records the rendered skill hash in the consumer pin. Pinning reconstructs and hash-verifies the portable template from the installed copy and approved executable. The installed agent remains byte-identical when it has no machine-local substitution.
 
 The private-alpha channel manifest is advisory. It identifies the latest approved receipt/build and retained rollback artifacts, but cannot install, select, or repin a consumer. Approved rollback explicitly reinstalls a retained prior wheel and reruns `runtime pin` with its receipt. Editable rollback is development-marked.
 

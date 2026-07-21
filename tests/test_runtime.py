@@ -557,10 +557,16 @@ def test_update_available_is_advisory_and_sorts_after_blockers(
     channel_path.parent.mkdir(parents=True)
     channel_path.write_text(
         json.dumps(
-            {
-                "schema_version": "1.0",
-                "channel": "private-alpha",
-                "latest": {"build_id": "meeting-ingest-0.1.0-gffffffffffff-seeeeeeeeeeee"},
+                {
+                    "schema_version": "1.0",
+                    "channel": "private-alpha",
+                    "latest": {
+                        "build_id": "meeting-ingest-0.1.0-gffffffffffff-seeeeeeeeeeee",
+                        "source_commit": "f" * 40,
+                        "wheel_sha256": "sha256:" + "e" * 64,
+                        "receipt_path": "releases/meeting-ingest-0.1.0-gffffffffffff-seeeeeeeeeeee/receipt.json",
+                        "receipt_sha256": "sha256:" + "d" * 64,
+                    },
                 "previous": [],
                 "published_at": "2026-07-21T00:00:00Z",
             }

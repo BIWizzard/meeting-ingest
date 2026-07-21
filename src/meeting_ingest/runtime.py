@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import csv
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 import hashlib
 from importlib import metadata
 import json
@@ -13,36 +13,26 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tomllib
 from typing import Any, Callable, Mapping
 from urllib.parse import unquote, urlparse
 
 from meeting_ingest._build_info import BUILD_INFO
 from meeting_ingest.run_summary import RunSummary
-
-
-RUNTIME_PIN_RELATIVE_PATH = Path(
-    "_local/project-context/meetings/meeting-ingest-runtime.toml"
+from meeting_ingest.runtime_config import (
+    ConsumerPin,
+    RUNTIME_PIN_RELATIVE_PATH,
+    is_sha256 as _is_sha256,
+    read_channel as _load_channel,
+    read_pin as _read_pin,
+    sha256_bytes as _sha256_bytes,
+    sha256_file as _sha256_file,
 )
+
+
 CLAUDE_SKILL_PATH = Path(".claude/skills/meeting-ingest/SKILL.md")
 CLAUDE_AGENT_PATH = Path(
     ".claude/agents/meeting-ingest-session-provider.md"
 )
-PIN_KEYS = {
-    "schema_version",
-    "channel",
-    "approved_build_id",
-    "approved_source_commit",
-    "approved_source_tree_sha256",
-    "approved_wheel_sha256",
-    "approved_receipt_sha256",
-    "approved_executable",
-    "workflow_contract_version",
-    "claude_skill_template_sha256",
-    "installed_claude_skill_sha256",
-    "claude_agent_sha256",
-    "approved_at",
-}
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 _AUTO_DISTRIBUTION = object()
 
@@ -80,15 +70,6 @@ class WorkflowEvidence:
     agent_path: str
     agent_sha256: str | None
     match: bool
-
-
-@dataclass(frozen=True)
-class ConsumerPin:
-    path: str
-    sha256: str | None
-    values: Mapping[str, Any] = field(default_factory=dict)
-    valid: bool = False
-    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -152,23 +133,6 @@ class RuntimeInspection:
             "findings": [finding.to_dict() for finding in self.findings],
             "runtime_provenance": asdict(self.runtime_provenance),
         }
-
-
-def _sha256_bytes(payload: bytes) -> str:
-    return "sha256:" + hashlib.sha256(payload).hexdigest()
-
-
-def _sha256_file(path: Path) -> str:
-    return _sha256_bytes(path.read_bytes())
-
-
-def _is_sha256(value: Any) -> bool:
-    return (
-        isinstance(value, str)
-        and value.startswith("sha256:")
-        and len(value) == 71
-        and all(character in "0123456789abcdef" for character in value[7:])
-    )
 
 
 def _resolved_invoked_path(value: str | Path | None) -> Path:
@@ -315,66 +279,6 @@ def _inspect_git(
     )
 
 
-def _read_pin(root: Path) -> ConsumerPin:
-    path = (root / RUNTIME_PIN_RELATIVE_PATH).resolve(strict=False)
-    if not path.is_file():
-        return ConsumerPin(path=str(path), sha256=None, error="missing")
-    try:
-        payload = path.read_bytes()
-        values = tomllib.loads(payload.decode("utf-8"))
-    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
-        return ConsumerPin(path=str(path), sha256=None, error=str(exc))
-    if not isinstance(values, dict):
-        return ConsumerPin(path=str(path), sha256=_sha256_bytes(payload), error="invalid")
-    unknown = set(values) - PIN_KEYS
-    missing = PIN_KEYS - set(values)
-    validation_errors: list[str] = []
-    if unknown:
-        validation_errors.append(f"unknown keys: {', '.join(sorted(unknown))}")
-    if missing:
-        validation_errors.append(f"missing keys: {', '.join(sorted(missing))}")
-    if values.get("schema_version") != "1.0":
-        validation_errors.append("schema_version must be 1.0")
-    digest_fields = {
-        "approved_source_tree_sha256",
-        "approved_wheel_sha256",
-        "approved_receipt_sha256",
-        "claude_skill_template_sha256",
-        "installed_claude_skill_sha256",
-        "claude_agent_sha256",
-    }
-    for field_name in digest_fields:
-        if not _is_sha256(values.get(field_name)):
-            validation_errors.append(f"{field_name} must be a sha256 digest")
-    commit = values.get("approved_source_commit")
-    if not (
-        isinstance(commit, str)
-        and len(commit) == 40
-        and all(character in "0123456789abcdef" for character in commit)
-    ):
-        validation_errors.append("approved_source_commit must be a full lowercase Git commit")
-    executable = values.get("approved_executable")
-    if not isinstance(executable, str) or not Path(executable).is_absolute():
-        validation_errors.append("approved_executable must be absolute")
-    string_fields = PIN_KEYS - digest_fields - {"approved_source_commit", "approved_executable"}
-    for field_name in string_fields:
-        if not isinstance(values.get(field_name), str) or not values[field_name]:
-            validation_errors.append(f"{field_name} must be a non-empty string")
-    if validation_errors:
-        return ConsumerPin(
-            path=str(path),
-            sha256=_sha256_bytes(payload),
-            values=values,
-            error="; ".join(validation_errors),
-        )
-    return ConsumerPin(
-        path=str(path),
-        sha256=_sha256_bytes(payload),
-        values=values,
-        valid=True,
-    )
-
-
 def _comparison(field: str, expected: Any, actual: Any) -> dict[str, Any]:
     return {
         "field": field,
@@ -407,24 +311,17 @@ def _default_application_data_root() -> Path:
 
 
 def _read_channel(application_data_root: Path, channel_name: str) -> dict[str, Any]:
-    path = application_data_root / "channels" / f"{channel_name}.json"
+    channel = _load_channel(application_data_root, channel_name)
     result: dict[str, Any] = {
         "name": channel_name,
-        "path": str(path.resolve(strict=False)),
-        "available": False,
+        "path": channel.path,
+        "available": channel.valid,
         "update_available": False,
     }
-    if not path.is_file():
-        return result
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        result["error"] = str(exc)
-        return result
-    if not isinstance(value, dict):
-        result["error"] = "Channel manifest must contain an object"
-        return result
-    result.update({"available": True, "manifest": value})
+    if channel.valid:
+        result["manifest"] = dict(channel.values)
+    elif channel.error != "missing":
+        result["error"] = channel.error
     return result
 
 

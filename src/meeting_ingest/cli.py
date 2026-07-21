@@ -12,6 +12,7 @@ from meeting_ingest.playbook_review import mutate_review
 from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
 from meeting_ingest.runtime import inspect_runtime_summary
+from meeting_ingest.runtime_release import pin_runtime_summary, update_check
 from meeting_ingest.session_inbox import process_session_inbox
 
 
@@ -24,6 +25,17 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_inspect_parser = runtime_subparsers.add_parser("inspect")
     runtime_inspect_parser.add_argument("--root", default=".", help="Consumer project root to inspect.")
     runtime_inspect_parser.add_argument("--json", action="store_true", help="Emit machine-readable runtime evidence.")
+    runtime_pin_parser = runtime_subparsers.add_parser("pin")
+    runtime_pin_parser.add_argument("--receipt", required=True, help="Approved-build receipt to select.")
+    runtime_pin_parser.add_argument("--root", required=True, help="Consumer project root to pin.")
+    runtime_pin_parser.add_argument(
+        "--approved-executable",
+        help="Absolute executable path to record; defaults to the invoked command.",
+    )
+    runtime_pin_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    runtime_update_parser = runtime_subparsers.add_parser("update-check")
+    runtime_update_parser.add_argument("--root", required=True, help="Consumer project root to inspect.")
+    runtime_update_parser.add_argument("--json", action="store_true", help="Emit a machine-readable update summary.")
 
     init_parser = subparsers.add_parser("init")
     init_parser.add_argument("--root", default=".", help="Project root to initialize.")
@@ -141,6 +153,14 @@ def _add_playbook_mutation_options(parser: argparse.ArgumentParser) -> None:
 def run(args: argparse.Namespace) -> RunSummary:
     if args.command == "runtime" and args.runtime_command == "inspect":
         return inspect_runtime_summary(Path(args.root))
+    if args.command == "runtime" and args.runtime_command == "pin":
+        return pin_runtime_summary(
+            Path(args.root),
+            Path(args.receipt),
+            approved_executable=args.approved_executable,
+        )
+    if args.command == "runtime" and args.runtime_command == "update-check":
+        return update_check(Path(args.root))
     if args.command == "init":
         return pipeline.initialize(Path(args.root))
     if args.command == "ingest":
@@ -249,6 +269,20 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
                 print("Findings:")
                 for finding in data["findings"]:
                     print(f"- {finding['code']}: {finding['message']}")
+            return
+        if command == "runtime_pin":
+            print(f"Pinned runtime: {data['build_id']}")
+            print(f"Pin: {data['pin_path']}")
+            return
+        if command == "runtime_update_check":
+            if summary.warnings:
+                print("Update status unavailable")
+            else:
+                print("Update available" if data["update_available"] else "No update available")
+            print(f"Installed: {data['installed_build_id']}")
+            print(f"Channel: {data['channel']['latest_build_id'] or 'unavailable'}")
+            for warning in summary.warnings:
+                print(f"Warning: {warning}")
             return
         if command in {"playbook_show", "playbook_brief"}:
             content = data["content"]

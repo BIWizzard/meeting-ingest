@@ -111,7 +111,7 @@ claude_agent_sha256 = "sha256:..."
 approved_at = "2026-07-20T00:00:00Z"
 ```
 
-The separate pin file can be loaded even when the normal project configuration is missing or invalid. `approved_executable` is intentionally machine-local in the maintainer-only alpha. The durable skill remains a portable template containing one strict approved-executable marker. Installation renders that marker to the consumer's absolute executable path; the receipt hashes the durable template and the consumer pin hashes both the template and rendered installed copy. No other template substitution is permitted. Portability beyond this controlled rendering is deferred.
+The separate pin file can be loaded even when the normal project configuration is missing or invalid. `approved_executable` is intentionally machine-local in the maintainer-only alpha. The durable skill remains a portable template containing exactly one strict approved-executable marker, `{{MEETING_INGEST_APPROVED_EXECUTABLE}}`. Installation renders that marker to the consumer's absolute executable path; the receipt hashes the durable template and the consumer pin hashes both the template and rendered installed copy. No other template substitution is permitted. Portability beyond this controlled rendering is deferred.
 
 ### Local private-alpha channel
 
@@ -319,13 +319,15 @@ uv run pytest tests/test_runtime_build.py -q
 - Test: create `tests/test_runtime_config.py`
 - Test: create `tests/test_runtime_release.py`
 
-- [ ] Strictly parse the separate runtime pin before normal project config; reject unknown keys, malformed hashes, partial identity, and relative approved-executable paths.
-- [ ] `runtime pin --receipt` verifies the receipt, wheel hash when the wheel is present, current embedded build, installed receipt, executable, and workflow files before atomically writing the pin.
-- [ ] Permit `runtime pin --receipt` to bootstrap only the runtime-pin parent directory and pin in an otherwise uninitialized root; it must not create normal config, corpus, inbox, cache, ledger, or iQ state.
-- [ ] Publishing copies an approved wheel/receipt into the local private-alpha release store and atomically advances the channel manifest; it never installs or pins a consumer.
-- [ ] `runtime update-check` compares channel, consumer pin, installed build, and receipt without mutating any of them.
-- [ ] A newer channel build is advisory when the current approved pin still matches.
-- [ ] Add explicit rollback metadata so the prior build receipt/wheel remains available after publishing or installing a newer approved build. No separate rollback verb is required: approved rollback explicitly reinstalls the retained prior wheel and reruns `runtime pin` with its retained receipt; editable rollback follows the recorded install command and is necessarily development-marked.
+- [x] Strictly parse the separate runtime pin before normal project config; reject unknown keys, malformed hashes, partial identity, and relative approved-executable paths.
+- [x] `runtime pin --receipt` verifies the receipt, wheel hash when the wheel is present, current embedded build, installed receipt, executable, and workflow files before atomically writing the pin.
+- [x] Permit `runtime pin --receipt` to bootstrap only the runtime-pin parent directory and pin in an otherwise uninitialized root; it must not create normal config, corpus, inbox, cache, ledger, or iQ state.
+- [x] Publishing copies an approved wheel/receipt into the local private-alpha release store and atomically advances the channel manifest; it never installs or pins a consumer.
+- [x] `runtime update-check` compares channel, consumer pin, installed build, and receipt without mutating any of them.
+- [x] A newer channel build is advisory when the current approved pin still matches.
+- [x] Add explicit rollback metadata so the prior build receipt/wheel remains available after publishing or installing a newer approved build. No separate rollback verb is required: approved rollback explicitly reinstalls the retained prior wheel and reruns `runtime pin` with its retained receipt; editable rollback follows the recorded install command and is necessarily development-marked.
+
+**Implementation verification (2026-07-21):** Strict pin/channel parsing, immutable publication, rendered-skill pinning, read-only update comparison, and three-generation retained rollback coverage passed 57 focused tests and 317 full tests. Publication uses a per-channel exclusion lock, unique pending files, file and directory durability syncs, immutable hard-link placement, and atomic manifest replacement. Independent read-only review reached commit-ready after rendered-template verification, stable runtime error codes, human advisory output, symlink/path binding, and lock descriptor ownership were corrected.
 
 ## Task 5: Classify Readiness And Enforce It Before Writes
 

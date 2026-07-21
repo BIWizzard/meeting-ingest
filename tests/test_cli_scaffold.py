@@ -32,6 +32,29 @@ def test_cli_parses_runtime_inspect() -> None:
     assert args.json is True
 
 
+def test_cli_parses_runtime_pin_and_update_check() -> None:
+    pin = build_parser().parse_args(
+        [
+            "runtime",
+            "pin",
+            "--receipt",
+            "/tmp/release/receipt.json",
+            "--root",
+            "/tmp/consumer",
+            "--json",
+        ]
+    )
+    update = build_parser().parse_args(
+        ["runtime", "update-check", "--root", "/tmp/consumer", "--json"]
+    )
+
+    assert pin.runtime_command == "pin"
+    assert pin.receipt == "/tmp/release/receipt.json"
+    assert pin.root == "/tmp/consumer"
+    assert update.runtime_command == "update-check"
+    assert update.root == "/tmp/consumer"
+
+
 def test_emit_prints_runtime_inspection_summary(capsys) -> None:
     summary = RunSummary(
         details={
@@ -88,6 +111,46 @@ def test_runtime_inspect_json_outputs_machine_readable_evidence(monkeypatch, cap
     assert result["command"] == "runtime_inspect"
     assert result["runtime_mode"] == "development"
     assert result["runtime_provenance"]["build_id"] == "development"
+
+
+def test_runtime_pin_expected_failure_uses_stable_runtime_code(tmp_path: Path, capsys) -> None:
+    exit_code = main(
+        [
+            "runtime",
+            "pin",
+            "--receipt",
+            str(tmp_path / "missing-receipt.json"),
+            "--root",
+            str(tmp_path / "consumer"),
+            "--json",
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 12
+    assert result["reason"] == "runtime_receipt_invalid"
+    assert result["errors"][0]["code"] == "runtime_receipt_invalid"
+
+
+def test_emit_update_check_warns_when_status_is_unavailable(capsys) -> None:
+    summary = RunSummary(
+        warnings=["Runtime pin unavailable or invalid: missing"],
+        details={
+            "command": "runtime_update_check",
+            "update_available": False,
+            "installed_build_id": "development",
+            "channel": {"latest_build_id": None},
+        },
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == (
+        "Update status unavailable\n"
+        "Installed: development\n"
+        "Channel: unavailable\n"
+        "Warning: Runtime pin unavailable or invalid: missing\n"
+    )
 
 
 def test_cli_parses_playbook_review_and_read_commands() -> None:
