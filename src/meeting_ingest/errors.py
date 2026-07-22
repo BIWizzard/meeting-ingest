@@ -94,6 +94,18 @@ class ProviderError(MeetingIngestError):
         )
 
 
+class RuntimeHandoffMismatchError(MeetingIngestError):
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            phase="readiness",
+            code="runtime_handoff_mismatch",
+            message=message,
+            exit_code=EXIT_RUNTIME_READINESS,
+            recoverable=True,
+            details=details or {},
+        )
+
+
 class LockConflictError(MeetingIngestError):
     def __init__(self, lock_path: str) -> None:
         super().__init__(

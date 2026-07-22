@@ -169,7 +169,7 @@ meeting-ingest runtime pin --receipt <path> --root <path> [--json]
 meeting-ingest runtime update-check --root <path> [--json]
 ```
 
-`runtime inspect`, `readiness`, `runtime update-check`, `status`, `doctor`, and `validate-response` are read-only. They never mutate the install, pin, config, corpus, cache, ledger, or iQ state and remain available while readiness is blocked.
+`runtime inspect`, `readiness`, `runtime update-check`, `status`, `doctor`, and `validate-response` are read-only. They never mutate the install, pin, config, corpus, cache, ledger, or iQ state and remain callable while readiness is blocked. The inspection/status commands still return their normal read-only summaries; `validate-response` additionally reports `status: "blocked"` with exit `12` when the response payload is valid but current runtime/project readiness would refuse phase 2.
 
 Runtime inspection reports the resolved invoked command, Python executable, imported module, distribution and `direct_url.json`, installed `RECORD` integrity, install mode, embedded identity, receipt/pin comparisons, editable source root/commit/dirty state, workflow paths/hashes, channel state, and update availability. Install modes are `approved_frozen`, `frozen_unapproved`, `editable`, and `unknown`; runtime modes are `approved`, `development`, and `unverified`. Unknown or uninspectable identity and invalid package integrity fail closed for writes.
 
@@ -2521,6 +2521,7 @@ Example clean doctor summary:
       "total": 0,
       "pending": 0,
       "stale": 0,
+      "blocked": 0,
       "failed": 0
     }
   },
@@ -2551,6 +2552,7 @@ Example doctor summary with issues:
       "total": 0,
       "pending": 0,
       "stale": 0,
+      "blocked": 0,
       "failed": 0
     }
   },
@@ -2579,6 +2581,7 @@ Current issue codes:
 - `stale_provider_response`
 - `session_handoff_pending`
 - `session_handoff_stale`
+- `session_handoff_runtime_blocked`
 - `session_handoff_invalid`
 - `inbox_residue`
 - `missing_artifact`
@@ -2597,6 +2600,7 @@ For session-backed workflows, `status --json` also includes:
       "total": 1,
       "pending": 1,
       "stale": 0,
+      "blocked": 0,
       "failed": 0
     },
     "results": []
@@ -2604,7 +2608,7 @@ For session-backed workflows, `status --json` also includes:
 }
 ```
 
-`session_handoffs.results` uses the same per-handoff records described in `docs/provider-handoff-contract.md`. It may contain `pending_provider_response`, `stale_handoff`, or `failed` records. `doctor --json` maps those records into the `session_handoff_pending`, `session_handoff_stale`, and `session_handoff_invalid` issue codes.
+`session_handoffs.results` uses the same per-handoff records described in `docs/provider-handoff-contract.md`. It may contain `pending_provider_response`, `stale_handoff`, or `failed` records. The disjoint `blocked` count identifies `stale_handoff` records whose `details.reason` is `legacy_runtime_binding` or `invalid_runtime_binding`; ordinary stale records remain in `stale`. `doctor --json` maps records into `session_handoff_pending`, `session_handoff_stale`, `session_handoff_runtime_blocked`, and `session_handoff_invalid` issue codes according to status and reason.
 
 ## Exit Codes
 

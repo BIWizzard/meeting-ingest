@@ -24,6 +24,7 @@ Read the request JSON. It contains:
 - `ingest_run_id`
 - `source_sha256`
 - `normalized_transcript_sha256`
+- `runtime_provenance_sha256`
 - `effective_date`
 - `quality`
 - `output_mode`
@@ -37,13 +38,14 @@ The top-level envelope must be:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
   "meeting_id": "copy from request",
   "ingest_run_id": "copy from request",
   "source_sha256": "copy from request",
   "normalized_transcript_sha256": "copy from request",
+  "runtime_provenance_sha256": "copy from request",
   "provider": {
     "name": "session",
     "host": "claude-code",

@@ -72,14 +72,32 @@ response, it reports that pending handoff and skips fresh phase 1 so the wrapper
 not mint a second request for the same inbox file.
 
 If an existing request cannot be safely rebound to a direct inbox source, the wrapper
-reports `status: "stale_handoff"` with a cleanup hint rather than failing the batch.
-This can happen for old retained failure pairs, requests for external sources, missing
-inbox files, or hash mismatches. Complete those manually with the lower-level phase-2
-command when appropriate, or remove stale request/response files after confirming they
-are no longer needed.
+reports `status: "stale_handoff"` with a cleanup hint without failing the batch. This
+ordinary stale state covers old retained failure pairs, requests for external sources,
+missing inbox files, or hash mismatches. Complete those manually with the lower-level
+phase-2 command when appropriate, or remove stale request/response files after confirming
+they are no longer needed.
 
-Use `uv run meeting-ingest status --json` to inspect pending, stale, and invalid
-session handoffs without running the wrapper. Use `uv run meeting-ingest doctor --json`
+Legacy schema `1.0` requests and schema `1.1` requests with invalid runtime bindings also
+remain visible as `stale_handoff`, but they are terminal blockers rather than ordinary
+cleanup warnings. The wrapper skips extraction and fresh phase 1, reports
+`status: "blocked"`, exit `12`, and increments `details.blocked_handoffs`. Restore the
+original reviewed request when possible; otherwise explicitly abandon the handoff before
+minting a fresh request under the intended runtime.
+
+To abandon after review, take the exact `details.request_path` and
+`details.expected_response_path` from `status --json`, remove only that named pair (or
+only the request when no response exists), and rerun `session-inbox`. Never delete the
+whole provider cache. Example after setting the reviewed paths relative to the meetings
+root:
+
+```bash
+rm -- "$MEETINGS_ROOT/$REQUEST_PATH" "$MEETINGS_ROOT/$EXPECTED_RESPONSE_PATH"
+uv run meeting-ingest session-inbox --quality balanced --json
+```
+
+Use `uv run meeting-ingest status --json` to inspect disjoint pending, ordinary stale,
+runtime-blocked, and invalid session-handoff counts without running the wrapper. Use `uv run meeting-ingest doctor --json`
 to surface those handoffs as hygiene issues.
 
 Lower-level phase 1:
@@ -114,9 +132,10 @@ Write one provider response JSON file at the returned `expected_response_path`. 
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
+  "runtime_provenance_sha256": "copy from request",
   "provider": {
     "name": "session",
     "host": "current host",
@@ -141,7 +160,7 @@ Write one provider response JSON file at the returned `expected_response_path`. 
 }
 ```
 
-Also include the exact `meeting_id`, `ingest_run_id`, `source_sha256`, and `normalized_transcript_sha256` from the request.
+Also include the exact `meeting_id`, `ingest_run_id`, `source_sha256`, `normalized_transcript_sha256`, and `runtime_provenance_sha256` from the request.
 
 Run the side-effect-free response preflight:
 
@@ -149,7 +168,9 @@ Run the side-effect-free response preflight:
 uv run meeting-ingest validate-response "$RESPONSE_PATH" --source "$SOURCE" --json
 ```
 
-For provider-validation failures, correct every reported `errors[0].details.issues` entry before continuing. A `source_read` failure means the `--source` path must be corrected. A successful preflight reports `provider_response.status: "valid"` and does not write ledger/artifact state or consume handoff files.
+If the request's runtime provenance is development-mode, include `--development-override` with the exact same reason used to mint the request. The generated `response_contract.preflight_command` includes the correctly escaped option.
+
+For provider-validation failures, correct every reported `errors[0].details.issues` entry before continuing. A `source_read` failure means the `--source` path must be corrected. Proceed only when the preflight reports `status: "success"`, `provider_response.status: "valid"`, and `runtime_readiness.verdict` is not `blocked`. A valid response under blocked runtime/project readiness returns `status: "blocked"` with exit `12`; resolve the reported `runtime_readiness.findings` before phase 2. The preflight does not write ledger/artifact state or consume handoff files.
 
 Use the current host in `provider.host`:
 

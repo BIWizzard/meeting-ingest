@@ -42,7 +42,9 @@ Ignore files already under `_inbox/_done/`.
 
 It scans existing provider requests first, completes ready responses before creating fresh requests, and skips fresh phase 1 while unresolved handoffs remain.
 
-It reports old or out-of-scope request files as `stale_handoff` with a cleanup hint instead of failing the batch.
+It reports old or out-of-scope request files as non-failing `stale_handoff` results with a cleanup hint. Legacy or invalid runtime bindings instead block the wrapper with exit `12`, skip extraction and fresh phase 1, and require restoring the reviewed request or explicitly abandoning it before reminting.
+
+To abandon after review, use the exact `details.request_path` and `details.expected_response_path` from `status --json`, remove only that named pair, and rerun `session-inbox`. Never delete the whole provider cache.
 
 `meeting-ingest ingest-inbox --provider session --json` is the lower-level phase-1 command. It also creates session-provider requests for each direct inbox file. It does not complete the model extraction or phase-2 ingest by itself.
 
@@ -77,20 +79,24 @@ The provider response must echo the request identity fields:
 - `ingest_run_id`
 - `source_sha256`
 - `normalized_transcript_sha256`
+- `runtime_provenance_sha256`
 
 Every request contains `response_contract.json_schema`, which is the complete request-bound response contract. Follow it directly: its `const` values contain the exact identity fields and model alias for this handoff, and its nested schemas list required field names and allowed enum values.
+
+Use the request's `response_contract.preflight_command` for validation. Development-mode requests include the exact escaped `--development-override` reason required to preserve the runtime binding.
 
 The provider envelope must use:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
   "meeting_id": "copy from request",
   "ingest_run_id": "copy from request",
   "source_sha256": "copy from request",
   "normalized_transcript_sha256": "copy from request",
+  "runtime_provenance_sha256": "copy from request",
   "provider": {
     "name": "session",
     "host": "claude-code",
@@ -135,7 +141,7 @@ Validate the completed response before phase 2:
 uv run meeting-ingest validate-response "$RESPONSE_PATH" --source "$SOURCE" --json
 ```
 
-Proceed only when it reports `status: "success"` and `provider_response.status: "valid"`. For provider-validation failures, correct every entry in `errors[0].details.issues`; for a `source_read` failure, correct the `--source` path. Then re-run the preflight. The preflight has no ledger, artifact, archive, reconcile, or cache-cleanup side effects.
+Proceed only when it reports `status: "success"`, `provider_response.status: "valid"`, and `runtime_readiness.verdict` is not `blocked`. For provider-validation failures, correct every entry in `errors[0].details.issues`; for a `source_read` failure, correct the `--source` path. A blocked readiness verdict uses exit `12` even when the response payload itself is valid. Then re-run the preflight. The preflight has no ledger, artifact, archive, reconcile, or cache-cleanup side effects.
 
 Phase 2:
 

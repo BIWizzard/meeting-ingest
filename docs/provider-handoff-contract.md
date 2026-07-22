@@ -99,6 +99,8 @@ Required fields:
 }
 ```
 
+For development-mode requests, `preflight_command` also includes `--development-override` with the exact shell-escaped reason bound into `runtime_provenance`. Approved-mode requests use the command shown above without that option.
+
 The abbreviated `json_schema` above is fully expanded in the generated request. It is a Draft 2020-12 schema containing the complete envelope and nested response payload, request-bound `const` identity values, required field names, and allowed enum values. Extraction agents should treat that embedded schema as the authoritative response-writing contract instead of discovering fields through validation failures.
 
 Rules:
@@ -123,7 +125,7 @@ Before phase 2, wrappers should run the side-effect-free preflight:
 meeting-ingest validate-response RESPONSE --source SOURCE --json
 ```
 
-The preflight verifies the persisted request, request/response identity, current source hash, payload shape, and semantic provider rules. Success reports `provider_response.status: valid`. Provider-validation failures use exit code `6` and return all independently detectable issues in `errors[0].details.issues`; an unreadable or missing `--source` uses the existing `source_read` taxonomy and exit code `4`. The command does not write ledger records or artifacts, archive/reconcile the source, or delete handoff files.
+The preflight verifies the persisted request, request/response identity, current source hash, payload shape, semantic provider rules, and current runtime/project readiness. Success reports `status: success`, `provider_response.status: valid`, and a non-blocked `runtime_readiness.verdict`. If the response is valid while current runtime/project readiness is blocked, the command reports `status: blocked`, exit `12`, `provider_response.status: valid`, and the actionable `runtime_readiness.findings`; callers must not continue to phase 2. Provider-validation failures use exit code `6` and return all independently detectable issues in `errors[0].details.issues`; an unreadable or missing `--source` uses the existing `source_read` taxonomy and exit code `4`. The command does not write ledger records or artifacts, archive/reconcile the source, or delete handoff files.
 
 Recommended path shape:
 
@@ -182,6 +184,7 @@ Rules:
 - `meeting_id`, `ingest_run_id`, `source_sha256`, `normalized_transcript_sha256`, and `runtime_provenance_sha256` in the envelope must match the persisted request file. The runtime hash is an echo only; it is never trusted as runtime evidence.
 - The response envelope's identity fields are not authoritative. The engine uses them to locate and verify the persisted request file, then adopts identity only from the verified request.
 - Request/response envelope schema `1.1` adds runtime binding. `provider_contract` remains `meeting-ingest-provider-response-v1` because the nested provider payload shape is unchanged.
+- Envelope schema `1.1` remains within the frozen `claude-code-session-v1` workflow architecture. Exact installed skill and agent hashes bind instruction-byte changes, so this additive handoff binding does not silently bypass workflow equality and does not require redefining the frozen workflow contract identifier.
 
 ## Provider Provenance
 
@@ -430,7 +433,8 @@ The top-level wrapper summary includes:
 - `processed`: total reported records, including stale handoff records
 - `completed`: phase-2 results completed by this wrapper run, including phase-2 no-op results
 - `pending_provider_responses`: existing or fresh handoffs still waiting for provider response JSON
-- `stale_handoffs`: existing request files whose source cannot be safely resolved for the inbox wrapper
+- `stale_handoffs`: ordinary existing request files whose source cannot be safely resolved for the inbox wrapper; excludes runtime-binding blockers
+- `blocked_handoffs`: legacy or invalid runtime-bound handoffs that prevent extraction and fresh phase 1 until restored or explicitly abandoned
 - `no_ops`: fresh phase-1 duplicate/no-op inbox results
 - `failed`: actionable failures
 - `phase1`: fresh phase-1 summary metadata
@@ -442,6 +446,8 @@ The top-level `phase1.status` values are:
 - `skipped_existing_pending`: fresh phase 1 was skipped because an unresolved existing handoff remains pending
 - any status returned by `ingest-inbox --provider session`, such as `success` or `no_op`
 
+The wrapper reports top-level `status: blocked` with exit `12` when unresolved legacy or invalid runtime bindings prevent progress and no per-file failure takes precedence. It may report `partial_success` with exit `12` if other handoffs completed or remained pending in the same invocation. Ordinary stale or out-of-scope handoffs remain non-failing.
+
 Existing handoff records use `details.phase: "existing_provider_request"` to distinguish them from fresh phase-1 results. When a response is completed, the completed result includes `phase1` containing the original existing-handoff record. This nested `phase1` is per-result provenance; it is separate from the top-level batch `phase1` summary.
 
 Existing handoff result statuses are:
@@ -449,20 +455,34 @@ Existing handoff result statuses are:
 - `pending_provider_response`: source is present, source hash matches the request, and the expected response file is not ready or has not yet completed phase 2
 - `success`: phase 2 completed and produced artifacts/reconcile results
 - `no_op`: phase 2 found primary artifacts already ready for the source hash
-- `stale_handoff`: the request is stale or outside the inbox wrapper scope, such as a request for an external source or a request whose inbox source is missing or hash-mismatched
+- `stale_handoff`: the request is stale or outside the inbox wrapper scope, or its runtime binding is legacy/invalid; inspect `details.reason` to distinguish ordinary cleanup from a terminal runtime-binding blocker
 - `failed`: malformed request files or actionable wrapper/phase-2 failures
 
-`stale_handoff` is non-failing. It is reported with a warning and a cleanup hint so an old or external request does not permanently poison normal inbox processing. Operators should complete those handoffs manually with the lower-level phase-2 command when appropriate, or remove stale request/response files after confirming they are no longer needed.
+Ordinary `stale_handoff` results are non-failing. They carry reasons such as `source_missing` or `source_hash_mismatch` and a cleanup hint so an old or external request does not permanently poison normal inbox processing. Operators should complete those handoffs manually with the lower-level phase-2 command when appropriate, or remove stale request/response files after confirming they are no longer needed. Reasons `legacy_runtime_binding` and `invalid_runtime_binding` are terminal blockers: the wrapper must not invoke extraction or mint fresh phase 1 while they remain. Restore the original reviewed request or explicitly abandon the pair before reminting.
 
 The wrapper is inbox-scoped because current provider request files carry `source_name` but not a durable original source path. For existing handoffs, it only treats `_inbox/<source_name>` as actionable when the file exists and its hash matches the request. This avoids completing a stale or out-of-scope request against an unrelated inbox file with the same basename. Future support for arbitrary pending handoffs would require the request contract to persist an original source path or equivalent rebinding data.
 
 The wrapper may complete a persisted request/response pair until that pair is superseded by a successful ingest and cache cleanup. If phase 2 failed and retained the pair, a corrected response at the same expected path is treated as completing the same attempt. A new attempt for the same source should still start from a fresh phase-1 request when the prior pair should no longer be reused.
 
-`status --json` exposes the same pending-handoff planner under `session_handoffs`, with `counts` and `results`. `doctor --json` maps planner records to hygiene issues:
+`status --json` exposes the same pending-handoff planner under `session_handoffs`, with disjoint `pending`, `stale`, `blocked`, and `failed` counts plus detailed `results`. `doctor --json` maps planner records to hygiene issues:
 
 - `session_handoff_pending` for actionable handoffs waiting for provider response or phase-2 completion
-- `session_handoff_stale` for non-failing stale or out-of-scope handoffs
+- `session_handoff_stale` for non-blocking stale or out-of-scope handoffs
+- `session_handoff_runtime_blocked` for legacy or invalid runtime bindings, with reason-specific recovery guidance
 - `session_handoff_invalid` for malformed request files that cannot be planned
+
+Readiness classifies `session_handoff_runtime_blocked` as a project blocker for unrelated writes. Operations explicitly resolving pending handoffs may enter their specialized validation path so direct phase 2 can return `runtime_handoff_mismatch` and `session-inbox` can report its structured blocked summary without losing the retained files.
+
+### Abandoning A Legacy Or Invalid Runtime Handoff
+
+There is no implicit migration from request schema `1.0` to `1.1`: provenance that was never captured cannot be reconstructed safely. To recover, first inspect `status --json` and the exact `results[].details.request_path` and `expected_response_path`. If an invalid `1.1` request can be restored byte-for-byte from a reviewed copy, restore it and retry under its bound runtime. Otherwise explicitly abandon only that named request/response pair—never the whole cache directory—then rerun `session-inbox` to mint a fresh schema `1.1` request under the intended runtime. For example, after reviewing the paths:
+
+```bash
+rm -- "$MEETINGS_ROOT/$REQUEST_PATH" "$MEETINGS_ROOT/$EXPECTED_RESPONSE_PATH"
+uv run meeting-ingest session-inbox --quality balanced --json
+```
+
+If the response path does not exist, remove only the reviewed request path. This is an explicit destructive recovery step; confirm the pair is no longer needed before removal.
 
 `ingest --provider-response` is phase 2 of this flow and hard-requires the matching persisted request file. It must not accept an arbitrary provider response envelope without the corresponding request file.
 

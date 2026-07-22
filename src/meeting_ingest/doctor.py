@@ -221,10 +221,26 @@ def _session_handoff_issues(paths: ProjectPaths) -> list[DoctorIssue]:
                 )
             )
         elif status == "stale_handoff":
+            reason = details.get("reason") if isinstance(details, dict) else None
+            if reason == "legacy_runtime_binding":
+                code = "session_handoff_runtime_blocked"
+                message = (
+                    "Session provider handoff uses legacy schema 1.0 without runtime provenance; "
+                    "abandon it and mint a fresh request under the intended runtime."
+                )
+            elif reason == "invalid_runtime_binding":
+                code = "session_handoff_runtime_blocked"
+                message = (
+                    "Session provider handoff has an invalid runtime-provenance binding; "
+                    "restore the reviewed request or explicitly abandon and remint it."
+                )
+            else:
+                code = "session_handoff_stale"
+                message = "Session provider handoff is stale or outside the inbox wrapper scope."
             issues.append(
                 DoctorIssue(
-                    code="session_handoff_stale",
-                    message="Session provider handoff is stale or outside the inbox wrapper scope.",
+                    code=code,
+                    message=message,
                     path=request_path,
                 )
             )

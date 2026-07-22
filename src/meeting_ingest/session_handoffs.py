@@ -8,7 +8,7 @@ from pathlib import Path
 from meeting_ingest.errors import MeetingIngestError, ProviderError
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.paths import ProjectPaths
-from meeting_ingest.provider_handoff import PROVIDER_CONTRACT, provider_response_path
+from meeting_ingest.provider_handoff import PROVIDER_CONTRACT, provider_response_path, runtime_provenance_sha256
 
 
 def pending_session_handoffs(paths: ProjectPaths) -> list[dict[str, object]]:
@@ -32,12 +32,23 @@ def pending_session_handoffs(paths: ProjectPaths) -> list[dict[str, object]]:
 
 
 def session_handoff_counts(handoffs: list[dict[str, object]]) -> dict[str, int]:
+    blocked = sum(1 for handoff in handoffs if _is_runtime_blocked_handoff(handoff))
     return {
         "total": len(handoffs),
         "pending": sum(1 for handoff in handoffs if handoff.get("status") == "pending_provider_response"),
-        "stale": sum(1 for handoff in handoffs if handoff.get("status") == "stale_handoff"),
+        "stale": sum(1 for handoff in handoffs if handoff.get("status") == "stale_handoff") - blocked,
+        "blocked": blocked,
         "failed": sum(1 for handoff in handoffs if handoff.get("status") == "failed"),
     }
+
+
+def _is_runtime_blocked_handoff(handoff: dict[str, object]) -> bool:
+    details = handoff.get("details")
+    return (
+        handoff.get("status") == "stale_handoff"
+        and isinstance(details, dict)
+        and details.get("reason") in {"legacy_runtime_binding", "invalid_runtime_binding"}
+    )
 
 
 def _pending_handoff_result(
@@ -60,6 +71,33 @@ def _pending_handoff_result(
     relative_source = _relative_to_meetings(paths, source_path)
     relative_request = _relative_to_meetings(paths, request_path)
     relative_response = _relative_to_meetings(paths, response_path)
+    request_schema = request_payload.get("schema_version")
+    if request_schema == "1.0":
+        return _stale_handoff_result(
+            source=relative_source,
+            request_payload=request_payload,
+            request_path=relative_request,
+            response_path=relative_response,
+            response_exists=response_path.exists(),
+            reason="legacy_runtime_binding",
+        )
+    if request_schema != "1.1":
+        raise ProviderError("session", f"Unsupported provider request schema: {request_path}")
+    provenance = request_payload.get("runtime_provenance")
+    runtime_binding_valid = not (
+        request_payload.get("runtime_provenance_schema") != "1.0"
+        or not isinstance(provenance, dict)
+        or request_payload.get("runtime_provenance_sha256") != runtime_provenance_sha256(provenance)
+    )
+    if not runtime_binding_valid:
+        return _stale_handoff_result(
+            source=relative_source,
+            request_payload=request_payload,
+            request_path=relative_request,
+            response_path=relative_response,
+            response_exists=response_path.exists(),
+            reason="invalid_runtime_binding",
+        )
     if not source_path.exists():
         return _stale_handoff_result(
             source=relative_source,
@@ -120,11 +158,22 @@ def _stale_handoff_result(
     response_exists: bool,
     reason: str,
 ) -> dict[str, object]:
-    message = (
-        "Session provider handoff is stale or outside the inbox wrapper scope; "
-        "complete it manually with `meeting-ingest ingest ... --provider-response ...` "
-        "or remove the stale request/response files after confirming they are no longer needed."
-    )
+    if reason == "legacy_runtime_binding":
+        message = (
+            "Session provider handoff uses legacy schema 1.0 without runtime provenance; "
+            "abandon it explicitly and mint a fresh provider request under the intended runtime."
+        )
+    elif reason == "invalid_runtime_binding":
+        message = (
+            "Session provider handoff has an invalid runtime-provenance binding; "
+            "restore the original reviewed request or abandon it and mint a fresh request."
+        )
+    else:
+        message = (
+            "Session provider handoff is stale or outside the inbox wrapper scope; "
+            "complete it manually with `meeting-ingest ingest ... --provider-response ...` "
+            "or remove the stale request/response files after confirming they are no longer needed."
+        )
     response_status = "ready" if response_exists else "unknown"
     return {
         "source": source,

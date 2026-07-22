@@ -30,6 +30,7 @@ The request JSON contains:
 - ingest_run_id
 - source_sha256
 - normalized_transcript_sha256
+- runtime_provenance_sha256
 - effective_date
 - quality
 - output_mode
@@ -41,10 +42,11 @@ Copy these identity fields exactly from the request into the response envelope:
 - ingest_run_id
 - source_sha256
 - normalized_transcript_sha256
+- runtime_provenance_sha256
 
 Set the response envelope fields as follows:
 
-- schema_version: "1.0"
+- schema_version: "1.1"
 - handoff_type: "provider_response"
 - provider_contract: "meeting-ingest-provider-response-v1"
 - provider.name: "session"
@@ -84,13 +86,14 @@ Rules:
 Expected JSON shape:
 
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
   "meeting_id": "<copy from request>",
   "ingest_run_id": "<copy from request>",
   "source_sha256": "<copy from request>",
   "normalized_transcript_sha256": "<copy from request>",
+  "runtime_provenance_sha256": "<copy from request>",
   "provider": {
     "name": "session",
     "host": "HOST_NAME",
@@ -117,7 +120,11 @@ Expected JSON shape:
 
 ## Completion Command
 
-After the response file exists, the wrapper should complete the ingest with:
+After the response file exists, the wrapper must run the request's
+`response_contract.preflight_command`, substituting the actual response and source paths.
+That generated command includes the exact development override when one is bound. Proceed
+only when it reports a valid response and non-blocked runtime readiness, then complete the
+ingest with:
 
 ```bash
 python3 -m meeting_ingest.cli ingest SOURCE --provider session --provider-response RESPONSE_PATH --json

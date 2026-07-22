@@ -96,6 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate_response_parser.add_argument("--source", required=True, help="Original source file bound to the request.")
     validate_response_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     validate_response_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(validate_response_parser)
 
     ingest_inbox_parser = subparsers.add_parser("ingest-inbox")
     ingest_inbox_parser.add_argument("--root", default=".", help="Path used for project discovery.")
@@ -246,6 +247,7 @@ def run(args: argparse.Namespace) -> RunSummary:
             Path(args.response),
             source=Path(args.source),
             start=Path(args.root),
+            development_override=development_override,
         )
     if args.command == "ingest-inbox":
         return pipeline.ingest_inbox(

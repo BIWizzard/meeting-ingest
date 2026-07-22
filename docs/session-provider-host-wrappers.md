@@ -9,7 +9,8 @@ Each snippet:
 3. fills `REQUEST_PATH`, `RESPONSE_PATH`, `HOST_NAME`, and `MODEL_ID`
 4. renders the generic extraction prompt from `docs/session-provider-subagent-prompt.md`
 5. leaves exactly one host-specific step: run a dedicated extraction sub-agent with that rendered prompt
-6. runs phase 2 with `ingest --provider session --provider-response`
+6. runs side-effect-free `validate-response` and stops if response validation or runtime readiness is blocked
+7. runs phase 2 with `ingest --provider session --provider-response`
 
 Run snippets from the project root after enabling:
 
@@ -55,8 +56,13 @@ PY
 After the host-specific sub-agent step writes `"$RESPONSE_PATH"`, every wrapper should complete with:
 
 ```bash
+python3 -m meeting_ingest.cli validate-response "$RESPONSE_PATH" --source "$SOURCE" --json
 python3 -m meeting_ingest.cli ingest "$SOURCE" --provider session --provider-response "$RESPONSE_PATH" --json
 ```
+
+For development-mode requests, use the request's generated
+`response_contract.preflight_command` so validation carries the exact bound override reason.
+Do not continue when preflight reports blocked runtime readiness.
 
 `provider-request` returns handoff paths relative to `meetings_root`. The snippets pass absolute paths to the sub-agent so its plain file reads and writes resolve correctly from any project working directory.
 
@@ -100,6 +106,7 @@ PY
 
 printf 'Run a dedicated Claude Code extraction sub-agent with this prompt:\n%s\n' "$PROMPT_PATH"
 printf 'After it writes %s, run:\n' "$RESPONSE_PATH"
+printf 'python3 -m meeting_ingest.cli validate-response %q --source %q --json\n' "$RESPONSE_PATH" "$SOURCE"
 printf 'python3 -m meeting_ingest.cli ingest %q --provider session --provider-response %q --json\n' "$SOURCE" "$RESPONSE_PATH"
 ```
 
@@ -143,6 +150,7 @@ PY
 
 printf 'Run a dedicated Supa Code extraction sub-agent with this prompt:\n%s\n' "$PROMPT_PATH"
 printf 'After it writes %s, run:\n' "$RESPONSE_PATH"
+printf 'python3 -m meeting_ingest.cli validate-response %q --source %q --json\n' "$RESPONSE_PATH" "$SOURCE"
 printf 'python3 -m meeting_ingest.cli ingest %q --provider session --provider-response %q --json\n' "$SOURCE" "$RESPONSE_PATH"
 ```
 
@@ -186,5 +194,6 @@ PY
 
 printf 'Run a dedicated T3 Code extraction sub-agent with this prompt:\n%s\n' "$PROMPT_PATH"
 printf 'After it writes %s, run:\n' "$RESPONSE_PATH"
+printf 'python3 -m meeting_ingest.cli validate-response %q --source %q --json\n' "$RESPONSE_PATH" "$SOURCE"
 printf 'python3 -m meeting_ingest.cli ingest %q --provider session --provider-response %q --json\n' "$SOURCE" "$RESPONSE_PATH"
 ```

@@ -5,12 +5,13 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Completed and independently reviewed Approved Runtime Track 1 Task 5. Implemented four readiness verdicts, explicit fail-closed finding classification, strict config/privacy/path/lock/handoff/current-integrity gates, typed invocation-scoped development override, readiness CLI, provenance-bearing mutation summaries, and pre-lock/pre-write guards across all public mutations. Fixed review findings covering playbook recovery, identity alias classification, host/provider privacy semantics, repeated session phase-1 idempotency, editable-only workflow overrides, pin-match reporting, privacy exit consistency, and unknown-provider diagnostics. Full suite passes 348 tests; final independent verdict is commit-ready; plan Task 5 checklist is marked complete. Changes remain uncommitted.",
+  "status_summary": "Approved Runtime Track 1 Task 6 is commit-ready after all review findings were resolved. Runtime provenance binding, preflight/readiness equivalence, blocker classification/counts, explicit recovery, canonical artifact/provider docs, reusable sub-agent prompt, concrete host-wrapper snippets, and Claude/Codex repo+installed mirrors are consistent. Final independent closure review found no issues. Full verification passed 365 tests and git diff --check.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "src/meeting_ingest/readiness.py",
-    "docs/plans/2026-07-20-approved-runtime-readiness.md"
+    "docs/artifact-contract.md",
+    "docs/session-provider-host-wrappers.md",
+    "docs/session-provider-subagent-prompt.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -22,16 +23,16 @@
     "Decide when to begin the separately planned Semantic Integrity Guardrails work after the Approved Runtime track."
   ],
   "next_actions": [
-    "Commit Track 1 Task 5 when authorized, then begin Task 6 runtime binding across session handoffs."
+    "Commit the reviewed Task 6 working tree as feat: bind runtime provenance across handoffs, then begin Track 1 Task 7 durable output provenance."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Commit Track 1 Task 5 when authorized, then begin Task 6 runtime binding across session handoffs.",
+  "continuation_hint": "Next: Commit the reviewed Task 6 working tree as feat: bind runtime provenance across handoffs, then begin Track 1 Task 7 durable output provenance.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-22T01:59:13.074Z",
-  "last_wrapped_at": "2026-07-22T00:40:46.594Z",
+  "last_saved_at": "2026-07-22T03:30:58.938Z",
+  "last_wrapped_at": "2026-07-22T02:01:04.082Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-22T01:59:13.074Z"
+  "updated_at": "2026-07-22T03:30:58.938Z"
 }

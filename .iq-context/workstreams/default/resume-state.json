@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Commit Track 1 Task 5 when authorized, then begin Task 6 runtime binding across session handoffs."
+    "Commit the reviewed Task 6 working tree as feat: bind runtime provenance across handoffs, then begin Track 1 Task 7 durable output provenance."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Commit Track 1 Task 5 when authorized, then begin Task 6 runtime binding across session handoffs.",
-  "updated_at": "2026-07-22T01:59:13.074Z"
+  "resume_from": "Resume with: Commit the reviewed Task 6 working tree as feat: bind runtime provenance across handoffs, then begin Track 1 Task 7 durable output provenance.",
+  "updated_at": "2026-07-22T03:30:58.938Z"
 }

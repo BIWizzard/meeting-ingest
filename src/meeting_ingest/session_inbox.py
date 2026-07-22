@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from meeting_ingest.clock import Clock
-from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError, ProviderError
+from meeting_ingest.errors import EXIT_GENERAL_FAILURE, EXIT_RUNTIME_READINESS, MeetingIngestError, ProviderError
 from meeting_ingest.paths import load_project
 from meeting_ingest import pipeline
 from meeting_ingest.run_summary import RunSummary
@@ -61,12 +61,21 @@ def process_session_inbox(
     existing_results = pending_session_handoffs(paths)
     existing_pending = False
     stale = 0
+    blocked_handoffs = 0
 
     for result in existing_results:
         if not isinstance(result, dict):
             continue
         if result.get("status") == "stale_handoff":
-            stale += 1
+            result_details = result.get("details")
+            if isinstance(result_details, dict) and result_details.get("reason") in {
+                "legacy_runtime_binding",
+                "invalid_runtime_binding",
+            }:
+                existing_pending = True
+                blocked_handoffs += 1
+            else:
+                stale += 1
             result_warnings = result.get("warnings")
             if isinstance(result_warnings, list):
                 warnings.extend(warning for warning in result_warnings if isinstance(warning, str))
@@ -161,6 +170,9 @@ def process_session_inbox(
     elif failed:
         status = "partial_success" if completed or no_ops or pending else "failed"
         exit_code = EXIT_GENERAL_FAILURE
+    elif blocked_handoffs:
+        status = "partial_success" if completed or no_ops or pending else "blocked"
+        exit_code = EXIT_RUNTIME_READINESS
     else:
         status = "success"
         exit_code = 0
@@ -178,6 +190,7 @@ def process_session_inbox(
             "completed": completed,
             "pending_provider_responses": pending,
             "stale_handoffs": stale,
+            "blocked_handoffs": blocked_handoffs,
             "no_ops": no_ops,
             "failed": failed,
             "phase1": {

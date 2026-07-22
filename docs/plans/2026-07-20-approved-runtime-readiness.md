@@ -368,13 +368,15 @@ uv run pytest tests/test_runtime_build.py -q
 - Test: modify `tests/test_pipeline_ingest.py`
 - Test: modify `tests/test_session_inbox.py`
 
-- [ ] Persist canonical runtime provenance plus fingerprint in every new request.
-- [ ] Bind the response echo through the request-specific response contract.
-- [ ] Verify the persisted request provenance against current runtime in preflight and phase 2.
-- [ ] Refuse approved/development mode changes, override-reason changes, build changes, workflow changes, or tampered provenance.
-- [ ] Preserve legacy handoff readability for doctor/status, but do not complete an unpinned legacy handoff as an approved client run.
-- [ ] Keep mismatched handoffs for explicit recovery; never delete them on validation failure.
-- [ ] Test update-during-handoff, dirty-state change during development handoff, tampering, legacy handoff, retry under original build, and fresh remint under a new build.
+- [x] Persist canonical runtime provenance plus fingerprint in every new request.
+- [x] Bind the response echo through the request-specific response contract.
+- [x] Verify the persisted request provenance against current runtime in preflight and phase 2.
+- [x] Refuse approved/development mode changes, override-reason changes, build changes, workflow changes, or tampered provenance.
+- [x] Preserve legacy handoff readability for doctor/status, but do not complete an unpinned legacy handoff as an approved client run.
+- [x] Keep mismatched handoffs for explicit recovery; never delete them on validation failure.
+- [x] Test update-during-handoff, dirty-state change during development handoff, tampering, legacy handoff, retry under original build, and fresh remint under a new build.
+
+**Implementation verification (2026-07-21):** Session request/response schema `1.1` now binds canonical runtime provenance and its SHA-256 across the generated response contract, side-effect-free preflight, direct phase 2, batch inbox, and active-session wrapper. Runtime drift and tampering fail with `runtime_handoff_mismatch` before lock acquisition or output mutation, preserve handoffs for recovery, and retain current runtime evidence in failure summaries. Legacy or invalid runtime bindings remain visible but block wrapper extraction and fresh reminting until explicitly abandoned. Claude/Codex workflow sources and installed mirrors are synchronized; valid response preflight now blocks on unsafe runtime/project readiness using phase-2-equivalent reconcile exemptions, doctor/readiness classify runtime-bound handoffs consistently, and status exposes disjoint blocked/stale counts with an explicit abandonment path. Focused and full verification passed 365 tests plus `git diff --check`.
 
 ## Task 7: Persist Runtime Provenance In Artifacts, Ledgers, And Derived Outputs
 

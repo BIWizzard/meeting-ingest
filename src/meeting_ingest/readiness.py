@@ -84,6 +84,7 @@ _PROJECT_BLOCKER_CODES = {
     "playbook_profile_invalid",
     "review_event_malformed",
     "session_handoff_invalid",
+    "session_handoff_runtime_blocked",
     "signal_identity_invalid",
     "signal_invalid",
     "signal_read_failed",
@@ -386,7 +387,9 @@ def _doctor_findings(
             continue
         if issue.code == "session_handoff_pending" and allow_pending_handoffs:
             continue
-        if issue.code == "incomplete_reconcile" and operation in {"ingest", "reconcile"}:
+        if issue.code == "session_handoff_runtime_blocked" and allow_pending_handoffs:
+            continue
+        if issue.code == "incomplete_reconcile" and operation in {"ingest", "reconcile", "validate-response"}:
             continue
         if issue.code == "playbook_profile_invalid" and operation in {
             "playbook-update",

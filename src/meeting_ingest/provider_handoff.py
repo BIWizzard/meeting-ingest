@@ -2,23 +2,27 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from hashlib import sha256
 import json
 from pathlib import Path
 import re
 from typing import Any
 
-from meeting_ingest.errors import ProviderError
+from meeting_ingest.errors import ProviderError, RuntimeHandoffMismatchError
+from meeting_ingest.ids import canonical_json
 from meeting_ingest.paths import ProjectPaths
 from meeting_ingest.provider_contract import PROVIDER_CONTRACT
 from meeting_ingest.provider_json import provider_response_from_payload
 from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, SUPPORTED_QUALITIES, ProviderResponse, ProviderValidationError
+from meeting_ingest.runtime import RuntimeProvenance
 
 
 REQUEST_DIR = "provider-requests"
 RESPONSE_DIR = "provider-responses"
 INGEST_RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
+RUNTIME_PROVENANCE_SCHEMA = "1.0"
+RUNTIME_PROVENANCE_FIELDS = tuple(field.name for field in fields(RuntimeProvenance))
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,11 @@ class SessionProviderEnvelope:
 
 def normalized_transcript_sha256(transcript: str) -> str:
     return sha256(transcript.encode("utf-8")).hexdigest()
+
+
+def runtime_provenance_sha256(provenance: dict[str, Any]) -> str:
+    """Fingerprint the frozen canonical runtime-provenance payload."""
+    return f"sha256:{sha256(canonical_json(provenance).encode('utf-8')).hexdigest()}"
 
 
 def provider_request_path(paths: ProjectPaths, ingest_run_id: str) -> Path:
@@ -64,16 +73,20 @@ def read_session_provider_envelope(
     *,
     paths: ProjectPaths,
     current_source_sha256: str,
+    current_runtime_provenance: dict[str, Any],
 ) -> SessionProviderEnvelope:
     payload = _read_json(response_path)
-    _require(payload.get("schema_version") == "1.0", "Unsupported provider response schema_version.")
+    # Schema 1.0 is recognized only so legacy handoffs receive the stable runtime
+    # mismatch recovery error instead of being misreported as unknown provider data.
+    _require(payload.get("schema_version") in {"1.0", "1.1"}, "Unsupported provider response schema_version.")
     _require(payload.get("handoff_type") == "provider_response", "Provider response envelope has wrong handoff_type.")
     _require(payload.get("provider_contract") == PROVIDER_CONTRACT, "Unsupported provider response contract.")
 
     ingest_run_id = _required_string(payload, "ingest_run_id")
     request_path = _safe_provider_request_path(paths, ingest_run_id)
     request_payload = _read_request_json(request_path)
-    _validate_request(request_payload)
+    _validate_current_request_or_legacy(payload, request_payload)
+    _verify_runtime_binding(payload, request_payload, current_runtime_provenance)
     _verify_identity(payload, request_payload, current_source_sha256)
 
     provider = payload.get("provider")
@@ -146,7 +159,7 @@ def _read_request_json(path: Path) -> dict[str, Any]:
 
 
 def _validate_request(payload: dict[str, Any]) -> None:
-    _require(payload.get("schema_version") == "1.0", "Unsupported provider request schema_version.")
+    _require(payload.get("schema_version") == "1.1", "Unsupported provider request schema_version.")
     _require(payload.get("handoff_type") == "provider_request", "Provider request has wrong handoff_type.")
     _require(payload.get("provider_contract") == PROVIDER_CONTRACT, "Unsupported provider request contract.")
     for field in (
@@ -163,6 +176,99 @@ def _validate_request(payload: dict[str, Any]) -> None:
         _required_string(payload, field)
     _require(payload["output_mode"] in SUPPORTED_OUTPUT_MODES, "Persisted provider request output_mode is unsupported.")
     _require(payload["quality"] in SUPPORTED_QUALITIES, "Persisted provider request quality is unsupported.")
+
+
+def verify_session_handoff_runtime(
+    response_path: Path,
+    *,
+    paths: ProjectPaths,
+    current_runtime_provenance: dict[str, Any],
+) -> None:
+    """Fail closed on runtime drift before phase 2 acquires the project lock."""
+    try:
+        payload = _read_json(response_path)
+        ingest_run_id = _required_string(payload, "ingest_run_id")
+        request_path = _safe_provider_request_path(paths, ingest_run_id)
+        request_payload = _read_request_json(request_path)
+    except (ProviderError, ProviderValidationError):
+        return
+    if payload.get("schema_version") not in {"1.0", "1.1"} or request_payload.get("schema_version") not in {
+        "1.0",
+        "1.1",
+    }:
+        return
+    try:
+        _validate_current_request_or_legacy(payload, request_payload)
+    except ProviderValidationError:
+        return
+    _verify_runtime_binding(payload, request_payload, current_runtime_provenance)
+
+
+def _verify_runtime_binding(
+    response: dict[str, Any],
+    request: dict[str, Any],
+    current_runtime_provenance: dict[str, Any],
+) -> None:
+    request_schema = request.get("schema_version")
+    response_schema = response.get("schema_version")
+    if request_schema != "1.1" or response_schema != "1.1":
+        raise RuntimeHandoffMismatchError(
+            "Legacy session handoff has no approved runtime binding and cannot complete.",
+            details={"request_schema_version": request_schema, "response_schema_version": response_schema},
+        )
+    provenance = request.get("runtime_provenance")
+    stored_hash = request.get("runtime_provenance_sha256")
+    if request.get("runtime_provenance_schema") != RUNTIME_PROVENANCE_SCHEMA or not isinstance(provenance, dict):
+        raise RuntimeHandoffMismatchError(
+            "Persisted provider request runtime provenance is missing or malformed.",
+            details={
+                "runtime_provenance_schema": request.get("runtime_provenance_schema"),
+                "runtime_provenance_type": type(provenance).__name__,
+            },
+        )
+    if set(provenance) != set(RUNTIME_PROVENANCE_FIELDS):
+        raise RuntimeHandoffMismatchError(
+            "Persisted provider request runtime provenance has a non-canonical shape.",
+            details={
+                "missing_fields": sorted(set(RUNTIME_PROVENANCE_FIELDS) - set(provenance)),
+                "unexpected_fields": sorted(set(provenance) - set(RUNTIME_PROVENANCE_FIELDS)),
+            },
+        )
+    actual_hash = runtime_provenance_sha256(provenance)
+    if stored_hash != actual_hash:
+        raise RuntimeHandoffMismatchError(
+            "Persisted provider request runtime provenance fingerprint is invalid.",
+            details={"stored_sha256": stored_hash, "actual_sha256": actual_hash},
+        )
+    if response.get("runtime_provenance_sha256") != stored_hash:
+        raise RuntimeHandoffMismatchError(
+            "Provider response runtime provenance fingerprint does not match the persisted request.",
+            details={
+                "request_sha256": stored_hash,
+                "response_sha256": response.get("runtime_provenance_sha256"),
+            },
+        )
+    if provenance != current_runtime_provenance:
+        raise RuntimeHandoffMismatchError(
+            "Current runtime provenance does not match the runtime bound to the provider request.",
+            details={
+                "request_sha256": stored_hash,
+                "current_sha256": runtime_provenance_sha256(current_runtime_provenance),
+            },
+        )
+
+
+def _validate_current_request_or_legacy(response: dict[str, Any], request: dict[str, Any]) -> None:
+    """Validate schema 1.1 requests while reserving known 1.0 pairs for the runtime recovery error."""
+    request_schema = request.get("schema_version")
+    response_schema = response.get("schema_version")
+    known_legacy_pair = (
+        request_schema in {"1.0", "1.1"}
+        and response_schema in {"1.0", "1.1"}
+        and (request_schema == "1.0" or response_schema == "1.0")
+    )
+    if not known_legacy_pair:
+        _validate_request(request)
 
 
 def _verify_identity(response: dict[str, Any], request: dict[str, Any], current_source_sha256: str) -> None:

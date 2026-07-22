@@ -1,10 +1,12 @@
 import json
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from conftest import approved_runtime_inspection
 import meeting_ingest.archive as archive_module
 import meeting_ingest.pipeline as pipeline_module
 from meeting_ingest.clock import FrozenClock
@@ -16,6 +18,7 @@ from meeting_ingest.errors import (
     EXIT_LEDGER_WRITE,
     EXIT_PROVIDER_FAILURE,
     EXIT_PROVIDER_VALIDATION,
+    EXIT_RUNTIME_READINESS,
     ConfigError,
     MeetingIngestError,
     UnsupportedSourceFormatError,
@@ -24,6 +27,9 @@ from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
 from meeting_ingest.paths import init_project
 from meeting_ingest.pipeline import ingest, ingest_inbox, provider_request, reconcile
+from meeting_ingest.provider_contract import response_contract_for_request
+from meeting_ingest.readiness import DevelopmentOverride
+from meeting_ingest.runtime import ReadinessFinding
 from meeting_ingest.schema import ProviderResponse
 
 
@@ -971,6 +977,7 @@ def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> N
     assert summary.status == "success"
     assert summary.meeting_id.startswith("mtg-20260703-")
     assert request_payload["handoff_type"] == "provider_request"
+    assert request_payload["schema_version"] == "1.1"
     assert request_payload["provider_contract"] == "meeting-ingest-provider-response-v1"
     assert request_payload["meeting_id"] == summary.meeting_id
     assert request_payload["source_sha256"] == summary.source_sha256
@@ -983,7 +990,11 @@ def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> N
         "ingest_run_id",
         "source_sha256",
         "normalized_transcript_sha256",
+        "runtime_provenance_sha256",
     ]
+    assert request_payload["runtime_provenance_schema"] == "1.0"
+    assert request_payload["runtime_provenance"] == summary.runtime_provenance
+    assert request_payload["runtime_provenance_sha256"].startswith("sha256:")
     assert response_schema["properties"]["meeting_id"] == {"const": summary.meeting_id}
     assert response_schema["properties"]["provider"]["properties"]["model_alias"] == {"const": "balanced"}
     risk_schema = response_schema["properties"]["response"]["properties"]["dependencies_risks"]["items"]
@@ -1037,6 +1048,28 @@ def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> N
     assert read_records(paths.ledger) == []
 
 
+def test_development_response_contract_preserves_escaped_override_reason() -> None:
+    request = {
+        "quality": "balanced",
+        "meeting_id": "meeting",
+        "ingest_run_id": "run",
+        "source_sha256": "source",
+        "normalized_transcript_sha256": "transcript",
+        "runtime_provenance_sha256": "sha256:" + "1" * 64,
+        "runtime_provenance": {
+            "runtime_mode": "development",
+            "development_override_reason": "developer's handoff",
+        },
+    }
+
+    contract = response_contract_for_request(request)
+
+    assert contract["preflight_command"] == (
+        "meeting-ingest validate-response RESPONSE --source SOURCE "
+        "--development-override 'developer'\"'\"'s handoff' --json"
+    )
+
+
 def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     _allow_session_provider(paths.config_path)
@@ -1077,6 +1110,207 @@ def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_pa
     assert not response_path.exists()
     assert not source.exists()
     assert (paths.inbox_done / source.name).exists()
+
+
+def test_session_provider_rejects_runtime_update_and_retries_under_original_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+
+    original = approved_runtime_inspection(tmp_path)
+    updated = replace(
+        original,
+        build=replace(original.build, build_id="meeting-ingest-test-updated"),
+        runtime_provenance=replace(original.runtime_provenance, build_id="meeting-ingest-test-updated"),
+    )
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: updated)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert exc.value.code == "runtime_handoff_mismatch"
+    assert exc.value.exit_code == EXIT_RUNTIME_READINESS
+    assert request_path.exists()
+    assert response_path.exists()
+    assert source.exists()
+    assert read_records(paths.ledger) == []
+
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: original)
+    summary = ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert summary.status == "success"
+    assert not request_path.exists()
+    assert not response_path.exists()
+
+
+def test_session_provider_can_abandon_mismatch_and_remint_under_updated_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    original_summary = provider_request(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    original_request = paths.meetings_root / original_summary.details["request_path"]
+    original_response = paths.meetings_root / original_summary.details["expected_response_path"]
+    _write_session_response(original_request, original_response)
+
+    original = approved_runtime_inspection(tmp_path)
+    updated = replace(
+        original,
+        build=replace(original.build, build_id="meeting-ingest-test-updated"),
+        runtime_provenance=replace(original.runtime_provenance, build_id="meeting-ingest-test-updated"),
+    )
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: updated)
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=original_response)
+    assert exc.value.code == "runtime_handoff_mismatch"
+
+    original_request.unlink()
+    original_response.unlink()
+    fresh_summary = provider_request(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)),
+    )
+    fresh_request = paths.meetings_root / fresh_summary.details["request_path"]
+    fresh_response = paths.meetings_root / fresh_summary.details["expected_response_path"]
+    _write_session_response(fresh_request, fresh_response)
+
+    summary = ingest(source, start=paths.inbox, provider="session", provider_response=fresh_response)
+
+    assert summary.status == "success"
+    assert summary.runtime_provenance["build_id"] == "meeting-ingest-test-updated"
+    assert fresh_summary.ingest_run_id != original_summary.ingest_run_id
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "provenance_payload",
+        "provenance_fingerprint",
+        "response_echo",
+        "legacy_handoff",
+    ],
+)
+def test_session_provider_rejects_invalid_runtime_binding(
+    tmp_path: Path, mutation: str
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    response_payload = json.loads(response_path.read_text(encoding="utf-8"))
+
+    if mutation == "provenance_payload":
+        request_payload["runtime_provenance"]["build_id"] = "tampered"
+    elif mutation == "provenance_fingerprint":
+        request_payload["runtime_provenance_sha256"] = "sha256:" + "0" * 64
+        response_payload["runtime_provenance_sha256"] = "sha256:" + "0" * 64
+    elif mutation == "response_echo":
+        response_payload["runtime_provenance_sha256"] = "sha256:" + "0" * 64
+    else:
+        request_payload["schema_version"] = "1.0"
+        response_payload["schema_version"] = "1.0"
+        request_payload.pop("runtime_provenance_schema")
+        request_payload.pop("runtime_provenance_sha256")
+        request_payload.pop("runtime_provenance")
+        response_payload.pop("runtime_provenance_sha256")
+
+    request_path.write_text(json.dumps(request_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    response_path.write_text(json.dumps(response_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, provider="session", provider_response=response_path)
+
+    assert exc.value.code == "runtime_handoff_mismatch"
+    assert exc.value.exit_code == EXIT_RUNTIME_READINESS
+    assert request_path.exists()
+    assert response_path.exists()
+    assert source.exists()
+    assert read_records(paths.ledger) == []
+
+
+def test_session_provider_rejects_development_tree_or_override_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    base = approved_runtime_inspection(tmp_path)
+    editable_finding = ReadinessFinding(
+        code="runtime_editable_blocked",
+        category="runtime",
+        severity="blocker",
+        message="Editable runtime.",
+        path=str(tmp_path),
+        remediation="Use an override.",
+    )
+    original = replace(
+        base,
+        install=replace(base.install, mode="editable"),
+        runtime_mode="development",
+        findings=(editable_finding,),
+        runtime_provenance=replace(
+            base.runtime_provenance,
+            source_commit="c" * 40,
+            source_tree_sha256="sha256:" + "1" * 64,
+            install_mode="editable",
+            runtime_mode="development",
+        ),
+    )
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: original)
+    override = DevelopmentOverride("session handoff test")
+    request_summary = provider_request(source, start=paths.inbox, development_override=override)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+
+    changed_tree = replace(
+        original,
+        runtime_provenance=replace(original.runtime_provenance, source_tree_sha256="sha256:" + "2" * 64),
+    )
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: changed_tree)
+    with pytest.raises(MeetingIngestError) as tree_exc:
+        ingest(
+            source,
+            start=paths.inbox,
+            provider="session",
+            provider_response=response_path,
+            development_override=override,
+        )
+    assert tree_exc.value.code == "runtime_handoff_mismatch"
+
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: original)
+    with pytest.raises(MeetingIngestError) as reason_exc:
+        ingest(
+            source,
+            start=paths.inbox,
+            provider="session",
+            provider_response=response_path,
+            development_override=DevelopmentOverride("different reason"),
+        )
+    assert reason_exc.value.code == "runtime_handoff_mismatch"
+    assert request_path.exists()
+    assert response_path.exists()
+    assert read_records(paths.ledger) == []
 
 
 def test_session_provider_response_identity_mismatch_records_failure_without_side_effects(tmp_path: Path) -> None:
@@ -1558,6 +1792,117 @@ def test_cli_validate_response_preflight_succeeds_without_side_effects(
     assert read_records(paths.ledger) == []
 
 
+def test_cli_validate_response_rejects_runtime_mismatch_with_current_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    current = approved_runtime_inspection(tmp_path)
+    changed = replace(
+        current,
+        build=replace(current.build, build_id="meeting-ingest-test-updated"),
+        runtime_provenance=replace(current.runtime_provenance, build_id="meeting-ingest-test-updated"),
+    )
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: changed)
+
+    exit_code = main(
+        ["validate-response", str(response_path), "--source", str(source), "--root", str(tmp_path), "--json"]
+    )
+    summary = json.loads(capsys.readouterr().out)
+
+    assert exit_code == EXIT_RUNTIME_READINESS
+    assert summary["errors"][0]["code"] == "runtime_handoff_mismatch"
+    assert summary["runtime_provenance"]["build_id"] == "meeting-ingest-test-updated"
+    assert request_path.exists()
+    assert response_path.exists()
+    assert source.exists()
+    assert read_records(paths.ledger) == []
+
+
+def test_cli_validate_response_accepts_matching_development_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    development = _development_runtime_inspection(tmp_path)
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: development)
+    reason = "validate development handoff"
+    request_summary = provider_request(
+        source,
+        start=paths.inbox,
+        development_override=DevelopmentOverride(reason),
+    )
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+
+    exit_code = main(
+        [
+            "validate-response",
+            str(response_path),
+            "--source",
+            str(source),
+            "--root",
+            str(tmp_path),
+            "--development-override",
+            reason,
+            "--json",
+        ]
+    )
+    summary = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert summary["status"] == "success"
+    assert summary["provider_response"]["status"] == "valid"
+    assert summary["runtime_readiness"]["verdict"] == "development_override"
+    assert summary["runtime_provenance"]["development_override_reason"] == reason
+    assert request_path.exists()
+    assert response_path.exists()
+    assert source.exists()
+    assert read_records(paths.ledger) == []
+
+
+def test_cli_validate_response_blocks_valid_payload_when_project_readiness_is_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    config_text = paths.config_path.read_text(encoding="utf-8")
+    paths.config_path.write_text(
+        config_text.replace("allow_session_provider = true", "allow_session_provider = false"),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["validate-response", str(response_path), "--source", str(source), "--root", str(tmp_path), "--json"]
+    )
+    summary = json.loads(capsys.readouterr().out)
+
+    assert exit_code == EXIT_RUNTIME_READINESS
+    assert summary["status"] == "blocked"
+    assert summary["provider_response"]["status"] == "valid"
+    assert summary["runtime_readiness"]["verdict"] == "blocked"
+    assert any(finding["code"] == "readiness_privacy_blocked" for finding in summary["runtime_readiness"]["findings"])
+    assert request_path.exists()
+    assert response_path.exists()
+    assert source.exists()
+    assert read_records(paths.ledger) == []
+
+
 def test_cli_validate_response_reports_all_payload_errors_without_ledger_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
@@ -1738,6 +2083,31 @@ def _allow_session_provider(config_path: Path) -> None:
     config_path.write_text(config_text.replace("allow_session_provider = false", "allow_session_provider = true"), encoding="utf-8")
 
 
+def _development_runtime_inspection(root: Path):
+    base = approved_runtime_inspection(root)
+    finding = ReadinessFinding(
+        code="runtime_editable_blocked",
+        category="runtime",
+        severity="blocker",
+        message="Editable runtime.",
+        path=str(root),
+        remediation="Use an override.",
+    )
+    return replace(
+        base,
+        install=replace(base.install, mode="editable"),
+        runtime_mode="development",
+        findings=(finding,),
+        runtime_provenance=replace(
+            base.runtime_provenance,
+            source_commit="c" * 40,
+            source_tree_sha256="sha256:" + "1" * 64,
+            install_mode="editable",
+            runtime_mode="development",
+        ),
+    )
+
+
 def _write_session_response(
     request_path: Path,
     response_path: Path,
@@ -1775,13 +2145,14 @@ def _write_session_response(
     if response_overrides:
         response_payload.update(response_overrides)
     envelope = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "handoff_type": "provider_response",
         "provider_contract": "meeting-ingest-provider-response-v1",
         "meeting_id": request_payload["meeting_id"],
         "ingest_run_id": request_payload["ingest_run_id"],
         "source_sha256": source_sha256 or request_payload["source_sha256"],
         "normalized_transcript_sha256": request_payload["normalized_transcript_sha256"],
+        "runtime_provenance_sha256": request_payload["runtime_provenance_sha256"],
         "provider": provider_payload,
         "response": response_payload,
     }

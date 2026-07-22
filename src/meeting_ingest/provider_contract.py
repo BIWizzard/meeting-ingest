@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from typing import Any
 
 from meeting_ingest.schema import (
@@ -19,6 +20,7 @@ IDENTITY_COPY_FIELDS = (
     "ingest_run_id",
     "source_sha256",
     "normalized_transcript_sha256",
+    "runtime_provenance_sha256",
 )
 
 
@@ -152,7 +154,7 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
         ("name", "model_alias"),
     )
     properties: dict[str, Any] = {
-        "schema_version": {"const": "1.0"},
+        "schema_version": {"const": "1.1"},
         "handoff_type": {"const": "provider_response"},
         "provider_contract": {"const": PROVIDER_CONTRACT},
         "provider": provider,
@@ -173,8 +175,15 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
     )
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["title"] = "Meeting Ingest session provider response"
+    preflight_command = "meeting-ingest validate-response RESPONSE --source SOURCE"
+    provenance = request.get("runtime_provenance")
+    if isinstance(provenance, dict) and provenance.get("runtime_mode") == "development":
+        reason = provenance.get("development_override_reason")
+        if isinstance(reason, str) and reason:
+            preflight_command += f" --development-override {shlex.quote(reason)}"
+    preflight_command += " --json"
     return {
         "identity_copy_fields": list(IDENTITY_COPY_FIELDS),
         "json_schema": schema,
-        "preflight_command": "meeting-ingest validate-response RESPONSE --source SOURCE --json",
+        "preflight_command": preflight_command,
     }

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import json
 import os
 from pathlib import Path
 import time
@@ -28,6 +29,7 @@ def test_status_reports_project_counts(tmp_path: Path) -> None:
             "total": 0,
             "pending": 0,
             "stale": 0,
+            "blocked": 0,
             "failed": 0,
         },
         "identity_registry": {"status": "missing", "people": 0, "issues": 0, "identity_candidates": 0},
@@ -42,6 +44,7 @@ def test_status_reports_project_counts(tmp_path: Path) -> None:
             "total": 0,
             "pending": 0,
             "stale": 0,
+            "blocked": 0,
             "failed": 0,
         },
         "results": [],
@@ -293,6 +296,7 @@ def test_status_reports_pending_session_handoff(tmp_path: Path) -> None:
         "total": 1,
         "pending": 1,
         "stale": 0,
+        "blocked": 0,
         "failed": 0,
     }
     assert summary.details["project"]["session_handoffs"] == handoff_status["counts"]
@@ -325,11 +329,66 @@ def test_doctor_reports_stale_session_handoff(tmp_path: Path) -> None:
     request_summary = provider_request(source, start=paths.inbox)
     source.unlink()
 
+    handoff_status = status(tmp_path).details["session_handoffs"]
     summary = doctor(tmp_path)
 
+    assert handoff_status["counts"] == {"total": 1, "pending": 0, "stale": 1, "blocked": 0, "failed": 0}
     assert {
         "code": "session_handoff_stale",
         "message": "Session provider handoff is stale or outside the inbox wrapper scope.",
+        "path": request_summary.details["request_path"],
+    } in summary.details["issues"]
+
+
+def test_doctor_reports_legacy_runtime_handoff_remediation(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request["schema_version"] = "1.0"
+    request.pop("runtime_provenance_schema")
+    request.pop("runtime_provenance_sha256")
+    request.pop("runtime_provenance")
+    request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    handoff_status = status(tmp_path).details["session_handoffs"]
+    summary = doctor(tmp_path)
+
+    assert handoff_status["counts"] == {"total": 1, "pending": 0, "stale": 0, "blocked": 1, "failed": 0}
+    assert {
+        "code": "session_handoff_runtime_blocked",
+        "message": (
+            "Session provider handoff uses legacy schema 1.0 without runtime provenance; "
+            "abandon it and mint a fresh request under the intended runtime."
+        ),
+        "path": request_summary.details["request_path"],
+    } in summary.details["issues"]
+
+
+def test_doctor_reports_invalid_runtime_handoff_remediation(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request["runtime_provenance"]["build_id"] = "tampered"
+    request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    handoff_status = status(tmp_path).details["session_handoffs"]
+    summary = doctor(tmp_path)
+
+    assert handoff_status["counts"] == {"total": 1, "pending": 0, "stale": 0, "blocked": 1, "failed": 0}
+    assert {
+        "code": "session_handoff_runtime_blocked",
+        "message": (
+            "Session provider handoff has an invalid runtime-provenance binding; "
+            "restore the reviewed request or explicitly abandon and remint it."
+        ),
         "path": request_summary.details["request_path"],
     } in summary.details["issues"]
 

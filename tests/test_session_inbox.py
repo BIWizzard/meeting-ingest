@@ -142,6 +142,65 @@ def test_session_inbox_reports_existing_missing_response_without_minting_new_req
     assert source.exists()
 
 
+def test_session_inbox_keeps_legacy_handoff_visible_but_not_actionable(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    request_payload["schema_version"] = "1.0"
+    request_payload.pop("runtime_provenance_schema")
+    request_payload.pop("runtime_provenance_sha256")
+    request_payload.pop("runtime_provenance")
+    request_path.write_text(json.dumps(request_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    summary = process_session_inbox(tmp_path)
+    result = summary.details["results"][0]
+
+    assert summary.status == "blocked"
+    assert summary.exit_code == 12
+    assert summary.details["stale_handoffs"] == 0
+    assert summary.details["blocked_handoffs"] == 1
+    assert summary.details["stale_handoffs"] == 0
+    assert summary.details["phase1"]["status"] == "skipped_existing_pending"
+    assert result["status"] == "stale_handoff"
+    assert result["details"]["reason"] == "legacy_runtime_binding"
+    assert "mint a fresh provider request" in result["warnings"][0]
+    assert sorted((paths.cache / "provider-requests").glob("*.request.json")) == [request_path]
+    assert source.exists()
+
+
+def test_session_inbox_does_not_extract_invalid_runtime_binding(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    request_payload["runtime_provenance"]["build_id"] = "tampered"
+    request_path.write_text(json.dumps(request_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    called = False
+
+    def extractor(_request_payload: dict[str, object], _request_path: Path, _response_path: Path) -> None:
+        nonlocal called
+        called = True
+
+    summary = process_session_inbox(tmp_path, extractor=extractor)
+    result = summary.details["results"][0]
+
+    assert summary.status == "blocked"
+    assert summary.exit_code == 12
+    assert summary.details["blocked_handoffs"] == 1
+    assert result["status"] == "stale_handoff"
+    assert result["details"]["reason"] == "invalid_runtime_binding"
+    assert called is False
+    assert request_path.exists()
+    assert source.exists()
+
+
 def test_session_inbox_reports_existing_handoff_with_missing_source_as_stale(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     _allow_session_provider(paths.config_path)
@@ -268,13 +327,14 @@ def _write_session_response(request_payload: dict[str, object], _request_path: P
         "cross_references": [],
     }
     envelope = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "handoff_type": "provider_response",
         "provider_contract": "meeting-ingest-provider-response-v1",
         "meeting_id": request_payload["meeting_id"],
         "ingest_run_id": request_payload["ingest_run_id"],
         "source_sha256": request_payload["source_sha256"],
         "normalized_transcript_sha256": request_payload["normalized_transcript_sha256"],
+        "runtime_provenance_sha256": request_payload["runtime_provenance_sha256"],
         "provider": provider_payload,
         "response": response_payload,
     }

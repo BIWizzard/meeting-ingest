@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +20,7 @@ from meeting_ingest.errors import (
     EXIT_USAGE_OR_CONFIG,
     MeetingIngestError,
     ProviderError,
+    RuntimeHandoffMismatchError,
     SourceExtractionError,
     UnsupportedSourceFormatError,
 )
@@ -37,12 +38,14 @@ from meeting_ingest.provider_handoff import (
     normalized_transcript_sha256,
     read_session_provider_envelope,
     request_for_missing_response,
+    runtime_provenance_sha256,
+    verify_session_handoff_runtime,
     write_provider_request,
 )
 from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.readiness import DevelopmentOverride, require_write_readiness, with_runtime_provenance
+from meeting_ingest.readiness import DevelopmentOverride, assess_readiness, require_write_readiness, with_runtime_provenance
 from meeting_ingest.schema import (
     SUPPORTED_OUTPUT_MODES,
     ProviderResponse,
@@ -166,6 +169,13 @@ def ingest(
             code="missing_provider_response",
         )
 
+    if provider_response is not None:
+        verify_session_handoff_runtime(
+            _resolve_provider_response_path(provider_response, paths),
+            paths=paths,
+            current_runtime_provenance=asdict(readiness.runtime_provenance),
+        )
+
     with ProjectLock(lock_path(paths.cache), clock=clock):
         if provider_response is not None:
             summary = _complete_session_ingest_locked(
@@ -174,6 +184,7 @@ def ingest(
                 paths=paths,
                 selected_mode=selected_mode,
                 selected_quality=selected_quality,
+                current_runtime_provenance=asdict(readiness.runtime_provenance),
                 clock=clock,
             )
         else:
@@ -189,9 +200,22 @@ def ingest(
     return with_runtime_provenance(summary, readiness)
 
 
-def validate_response(provider_response: Path, *, source: Path, start: Path | None = None) -> RunSummary:
+def validate_response(
+    provider_response: Path,
+    *,
+    source: Path,
+    start: Path | None = None,
+    development_override: DevelopmentOverride | None = None,
+) -> RunSummary:
     """Validate a session response without producing ingest side effects."""
     _, paths = load_project(start or source)
+    readiness = assess_readiness(
+        paths.project_root,
+        operation="validate-response",
+        development_override=development_override,
+        require_session_provider=True,
+        allow_pending_handoffs=True,
+    )
     resolved_source = source.resolve()
     response_path = _resolve_provider_response_path(provider_response, paths)
     try:
@@ -201,15 +225,21 @@ def validate_response(provider_response: Path, *, source: Path, start: Path | No
             str(resolved_source),
             f"Source file could not be read: {resolved_source}: {exc}",
         ) from exc
-    envelope = read_session_provider_envelope(
-        response_path,
-        paths=paths,
-        current_source_sha256=current_source_sha256,
-    )
+    try:
+        envelope = read_session_provider_envelope(
+            response_path,
+            paths=paths,
+            current_source_sha256=current_source_sha256,
+            current_runtime_provenance=asdict(readiness.runtime_provenance),
+        )
+    except RuntimeHandoffMismatchError as exc:
+        exc.details.setdefault("runtime_provenance", asdict(readiness.runtime_provenance))
+        raise
     validate_provider_response(envelope.response)
-    return RunSummary(
-        status="success",
-        exit_code=0,
+    runtime_blocked = readiness.verdict == "blocked"
+    return with_runtime_provenance(RunSummary(
+        status="blocked" if runtime_blocked else "success",
+        exit_code=readiness.exit_code if runtime_blocked else 0,
         source_sha256=str(envelope.request["source_sha256"]),
         meeting_id=str(envelope.request["meeting_id"]),
         ingest_run_id=str(envelope.request["ingest_run_id"]),
@@ -221,9 +251,13 @@ def validate_response(provider_response: Path, *, source: Path, start: Path | No
                 "status": "valid",
                 "path": _relative_to_meetings(paths, response_path),
             },
+            "runtime_readiness": {
+                "verdict": readiness.verdict,
+                "findings": [finding.to_dict() for finding in readiness.findings],
+            },
             "side_effects": "none",
         },
-    )
+    ), readiness)
 
 
 def repair_date(
@@ -403,6 +437,7 @@ def provider_request(
             selected_mode=selected_mode,
             selected_quality=selected_quality,
             meeting_date=meeting_date,
+            runtime_provenance=asdict(readiness.runtime_provenance),
             clock=clock,
         )
     return with_runtime_provenance(summary, readiness)
@@ -453,6 +488,7 @@ def ingest_inbox(
             paths,
             selected_mode=selected_mode,
             selected_quality=selected_quality,
+            runtime_provenance=asdict(readiness.runtime_provenance),
             clock=clock,
         ), readiness)
 
@@ -519,6 +555,7 @@ def _session_ingest_inbox_requests(
     *,
     selected_mode: str,
     selected_quality: str,
+    runtime_provenance: dict[str, Any],
     clock: Clock | None,
 ) -> RunSummary:
     sources = _direct_inbox_sources(paths)
@@ -534,6 +571,7 @@ def _session_ingest_inbox_requests(
                     selected_mode=selected_mode,
                     selected_quality=selected_quality,
                     meeting_date=None,
+                    runtime_provenance=runtime_provenance,
                     clock=clock,
                 )
         except MeetingIngestError as exc:
@@ -700,6 +738,7 @@ def _provider_request_locked(
     selected_mode: str,
     selected_quality: str,
     meeting_date: str | None,
+    runtime_provenance: dict[str, Any],
     clock: Clock | None,
 ) -> RunSummary:
     try:
@@ -707,7 +746,7 @@ def _provider_request_locked(
     except _PreparedNoOp as no_op:
         return no_op.summary
     request_payload = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "handoff_type": "provider_request",
         "provider_contract": PROVIDER_CONTRACT,
         "source_name": prepared.source.name,
@@ -718,6 +757,9 @@ def _provider_request_locked(
         "effective_date": prepared.extraction.effective_date.value,
         "quality": selected_quality,
         "output_mode": selected_mode,
+        "runtime_provenance_schema": "1.0",
+        "runtime_provenance_sha256": runtime_provenance_sha256(runtime_provenance),
+        "runtime_provenance": runtime_provenance,
         "normalized_transcript": prepared.extraction.normalized_text,
         "source_format": prepared.extraction.source_format,
         "date_confidence": prepared.extraction.effective_date.confidence,
@@ -771,6 +813,7 @@ def _complete_session_ingest_locked(
     paths: ProjectPaths,
     selected_mode: str,
     selected_quality: str,
+    current_runtime_provenance: dict[str, Any],
     clock: Clock | None,
 ) -> RunSummary:
     source = source.resolve()
@@ -781,8 +824,17 @@ def _complete_session_ingest_locked(
 
     response_path = _resolve_provider_response_path(provider_response, paths)
     try:
-        envelope = read_session_provider_envelope(response_path, paths=paths, current_source_sha256=source_sha256)
+        envelope = read_session_provider_envelope(
+            response_path,
+            paths=paths,
+            current_source_sha256=source_sha256,
+            current_runtime_provenance=current_runtime_provenance,
+        )
         validate_provider_response(envelope.response)
+    # Runtime mismatches must bypass the generic exception wrapper and failure-ledger
+    # write below so the original handoff remains recoverable under its bound runtime.
+    except RuntimeHandoffMismatchError:
+        raise
     except ProviderError as exc:
         _record_session_failure_from_response_path(paths, source=source, source_sha256=source_sha256, response_path=response_path, error=exc, clock=clock)
         raise

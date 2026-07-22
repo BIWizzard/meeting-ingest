@@ -272,6 +272,47 @@ def test_pending_handoff_can_be_allowed_only_for_resolution(
     assert resolving.verdict == "ready"
 
 
+def test_runtime_blocked_handoff_blocks_unrelated_writes_but_allows_specialized_resolution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [DoctorIssue("session_handoff_runtime_blocked", "Bound runtime mismatch.", "request.json")],
+    )
+
+    blocked = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+    resolving = assess_readiness(
+        tmp_path,
+        operation="ingest",
+        allow_pending_handoffs=True,
+        runtime_inspector=approved_runtime_inspection,
+    )
+
+    assert blocked.verdict == "blocked"
+    assert blocked.findings[0].code == "session_handoff_runtime_blocked"
+    assert resolving.verdict == "ready"
+
+
+def test_validate_response_uses_ingest_incomplete_reconcile_exemption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [DoctorIssue("incomplete_reconcile", "Prior reconcile is pending.", "source.txt")],
+    )
+
+    result = assess_readiness(
+        tmp_path,
+        operation="validate-response",
+        runtime_inspector=approved_runtime_inspection,
+    )
+
+    assert result.verdict == "ready"
+    assert result.findings == ()
+
+
 def test_symlinked_config_is_unsafe(tmp_path: Path) -> None:
     external = tmp_path / "external.toml"
     external.write_text('schema_version = "1.0"\n', encoding="utf-8")

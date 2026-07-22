@@ -186,13 +186,14 @@ The command returns `request_path` and `expected_response_path`. The request emb
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
   "meeting_id": "mtg-20260703-abc12345",
   "ingest_run_id": "ingest-20260703-20260703T120000Z-abcd",
   "source_sha256": "...",
   "normalized_transcript_sha256": "...",
+  "runtime_provenance_sha256": "sha256:...",
   "provider": {
     "name": "session",
     "host": "codex",
@@ -224,6 +225,10 @@ python3 -m meeting_ingest.cli validate-response _local/project-context/meetings/
 ```
 
 Validation exit `6` reports all independently detectable payload issues under `errors[0].details.issues`. Correct them before phase 2. If phase 1 reports low date confidence, confirm the occurrence date and create a fresh request with `--meeting-date` before extraction.
+
+Proceed only when preflight reports `status: "success"`, `provider_response.status: "valid"`, and a non-blocked `runtime_readiness.verdict`. A valid response under blocked runtime/project readiness returns exit `12`; resolve `runtime_readiness.findings` before phase 2.
+
+After upgrading, request schema `1.0` handoffs cannot be completed or migrated because they lack bound runtime provenance. Inspect the exact pair with `status --json`; restore a reviewed schema `1.1` request when available, or explicitly remove only its reported `request_path` and `expected_response_path` before rerunning `session-inbox`. Never clear the entire provider cache as an upgrade shortcut.
 
 Complete the ingest with the response file:
 
