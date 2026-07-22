@@ -5,7 +5,7 @@ import os
 import pytest
 
 from meeting_ingest import pipeline
-from meeting_ingest.errors import EXIT_ARTIFACT_WRITE, MeetingIngestError
+from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.ledger import read_records
 
 
@@ -114,7 +114,7 @@ def test_repair_date_fails_without_ledger_append_when_artifact_missing(tmp_path:
     with pytest.raises(MeetingIngestError) as excinfo:
         pipeline.repair_date(meeting_id, date="2026-07-10", start=tmp_path)
 
-    assert excinfo.value.code == "repair_artifact_missing"
+    assert excinfo.value.code == "missing_artifact"
     assert (meetings_root / "_ledger.jsonl").read_text(encoding="utf-8") == before
 
 
@@ -129,10 +129,9 @@ def test_repair_date_fails_without_ledger_append_or_file_mutation_when_signal_mi
     with pytest.raises(MeetingIngestError) as excinfo:
         pipeline.repair_date(meeting_id, date="2026-07-10", start=tmp_path)
 
-    assert excinfo.value.code == "repair_artifact_missing"
-    assert excinfo.value.phase == "repair"
-    assert excinfo.value.exit_code == EXIT_ARTIFACT_WRITE
-    assert excinfo.value.details == {"path": f"_signals/{meeting_id}.jsonl"}
+    assert excinfo.value.code == "missing_signal_file"
+    assert excinfo.value.phase == "readiness"
+    assert excinfo.value.exit_code == 12
     assert (meetings_root / "_ledger.jsonl").read_text(encoding="utf-8") == ledger_before
     assert list(meetings_root.glob("2026-07-10-*.md")) == []
     assert all(path.exists() and path.read_text(encoding="utf-8") == content for path, content in artifact_contents.items())

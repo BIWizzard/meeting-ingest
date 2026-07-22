@@ -80,14 +80,15 @@ def test_failed_attempt_is_recorded_without_replacing_current_index(tmp_path: Pa
     assert status["latest_attempt_status"] == "failed"
 
 
-def test_failed_first_attempt_reports_failed_status(tmp_path: Path) -> None:
+def test_invalid_registry_blocks_before_recording_a_failed_attempt(tmp_path: Path) -> None:
     paths = _configured_project(tmp_path)
     (paths.playbook_state / "stakeholders.toml").write_text('schema_version = "2.0"\n', encoding="utf-8")
 
-    with pytest.raises(MeetingIngestError, match="registry is invalid"):
+    with pytest.raises(MeetingIngestError) as exc:
         update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "deadbeef")
 
-    assert project_status(paths)["playbook"]["status"] == "failed"
+    assert exc.value.code == "identity_registry_invalid"
+    assert project_status(paths)["playbook"]["status"] == "missing"
 
 
 def test_repair_index_restores_latest_committed_generation(tmp_path: Path) -> None:

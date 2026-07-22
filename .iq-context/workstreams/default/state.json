@@ -5,11 +5,12 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Completed and committed Approved Runtime Track 1 Task 3 as f9d2f90. Read-only runtime inspect now reports fail-closed build, install, package RECORD integrity, editable Git state, receipt, pin, executable, workflow, channel, and runtime provenance evidence in human and JSON forms. Independent initial review was commit-ready-with-notes; all valid notes were fixed, expanded coverage passes 32 focused and 292 full tests, and follow-up review returned commit-ready. The main commit hook refreshed the global uv tool.",
+  "status_summary": "Completed and independently reviewed Approved Runtime Track 1 Task 5. Implemented four readiness verdicts, explicit fail-closed finding classification, strict config/privacy/path/lock/handoff/current-integrity gates, typed invocation-scoped development override, readiness CLI, provenance-bearing mutation summaries, and pre-lock/pre-write guards across all public mutations. Fixed review findings covering playbook recovery, identity alias classification, host/provider privacy semantics, repeated session phase-1 idempotency, editable-only workflow overrides, pin-match reporting, privacy exit consistency, and unknown-provider diagnostics. Full suite passes 348 tests; final independent verdict is commit-ready; plan Task 5 checklist is marked complete. Changes remain uncommitted.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "src/meeting_ingest/runtime.py"
+    "src/meeting_ingest/readiness.py",
+    "docs/plans/2026-07-20-approved-runtime-readiness.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -18,20 +19,19 @@
     "No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval."
   ],
   "open_questions": [
-    "Decide whether fresh ingest may report Ready with history warnings while historical continuity remains incomplete.",
     "Decide when to begin the separately planned Semantic Integrity Guardrails work after the Approved Runtime track."
   ],
   "next_actions": [
-    "Begin Track 1 Task 4: extract strict consumer pin/channel configuration into runtime_config.py, implement explicit publish/pin/update-check and rollback retention in runtime_release.py, add CLI surfaces and focused tests, then run independent review before commit."
+    "Commit Track 1 Task 5 when authorized, then begin Task 6 runtime binding across session handoffs."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Begin Track 1 Task 4: extract strict consumer pin/channel configuration into runtime_config.py, implement explicit publish/pin/update-check and rollback retention in runtime_release.py, add CLI surfaces and focused tests, then run independent review before commit.",
+  "continuation_hint": "Next: Commit Track 1 Task 5 when authorized, then begin Task 6 runtime binding across session handoffs.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-21T22:07:43.505Z",
-  "last_wrapped_at": "2026-07-21T21:15:52.371Z",
+  "last_saved_at": "2026-07-22T01:59:13.074Z",
+  "last_wrapped_at": "2026-07-22T00:40:46.594Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-21T22:07:43.505Z"
+  "updated_at": "2026-07-22T01:59:13.074Z"
 }

@@ -6,7 +6,7 @@ import pytest
 
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.cli import main
-from meeting_ingest.errors import ConfigError
+from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.ledger import read_records
 from meeting_ingest.paths import init_project
 from meeting_ingest.pipeline import provider_request
@@ -201,10 +201,11 @@ def test_session_inbox_requires_privacy_gate_before_scanning_or_extracting(tmp_p
         nonlocal called
         called = True
 
-    with pytest.raises(ConfigError) as exc:
+    with pytest.raises(MeetingIngestError) as exc:
         process_session_inbox(tmp_path, extractor=extractor)
 
-    assert exc.value.code == "session_provider_disabled"
+    assert exc.value.code == "readiness_privacy_blocked"
+    assert exc.value.exit_code == 12
     assert called is False
 
 

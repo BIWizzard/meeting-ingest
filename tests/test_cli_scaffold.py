@@ -4,6 +4,8 @@ from pathlib import Path
 import meeting_ingest.cli as cli_module
 from meeting_ingest.cli import build_parser, emit, main
 from meeting_ingest.run_summary import RunSummary
+from conftest import approved_runtime_inspection
+from meeting_ingest.runtime import ReadinessFinding
 
 
 def test_cli_parses_meeting_date_for_ingest_and_provider_request() -> None:
@@ -12,6 +14,15 @@ def test_cli_parses_meeting_date_for_ingest_and_provider_request() -> None:
     assert ingest_args.meeting_date == "2026-07-10"
     request_args = parser.parse_args(["provider-request", "meeting.vtt", "--meeting-date", "2026-07-13"])
     assert request_args.meeting_date == "2026-07-13"
+
+
+def test_cli_parses_development_override_before_or_after_command() -> None:
+    parser = build_parser()
+    before = parser.parse_args(["--development-override", "local test", "init"])
+    after = parser.parse_args(["init", "--development-override", "local test"])
+
+    assert before.development_override == "local test"
+    assert after.development_override == "local test"
 
 
 def test_cli_parses_playbook_update() -> None:
@@ -86,6 +97,33 @@ def test_emit_prints_runtime_inspection_summary(capsys) -> None:
     )
 
 
+def test_emit_blocked_readiness_leads_with_verdict_and_remediation(capsys) -> None:
+    summary = RunSummary(
+        status="blocked",
+        exit_code=12,
+        runtime_provenance={"development_override_reason": None},
+        details={
+            "command": "readiness",
+            "verdict": "blocked",
+            "findings": [
+                {
+                    "severity": "blocker",
+                    "remediation": "Install and pin the approved runtime.",
+                }
+            ],
+            "finding_counts": {"by_severity": {"blocker": 1}},
+        },
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == (
+        "Readiness: Blocked\n"
+        "Next action: Install and pin the approved runtime.\n"
+        "Findings: blocker=1\n"
+    )
+
+
 def test_runtime_inspect_json_outputs_machine_readable_evidence(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         cli_module,
@@ -130,6 +168,49 @@ def test_runtime_pin_expected_failure_uses_stable_runtime_code(tmp_path: Path, c
     assert exit_code == 12
     assert result["reason"] == "runtime_receipt_invalid"
     assert result["errors"][0]["code"] == "runtime_receipt_invalid"
+
+
+def test_mutating_cli_failure_after_guard_preserves_runtime_provenance(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    assert main(["init", "--root", str(tmp_path), "--json"]) == 0
+    capsys.readouterr()
+    source = tmp_path / "_local/project-context/meetings/_inbox/unsupported.pdf"
+    source.write_text("unsupported", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(["ingest", str(source), "--json"])
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 3
+    assert result["errors"][0]["code"] == "unsupported_source_format"
+    assert result["runtime_provenance"]["runtime_mode"] == "approved"
+
+
+def test_readiness_cli_returns_stable_blocked_exit_code(tmp_path: Path, monkeypatch, capsys) -> None:
+    from dataclasses import replace
+
+    from meeting_ingest.paths import init_project
+
+    init_project(tmp_path)
+    inspection = approved_runtime_inspection(tmp_path)
+    finding = ReadinessFinding(
+        code="runtime_package_integrity_failed",
+        category="runtime",
+        severity="blocker",
+        message="Package integrity failed.",
+        path="/runtime/RECORD",
+        remediation="Reinstall the package.",
+    )
+    inspection = replace(inspection, findings=(finding,), runtime_mode="unverified")
+    monkeypatch.setattr("meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: inspection)
+
+    exit_code = main(["readiness", "--root", str(tmp_path), "--json"])
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 12
+    assert result["verdict"] == "blocked"
+    assert result["findings"][0]["code"] == "runtime_package_integrity_failed"
 
 
 def test_emit_update_check_warns_when_status_is_unavailable(capsys) -> None:

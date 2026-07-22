@@ -11,6 +11,12 @@ from meeting_ingest import pipeline, playbook
 from meeting_ingest.playbook_review import mutate_review
 from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.readiness import (
+    DevelopmentOverride,
+    clear_runtime_provenance,
+    current_runtime_provenance,
+    readiness_summary,
+)
 from meeting_ingest.runtime import inspect_runtime_summary
 from meeting_ingest.runtime_release import pin_runtime_summary, update_check
 from meeting_ingest.session_inbox import process_session_inbox
@@ -18,6 +24,11 @@ from meeting_ingest.session_inbox import process_session_inbox
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="meeting-ingest")
+    parser.add_argument(
+        "--development-override",
+        type=_non_empty_reason,
+        help="Authorize this invocation to use an eligible development runtime, with a required reason.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     runtime_parser = subparsers.add_parser("runtime")
@@ -37,9 +48,21 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_update_parser.add_argument("--root", required=True, help="Consumer project root to inspect.")
     runtime_update_parser.add_argument("--json", action="store_true", help="Emit a machine-readable update summary.")
 
+    readiness_parser = subparsers.add_parser("readiness")
+    readiness_parser.add_argument("--root", default=".", help="Consumer project root to inspect.")
+    readiness_parser.add_argument(
+        "--host",
+        choices=("claude-code",),
+        default="claude-code",
+        help="Reserved host selector; the current reference host is claude-code.",
+    )
+    readiness_parser.add_argument("--json", action="store_true", help="Emit machine-readable readiness findings.")
+    _add_development_override(readiness_parser)
+
     init_parser = subparsers.add_parser("init")
     init_parser.add_argument("--root", default=".", help="Project root to initialize.")
     init_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(init_parser)
 
     ingest_parser = subparsers.add_parser("ingest")
     ingest_parser.add_argument("source")
@@ -53,6 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Known meeting occurrence date (YYYY-MM-DD); overrides inferred dates.",
     )
     ingest_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(ingest_parser)
 
     provider_request_parser = subparsers.add_parser("provider-request")
     provider_request_parser.add_argument("source")
@@ -65,6 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Known meeting occurrence date (YYYY-MM-DD); overrides inferred dates.",
     )
     provider_request_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(provider_request_parser)
 
     validate_response_parser = subparsers.add_parser("validate-response")
     validate_response_parser.add_argument("response", help="Provider response JSON path to validate.")
@@ -78,24 +103,28 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_inbox_parser.add_argument("--provider")
     ingest_inbox_parser.add_argument("--quality")
     ingest_inbox_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(ingest_inbox_parser)
 
     session_inbox_parser = subparsers.add_parser("session-inbox")
     session_inbox_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     session_inbox_parser.add_argument("--mode")
     session_inbox_parser.add_argument("--quality")
     session_inbox_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(session_inbox_parser)
 
     repair_date_parser = subparsers.add_parser("repair-date")
     repair_date_parser.add_argument("selector", help="meeting_id or full source_sha256 of the ingest to repair.")
     repair_date_parser.add_argument("--date", required=True, help="Correct meeting occurrence date (YYYY-MM-DD).")
     repair_date_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     repair_date_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(repair_date_parser)
 
     playbook_parser = subparsers.add_parser("playbook")
     playbook_subparsers = playbook_parser.add_subparsers(dest="playbook_command", required=True)
     playbook_update_parser = playbook_subparsers.add_parser("update")
     playbook_update_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     playbook_update_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(playbook_update_parser)
     reject_parser = playbook_subparsers.add_parser("reject")
     reject_parser.add_argument("entry_id")
     reject_parser.add_argument("--reason", required=True)
@@ -131,15 +160,19 @@ def build_parser() -> argparse.ArgumentParser:
     repair_index_parser = playbook_subparsers.add_parser("repair-index")
     repair_index_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     repair_index_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(repair_index_parser)
     cleanup_parser = playbook_subparsers.add_parser("cleanup-uncommitted")
     cleanup_parser.add_argument("--root", default=".", help="Path used for project discovery.")
     cleanup_parser.add_argument("--dry-run", action="store_true", help="Report targets without deleting them.")
     cleanup_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(cleanup_parser)
 
     for command in ("doctor", "status", "reconcile"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--root", default=".", help="Path used for project discovery.")
         command_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+        if command == "reconcile":
+            _add_development_override(command_parser)
 
     return parser
 
@@ -148,9 +181,28 @@ def _add_playbook_mutation_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", default=".", help="Path used for project discovery.")
     parser.add_argument("--actor", default="user", help="Human or authorized agent recording the review event.")
     parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
+    _add_development_override(parser)
+
+
+def _non_empty_reason(value: str) -> str:
+    reason = value.strip()
+    if not reason:
+        raise argparse.ArgumentTypeError("development override reason must be non-empty")
+    return reason
+
+
+def _add_development_override(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--development-override",
+        type=_non_empty_reason,
+        default=argparse.SUPPRESS,
+        help="Authorize an eligible development runtime for this invocation.",
+    )
 
 
 def run(args: argparse.Namespace) -> RunSummary:
+    override_reason = getattr(args, "development_override", None)
+    development_override = DevelopmentOverride(override_reason) if override_reason is not None else None
     if args.command == "runtime" and args.runtime_command == "inspect":
         return inspect_runtime_summary(Path(args.root))
     if args.command == "runtime" and args.runtime_command == "pin":
@@ -161,8 +213,13 @@ def run(args: argparse.Namespace) -> RunSummary:
         )
     if args.command == "runtime" and args.runtime_command == "update-check":
         return update_check(Path(args.root))
+    if args.command == "readiness":
+        return readiness_summary(
+            Path(args.root),
+            development_override=development_override,
+        )
     if args.command == "init":
-        return pipeline.initialize(Path(args.root))
+        return pipeline.initialize(Path(args.root), development_override=development_override)
     if args.command == "ingest":
         return pipeline.ingest(
             Path(args.source),
@@ -172,6 +229,7 @@ def run(args: argparse.Namespace) -> RunSummary:
             quality=args.quality,
             provider_response=Path(args.provider_response) if args.provider_response else None,
             meeting_date=args.meeting_date,
+            development_override=development_override,
         )
     if args.command == "provider-request":
         return pipeline.provider_request(
@@ -181,6 +239,7 @@ def run(args: argparse.Namespace) -> RunSummary:
             provider=args.provider,
             quality=args.quality,
             meeting_date=args.meeting_date,
+            development_override=development_override,
         )
     if args.command == "validate-response":
         return pipeline.validate_response(
@@ -194,31 +253,37 @@ def run(args: argparse.Namespace) -> RunSummary:
             mode=args.mode,
             provider=args.provider,
             quality=args.quality,
+            development_override=development_override,
         )
     if args.command == "session-inbox":
         return process_session_inbox(
             Path(args.root),
             mode=args.mode,
             quality=args.quality,
+            development_override=development_override,
         )
     if args.command == "doctor":
         return pipeline.doctor(Path(args.root))
     if args.command == "status":
         return pipeline.status(Path(args.root))
     if args.command == "reconcile":
-        return pipeline.reconcile(Path(args.root))
+        return pipeline.reconcile(Path(args.root), development_override=development_override)
     if args.command == "repair-date":
-        return pipeline.repair_date(args.selector, date=args.date, start=Path(args.root))
+        return pipeline.repair_date(
+            args.selector, date=args.date, start=Path(args.root), development_override=development_override
+        )
     if args.command == "playbook" and args.playbook_command == "update":
-        return playbook.update(Path(args.root))
+        return playbook.update(Path(args.root), development_override=development_override)
     if args.command == "playbook" and args.playbook_command == "show":
         return playbook.show(Path(args.root), args.selector, output_format=args.format)
     if args.command == "playbook" and args.playbook_command == "brief":
         return playbook.brief(Path(args.root), args.selector, output_format=args.format)
     if args.command == "playbook" and args.playbook_command == "repair-index":
-        return playbook.repair_index(Path(args.root))
+        return playbook.repair_index(Path(args.root), development_override=development_override)
     if args.command == "playbook" and args.playbook_command == "cleanup-uncommitted":
-        return playbook.cleanup_uncommitted(Path(args.root), dry_run=args.dry_run)
+        return playbook.cleanup_uncommitted(
+            Path(args.root), dry_run=args.dry_run, development_override=development_override
+        )
     if args.command == "playbook" and args.playbook_command in {
         "reject",
         "restore",
@@ -247,6 +312,7 @@ def run(args: argparse.Namespace) -> RunSummary:
             reason=getattr(args, "reason", None),
             note=getattr(args, "note", None),
             actor=args.actor,
+            development_override=development_override,
         )
     raise AssertionError(f"Unhandled command: {args.command}")
 
@@ -255,6 +321,27 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
     data = summary.to_dict()
     if as_json:
         print(json.dumps(data, indent=2, sort_keys=True))
+        return
+
+    if data.get("command") == "readiness":
+        print(f"Readiness: {data['verdict'].replace('_', ' ').title()}")
+        if data["verdict"] == "development_override":
+            print(f"Development reason: {data['runtime_provenance']['development_override_reason']}")
+        actionable = [
+            finding
+            for finding in data["findings"]
+            if (
+                data["verdict"] == "blocked" and finding["severity"] == "blocker"
+            ) or (
+                data["verdict"] == "ready_with_history_warnings"
+                and finding["severity"] == "warning"
+            )
+        ]
+        if actionable:
+            print(f"Next action: {actionable[0]['remediation']}")
+        if data["findings"]:
+            counts = data["finding_counts"]["by_severity"]
+            print("Findings: " + ", ".join(f"{key}={value}" for key, value in counts.items()))
         return
 
     if summary.status in {"success", "no_op"}:
@@ -303,16 +390,23 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    clear_runtime_provenance()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
         summary = run(args)
+        if summary.runtime_provenance is None:
+            summary.runtime_provenance = current_runtime_provenance()
     except MeetingIngestError as exc:
+        runtime_provenance = (
+            exc.details.get("runtime_provenance") if isinstance(exc.details, dict) else None
+        ) or current_runtime_provenance()
         summary = RunSummary(
             status="failed",
             exit_code=exc.exit_code,
             warnings=[],
             errors=[exc.to_error_block()],
+            runtime_provenance=runtime_provenance if isinstance(runtime_provenance, dict) else None,
             details={"reason": exc.code},
         )
     except Exception as exc:

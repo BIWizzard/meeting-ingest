@@ -22,6 +22,7 @@ from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, load_project
 from meeting_ingest.playbook_review import ReviewState, read_review_state
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.readiness import DevelopmentOverride, require_write_readiness, with_runtime_provenance
 from meeting_ingest.schema import SUPPORTED_SIGNAL_SCHEMA_VERSIONS, SignalRecord
 from meeting_ingest.signals import read_signal_jsonl
 from meeting_ingest.stakeholders import (
@@ -89,18 +90,22 @@ def update(
     clock: Clock | None = None,
     suffix_factory: Callable[[], str] = default_suffix,
     trigger: str = "explicit_cli",
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     """Build and commit a complete immutable stakeholder briefing generation."""
     if trigger not in {"explicit_cli", "agent_wrapper"}:
         raise ValueError(f"Unsupported playbook trigger: {trigger}")
     _, paths = load_project(start)
+    readiness = require_write_readiness(paths.project_root, operation="playbook-update", development_override=development_override)
     active_clock = clock or SystemClock()
     with ProjectLock(lock_path(paths.cache), clock=active_clock):
         now = active_clock.now_utc()
         suffix = suffix_factory()[:4]
         run_id = f"derive-{now:%Y%m%d}-{format_timestamp(now)}-{suffix}"
         try:
-            return _update_locked(paths, now=now, run_id=run_id, trigger=trigger)
+            return with_runtime_provenance(
+                _update_locked(paths, now=now, run_id=run_id, trigger=trigger), readiness
+            )
         except MeetingIngestError as exc:
             if not _derivation_is_committed(paths, run_id):
                 _record_failed_derivation(paths, run_id=run_id, now=now, trigger=trigger, error=exc)
@@ -373,8 +378,14 @@ def brief(start: Path, selector: str, *, output_format: str = "markdown") -> Run
     )
 
 
-def repair_index(start: Path, *, clock: Clock | None = None) -> RunSummary:
+def repair_index(
+    start: Path,
+    *,
+    clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
+) -> RunSummary:
     _, paths = load_project(start)
+    readiness = require_write_readiness(paths.project_root, operation="playbook-repair-index", development_override=development_override)
     active_clock = clock or SystemClock()
     with ProjectLock(lock_path(paths.cache), clock=active_clock):
         records, _ = read_derivation_records(paths.playbook_state / "derivation-ledger.jsonl")
@@ -416,7 +427,7 @@ def repair_index(start: Path, *, clock: Clock | None = None) -> RunSummary:
         }
         index_relative = _relative_to_meetings_root(paths, paths.derived) / "playbook-index.json"
         _write_json_atomic(paths.meetings_root / index_relative, index)
-    return RunSummary(
+    return with_runtime_provenance(RunSummary(
         status="success",
         exit_code=0,
         artifacts=[{"kind": "playbook_index", "status": "ready", "path": index_relative.as_posix()}],
@@ -425,14 +436,23 @@ def repair_index(start: Path, *, clock: Clock | None = None) -> RunSummary:
             "derivation_run_id": committed["derivation_run_id"],
             "changed": True,
         },
-    )
+    ), readiness)
 
 
 def cleanup_uncommitted(
-    start: Path, *, dry_run: bool = False, clock: Clock | None = None
+    start: Path,
+    *,
+    dry_run: bool = False,
+    clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     """Remove only generation directories that have no successful ledger commit."""
     _, paths = load_project(start)
+    readiness = require_write_readiness(
+        paths.project_root,
+        operation="playbook-cleanup",
+        development_override=development_override,
+    )
     active_clock = clock or SystemClock()
     with ProjectLock(lock_path(paths.cache), clock=active_clock):
         records, ledger_issues = read_derivation_records(paths.playbook_state / "derivation-ledger.jsonl")
@@ -502,7 +522,7 @@ def cleanup_uncommitted(
 
     changed = bool(removed)
     status = "success" if dry_run or changed else "no_op"
-    return RunSummary(
+    summary = RunSummary(
         status=status,
         exit_code=0,
         warnings=[f"Skipped {item['path']}: {item['reason']}." for item in skipped],
@@ -515,6 +535,7 @@ def cleanup_uncommitted(
             "skipped": skipped,
         },
     )
+    return with_runtime_provenance(summary, readiness)
 
 
 def _indexed_generation_path(paths: ProjectPaths) -> str | None:

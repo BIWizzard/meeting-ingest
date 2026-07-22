@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from meeting_ingest.clock import Clock
-from meeting_ingest.errors import EXIT_GENERAL_FAILURE, ConfigError, MeetingIngestError, ProviderError
+from meeting_ingest.errors import EXIT_GENERAL_FAILURE, MeetingIngestError, ProviderError
 from meeting_ingest.paths import load_project
 from meeting_ingest import pipeline
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.readiness import DevelopmentOverride, require_write_readiness, with_runtime_provenance
 from meeting_ingest.session_handoffs import pending_session_handoffs
 
 
@@ -25,6 +26,7 @@ def process_session_inbox(
     mode: str | None = None,
     quality: str | None = None,
     clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     """Run session inbox phase 1 and complete phase 2 when responses are available.
 
@@ -47,9 +49,14 @@ def process_session_inbox(
     }
     warnings: list[str] = []
 
-    config, paths = load_project(start)
-    if not config.privacy.allow_session_provider:
-        raise ConfigError("Session provider use is disabled by config.", code="session_provider_disabled")
+    _, paths = load_project(start)
+    readiness = require_write_readiness(
+        paths.project_root,
+        operation="session-inbox",
+        development_override=development_override,
+        require_session_provider=True,
+        allow_pending_handoffs=True,
+    )
 
     existing_results = pending_session_handoffs(paths)
     existing_pending = False
@@ -78,6 +85,7 @@ def process_session_inbox(
             paths_meetings_root=paths.meetings_root,
             extractor=extractor,
             clock=clock,
+            development_override=development_override,
         )
         results.append(completion)
         if completion.get("status") in {"success", "no_op"}:
@@ -98,6 +106,7 @@ def process_session_inbox(
             provider="session",
             quality=quality,
             clock=clock,
+            development_override=development_override,
         )
         phase1_data = phase1.to_dict()
         phase1_results = phase1_data.get("results", [])
@@ -126,6 +135,7 @@ def process_session_inbox(
                 paths_meetings_root=paths.meetings_root,
                 extractor=extractor,
                 clock=clock,
+                development_override=development_override,
             )
             results.append(completion)
             if completion.get("status") in {"success", "no_op"}:
@@ -155,7 +165,7 @@ def process_session_inbox(
         status = "success"
         exit_code = 0
 
-    return RunSummary(
+    return with_runtime_provenance(RunSummary(
         status=status,
         exit_code=exit_code,
         warnings=warnings,
@@ -178,7 +188,7 @@ def process_session_inbox(
             },
             "results": results,
         },
-    )
+    ), readiness)
 
 
 def _complete_pending_result(
@@ -187,6 +197,7 @@ def _complete_pending_result(
     paths_meetings_root: Path,
     extractor: SessionInboxExtractor | None,
     clock: Clock | None,
+    development_override: DevelopmentOverride | None,
 ) -> dict[str, object]:
     details = result.get("details")
     source = result.get("source")
@@ -234,6 +245,7 @@ def _complete_pending_result(
             start=paths_meetings_root,
             provider_response=response_path,
             clock=clock,
+            development_override=development_override,
         )
     except MeetingIngestError as exc:
         return _failed_result(result, exc)

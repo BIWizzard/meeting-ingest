@@ -66,7 +66,7 @@ def test_cleanup_uncommitted_refuses_malformed_derivation_ledger(tmp_path: Path)
     with pytest.raises(MeetingIngestError) as exc:
         cleanup_uncommitted(tmp_path, clock=FrozenClock(NOW))
 
-    assert exc.value.code == "cleanup_ledger_invalid"
+    assert exc.value.code == "derivation_ledger_malformed"
     assert candidate.exists()
 
 
@@ -131,7 +131,7 @@ def test_cleanup_uncommitted_refuses_symlinked_generations_root(tmp_path: Path) 
     with pytest.raises(MeetingIngestError) as exc:
         cleanup_uncommitted(tmp_path, clock=FrozenClock(NOW))
 
-    assert exc.value.code == "cleanup_generations_path_invalid"
+    assert exc.value.code == "readiness_path_unsafe"
     assert (outside / "generations" / "derive-20260719-20260719T190000Z-7777").exists()
 
 

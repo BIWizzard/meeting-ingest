@@ -102,6 +102,34 @@ def load_config(path: Path) -> MeetingIngestConfig:
             code="unsupported_schema_version",
         )
 
+    allowed_top_level = {
+        "schema_version",
+        "default_mode",
+        "default_provider",
+        "default_quality",
+        "auto_init",
+        "reconcile_after_success",
+        "cache_normalized_transcript",
+        "paths",
+        "privacy",
+        "playbook",
+    }
+    unknown = set(data) - allowed_top_level
+    if unknown:
+        raise ConfigError(f"Unknown config keys: {', '.join(sorted(unknown))}", code="unknown_config_key")
+    for key in ("default_mode", "default_provider", "default_quality"):
+        value = data.get(key)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ConfigError(f"{key} must be a non-empty string.", code="invalid_config_value")
+    for key in ("auto_init", "reconcile_after_success", "cache_normalized_transcript"):
+        value = data.get(key)
+        if value is not None and not isinstance(value, bool):
+            raise ConfigError(f"{key} must be a boolean.", code="invalid_config_value")
+    for table_name in ("paths", "privacy", "playbook"):
+        value = data.get(table_name, {})
+        if not isinstance(value, dict):
+            raise ConfigError(f"[{table_name}] must be a TOML table.", code="invalid_config_value")
+
     paths = _load_paths_config(data.get("paths", {}))
     privacy = _load_privacy_config(data.get("privacy", {}))
     playbook = _load_playbook_config(data.get("playbook", {}))
@@ -110,9 +138,9 @@ def load_config(path: Path) -> MeetingIngestConfig:
         default_mode=data.get("default_mode", "summary-plus-verbatim"),
         default_provider=data.get("default_provider", "mock"),
         default_quality=data.get("default_quality", "balanced"),
-        auto_init=bool(data.get("auto_init", False)),
-        reconcile_after_success=bool(data.get("reconcile_after_success", True)),
-        cache_normalized_transcript=bool(data.get("cache_normalized_transcript", True)),
+        auto_init=data.get("auto_init", False),
+        reconcile_after_success=data.get("reconcile_after_success", True),
+        cache_normalized_transcript=data.get("cache_normalized_transcript", True),
         paths=paths,
         privacy=privacy,
         playbook=playbook,
@@ -124,6 +152,9 @@ def _load_paths_config(data: dict[str, object]) -> PathsConfig:
     unknown = set(data) - set(defaults)
     if unknown:
         raise ConfigError(f"Unknown [paths] keys: {', '.join(sorted(unknown))}", code="unknown_config_key")
+    for key, value in data.items():
+        if not isinstance(value, str) or not value:
+            raise ConfigError(f"[paths].{key} must be a non-empty string.", code="invalid_config_value")
     return PathsConfig(**{**defaults, **data})
 
 
@@ -132,6 +163,9 @@ def _load_privacy_config(data: dict[str, object]) -> PrivacyConfig:
     unknown = set(data) - set(defaults)
     if unknown:
         raise ConfigError(f"Unknown [privacy] keys: {', '.join(sorted(unknown))}", code="unknown_config_key")
+    for key, value in data.items():
+        if not isinstance(value, bool):
+            raise ConfigError(f"[privacy].{key} must be a boolean.", code="invalid_config_value")
     return PrivacyConfig(**{**defaults, **data})
 
 

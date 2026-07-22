@@ -882,10 +882,23 @@ def test_ingest_rejects_remote_provider_when_privacy_gate_disabled(tmp_path: Pat
     source = paths.inbox / "2026-07-03-team-sync.txt"
     source.write_text("Ken: Hello\n", encoding="utf-8")
 
-    with pytest.raises(ConfigError) as exc:
+    with pytest.raises(MeetingIngestError) as exc:
         ingest(source, start=paths.inbox, provider="anthropic")
 
-    assert exc.value.code == "remote_provider_disabled"
+    assert exc.value.code == "readiness_privacy_blocked"
+    assert exc.value.exit_code == 12
+
+
+def test_ingest_reports_unknown_provider_before_remote_privacy(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError) as exc:
+        ingest(source, start=paths.inbox, provider="sesion")
+
+    assert exc.value.code == "provider_not_implemented"
+    assert exc.value.exit_code == 2
 
 
 def test_ingest_allows_anthropic_when_privacy_gate_enabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -922,10 +935,11 @@ def test_session_provider_request_requires_privacy_gate(tmp_path: Path) -> None:
     source = paths.inbox / "2026-07-03-team-sync.txt"
     source.write_text("Ken: Hello\n", encoding="utf-8")
 
-    with pytest.raises(ConfigError) as exc:
+    with pytest.raises(MeetingIngestError) as exc:
         provider_request(source, start=paths.inbox)
 
-    assert exc.value.code == "session_provider_disabled"
+    assert exc.value.code == "readiness_privacy_blocked"
+    assert exc.value.exit_code == 12
 
 
 def test_provider_response_requires_session_provider(tmp_path: Path) -> None:
@@ -1401,6 +1415,14 @@ def test_ingest_inbox_session_provider_creates_batch_provider_requests(tmp_path:
     assert not (paths.meetings_root / result_details["expected_response_path"]).exists()
     assert read_records(paths.ledger) == []
     assert source.exists()
+
+    repeated = ingest_inbox(
+        tmp_path,
+        provider="session",
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 1, tzinfo=UTC)),
+    )
+    assert repeated.exit_code == 0
+    assert repeated.details["pending_provider_responses"] == 1
 
 
 def test_ingest_inbox_session_provider_reports_mixed_batch_outcomes(tmp_path: Path) -> None:

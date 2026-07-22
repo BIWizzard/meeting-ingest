@@ -14,6 +14,7 @@ from meeting_ingest.ids import normalize_identity_actor, normalize_identity_evid
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, load_project
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.readiness import DevelopmentOverride, require_write_readiness, with_runtime_provenance
 from meeting_ingest.schema import SignalRecord
 
 
@@ -89,14 +90,16 @@ def mutate_review(
     actor: str = "user",
     clock: Clock | None = None,
     suffix_factory: Callable[[], str] = default_suffix,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     if action not in REVIEW_ACTIONS:
         raise ValueError(f"Unsupported review action: {action}")
     _validate_new_event_fields(action=action, target=target, reason=reason, note=note, actor=actor)
     _, paths = load_project(start)
+    readiness = require_write_readiness(paths.project_root, operation="playbook-review", development_override=development_override)
     active_clock = clock or SystemClock()
     with ProjectLock(lock_path(paths.cache), clock=active_clock):
-        return _mutate_review_locked(
+        summary = _mutate_review_locked(
             paths,
             action=action,
             target=target,
@@ -106,6 +109,7 @@ def mutate_review(
             clock=active_clock,
             suffix_factory=suffix_factory,
         )
+    return with_runtime_provenance(summary, readiness)
 
 
 def _mutate_review_locked(

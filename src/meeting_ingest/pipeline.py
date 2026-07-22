@@ -42,6 +42,7 @@ from meeting_ingest.provider_handoff import (
 from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.readiness import DevelopmentOverride, require_write_readiness, with_runtime_provenance
 from meeting_ingest.schema import (
     SUPPORTED_OUTPUT_MODES,
     ProviderResponse,
@@ -108,9 +109,12 @@ class _TitleMetadata:
     rename_suggestion: str | None
 
 
-def initialize(project_root: Path) -> RunSummary:
+def initialize(
+    project_root: Path, *, development_override: DevelopmentOverride | None = None
+) -> RunSummary:
+    readiness = require_write_readiness(project_root, operation="init", development_override=development_override)
     paths = init_project(project_root)
-    return RunSummary(
+    return with_runtime_provenance(RunSummary(
         status="success",
         exit_code=0,
         details={
@@ -118,7 +122,7 @@ def initialize(project_root: Path) -> RunSummary:
             "config_path": str(paths.config_path),
             "meetings_root": str(paths.meetings_root),
         },
-    )
+    ), readiness)
 
 
 def ingest(
@@ -131,6 +135,7 @@ def ingest(
     provider_response: Path | None = None,
     meeting_date: str | None = None,
     clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     config, paths = load_project(start or source)
     if provider_response is not None and meeting_date is not None:
@@ -141,6 +146,14 @@ def ingest(
     selected_mode = mode or config.default_mode
     selected_provider = provider or ("session" if provider_response else config.default_provider)
     selected_quality = quality or config.default_quality
+    readiness = require_write_readiness(
+        paths.project_root,
+        operation="ingest",
+        development_override=development_override,
+        require_session_provider=selected_provider == "session",
+        require_remote_provider=selected_provider == "anthropic",
+        allow_pending_handoffs=provider_response is not None,
+    )
     _validate_ingest_options(config, selected_mode, selected_provider)
     if provider_response is not None and selected_provider != "session":
         raise ConfigError(
@@ -155,7 +168,7 @@ def ingest(
 
     with ProjectLock(lock_path(paths.cache), clock=clock):
         if provider_response is not None:
-            return _complete_session_ingest_locked(
+            summary = _complete_session_ingest_locked(
                 source,
                 provider_response=provider_response,
                 paths=paths,
@@ -163,15 +176,17 @@ def ingest(
                 selected_quality=selected_quality,
                 clock=clock,
             )
-        return _ingest_locked(
-            source,
-            paths=paths,
-            selected_mode=selected_mode,
-            selected_provider=selected_provider,
-            selected_quality=selected_quality,
-            meeting_date=meeting_date,
-            clock=clock,
-        )
+        else:
+            summary = _ingest_locked(
+                source,
+                paths=paths,
+                selected_mode=selected_mode,
+                selected_provider=selected_provider,
+                selected_quality=selected_quality,
+                meeting_date=meeting_date,
+                clock=clock,
+            )
+    return with_runtime_provenance(summary, readiness)
 
 
 def validate_response(provider_response: Path, *, source: Path, start: Path | None = None) -> RunSummary:
@@ -217,11 +232,14 @@ def repair_date(
     date: str,
     start: Path | None = None,
     clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     new_date = _validate_meeting_date(date)
     _, paths = load_project(start or Path.cwd())
+    readiness = require_write_readiness(paths.project_root, operation="repair-date", development_override=development_override)
     with ProjectLock(lock_path(paths.cache), clock=clock):
-        return _repair_date_locked(selector, new_date=new_date, paths=paths, clock=clock)
+        summary = _repair_date_locked(selector, new_date=new_date, paths=paths, clock=clock)
+    return with_runtime_provenance(summary, readiness)
 
 
 def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, clock: Clock | None) -> RunSummary:
@@ -361,17 +379,25 @@ def provider_request(
     quality: str | None = None,
     meeting_date: str | None = None,
     clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     config, paths = load_project(start or source)
     selected_mode = mode or config.default_mode
     selected_provider = provider or "session"
     selected_quality = quality or config.default_quality
-    _validate_ingest_options(config, selected_mode, selected_provider)
     if selected_provider != "session":
         raise ConfigError("provider-request only supports provider 'session'.", code="invalid_provider_request_provider")
 
+    readiness = require_write_readiness(
+        paths.project_root,
+        operation="provider-request",
+        development_override=development_override,
+        require_session_provider=True,
+    )
+    _validate_ingest_options(config, selected_mode, selected_provider)
+
     with ProjectLock(lock_path(paths.cache), clock=clock):
-        return _provider_request_locked(
+        summary = _provider_request_locked(
             source,
             paths=paths,
             selected_mode=selected_mode,
@@ -379,6 +405,7 @@ def provider_request(
             meeting_date=meeting_date,
             clock=clock,
         )
+    return with_runtime_provenance(summary, readiness)
 
 
 def complete_session_ingest(
@@ -387,8 +414,16 @@ def complete_session_ingest(
     provider_response: Path,
     start: Path | None = None,
     clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
-    return ingest(source, start=start, provider="session", provider_response=provider_response, clock=clock)
+    return ingest(
+        source,
+        start=start,
+        provider="session",
+        provider_response=provider_response,
+        clock=clock,
+        development_override=development_override,
+    )
 
 
 def ingest_inbox(
@@ -398,19 +433,28 @@ def ingest_inbox(
     provider: str | None = None,
     quality: str | None = None,
     clock: Clock | None = None,
+    development_override: DevelopmentOverride | None = None,
 ) -> RunSummary:
     config, paths = load_project(start)
     selected_mode = mode or config.default_mode
     selected_provider = provider or config.default_provider
     selected_quality = quality or config.default_quality
+    readiness = require_write_readiness(
+        paths.project_root,
+        operation="ingest-inbox",
+        development_override=development_override,
+        require_session_provider=selected_provider == "session",
+        require_remote_provider=selected_provider == "anthropic",
+        allow_pending_handoffs=selected_provider == "session",
+    )
     _validate_ingest_options(config, selected_mode, selected_provider)
     if selected_provider == "session":
-        return _session_ingest_inbox_requests(
+        return with_runtime_provenance(_session_ingest_inbox_requests(
             paths,
             selected_mode=selected_mode,
             selected_quality=selected_quality,
             clock=clock,
-        )
+        ), readiness)
 
     sources = _direct_inbox_sources(paths)
     results: list[dict[str, object]] = []
@@ -425,6 +469,7 @@ def ingest_inbox(
                 provider=selected_provider,
                 quality=selected_quality,
                 clock=clock,
+                development_override=development_override,
             )
         except MeetingIngestError as exc:
             error_block = exc.to_error_block()
@@ -454,7 +499,7 @@ def ingest_inbox(
         status = "success"
         exit_code = 0
 
-    return RunSummary(
+    return with_runtime_provenance(RunSummary(
         status=status,
         exit_code=exit_code,
         errors=batch_errors,
@@ -466,7 +511,7 @@ def ingest_inbox(
             "failed": failed,
             "results": results,
         },
-    )
+    ), readiness)
 
 
 def _session_ingest_inbox_requests(
@@ -482,14 +527,15 @@ def _session_ingest_inbox_requests(
     for source in sources:
         relative_source = str(source.relative_to(paths.meetings_root))
         try:
-            summary = provider_request(
-                source,
-                start=paths.meetings_root,
-                mode=selected_mode,
-                provider="session",
-                quality=selected_quality,
-                clock=clock,
-            )
+            with ProjectLock(lock_path(paths.cache), clock=clock):
+                summary = _provider_request_locked(
+                    source,
+                    paths=paths,
+                    selected_mode=selected_mode,
+                    selected_quality=selected_quality,
+                    meeting_date=None,
+                    clock=clock,
+                )
         except MeetingIngestError as exc:
             error_block = exc.to_error_block()
             batch_errors.append({"source": relative_source, **error_block})
@@ -1087,8 +1133,11 @@ def status(start: Path) -> RunSummary:
     )
 
 
-def reconcile(start: Path) -> RunSummary:
+def reconcile(
+    start: Path, *, development_override: DevelopmentOverride | None = None
+) -> RunSummary:
     _, paths = load_project(start)
+    readiness = require_write_readiness(paths.project_root, operation="reconcile", development_override=development_override)
     repaired: list[dict[str, object]] = []
     skipped: list[dict[str, object]] = []
     with ProjectLock(lock_path(paths.cache)):
@@ -1123,7 +1172,7 @@ def reconcile(start: Path) -> RunSummary:
                     "changed": repair_result["changed"],
                 }
             )
-    return RunSummary(
+    return with_runtime_provenance(RunSummary(
         status="success",
         exit_code=0,
         details={
@@ -1131,7 +1180,7 @@ def reconcile(start: Path) -> RunSummary:
             "repaired": repaired,
             "skipped": skipped,
         },
-    )
+    ), readiness)
 
 
 def _validate_ingest_options(config: MeetingIngestConfig, mode: str, provider: str) -> None:

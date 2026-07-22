@@ -344,15 +344,17 @@ uv run pytest tests/test_runtime_build.py -q
 - Test: modify `tests/test_session_inbox.py`
 - Test: modify playbook mutation/rebuild tests
 
-- [ ] Implement the four verdicts and categorized findings without duplicating raw doctor output.
-- [ ] Separate next-meeting blockers from history warnings using explicit issue-code classification and the frozen provenance-era boundary; unknown issue codes fail closed until classified.
-- [ ] Check normal config, required privacy gate, current handoffs, lock/active state, path safety, and current-write integrity.
-- [ ] Add the global `--development-override <reason>` option and typed API authorization.
-- [ ] Call the shared guard from every public write-capable engine entry point before lock acquisition or writes.
-- [ ] Preserve read-only access to inspect/readiness/status/doctor even when blocked.
-- [ ] Ensure development override bypasses only approval/install-mode blockers, never source, config, privacy, path, handoff-identity, package-integrity, or corruption blockers.
-- [ ] Add an autouse test fixture that injects an approved runtime inspector; add dedicated tests proving production defaults do not trust test environment variables.
-- [ ] Test Ready, Ready with history warnings, Development override, Blocked, unknown issue fail-closed, grouped human output, full JSON details, and zero side effects.
+- [x] Implement the four verdicts and categorized findings without duplicating raw doctor output.
+- [x] Separate next-meeting blockers from history warnings using explicit issue-code classification and the frozen provenance-era boundary; unknown issue codes fail closed until classified.
+- [x] Check normal config, required privacy gate, current handoffs, lock/active state, path safety, and current-write integrity.
+- [x] Add the global `--development-override <reason>` option and typed API authorization.
+- [x] Call the shared guard from every public write-capable engine entry point before lock acquisition or writes.
+- [x] Preserve read-only access to inspect/readiness/status/doctor even when blocked.
+- [x] Ensure development override bypasses only approval/install-mode blockers, never source, config, privacy, path, handoff-identity, package-integrity, or corruption blockers.
+- [x] Add an autouse test fixture that injects an approved runtime inspector; add dedicated tests proving production defaults do not trust test environment variables.
+- [x] Test Ready, Ready with history warnings, Development override, Blocked, unknown issue fail-closed, grouped human output, full JSON details, and zero side effects.
+
+**Implementation verification (2026-07-21):** Four-verdict readiness classification, strict project and runtime gates, invocation-scoped development authorization, pre-side-effect enforcement across every public mutation, read-only availability, and runtime-provenance summaries passed 348 full tests. Independent read-only review reached commit-ready after fixes for playbook recovery paths, known identity-alias classification, host/provider privacy separation, session phase-1 idempotency, editable-only workflow overrides, pin-match reporting, consistent readiness privacy errors, and unknown-provider diagnostics.
 
 ## Task 6: Bind Runtime Across Session Handoffs
 

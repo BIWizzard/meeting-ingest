@@ -8,6 +8,7 @@ from meeting_ingest.errors import LockConflictError
 from meeting_ingest.locking import ProjectLock, inspect_lock, lock_path
 from meeting_ingest.paths import init_project
 from meeting_ingest.pipeline import doctor, ingest
+from meeting_ingest.readiness import RuntimeReadinessError
 
 
 def test_project_lock_creates_and_removes_lockfile(tmp_path: Path) -> None:
@@ -40,10 +41,11 @@ def test_ingest_fails_with_lock_conflict(tmp_path: Path) -> None:
     source.write_text("Ken: Hello\n", encoding="utf-8")
 
     with ProjectLock(lock_path(paths.cache)):
-        with pytest.raises(LockConflictError) as exc:
+        with pytest.raises(RuntimeReadinessError) as exc:
             ingest(source, start=paths.inbox)
 
-    assert exc.value.exit_code == 10
+    assert exc.value.code == "lock_conflict"
+    assert exc.value.exit_code == 12
     assert source.exists()
 
 
