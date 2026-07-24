@@ -126,6 +126,114 @@ def test_invalid_legacy_lookalike_remains_a_project_blocker(tmp_path: Path) -> N
     ]
 
 
+def test_invalid_ledger_runtime_provenance_blocks_readiness(tmp_path: Path) -> None:
+    from meeting_ingest.pipeline import ingest
+
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    ingest(source, start=paths.inbox)
+    records = [
+        json.loads(line) for line in paths.ledger.read_text(encoding="utf-8").splitlines()
+    ]
+    records[-1]["runtime_provenance_sha256"] = "sha256:" + "0" * 64
+    paths.ledger.write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+    finding = next(
+        finding
+        for finding in result.findings
+        if finding.code == "ledger_provenance_invalid"
+    )
+
+    assert result.verdict == "blocked"
+    assert (finding.category, finding.severity) == ("project", "blocker")
+
+
+def test_tampered_current_signal_file_blocks_readiness(tmp_path: Path) -> None:
+    from meeting_ingest.pipeline import ingest
+
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Please capture this. [mock-signal]\n", encoding="utf-8")
+    summary = ingest(source, start=paths.inbox)
+    signal_path = paths.meetings_root / summary.artifacts[1]["path"]
+    signal_path.write_text(
+        signal_path.read_text(encoding="utf-8") + "\n",
+        encoding="utf-8",
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+    finding = next(
+        finding
+        for finding in result.findings
+        if finding.code == "current_signal_link_invalid"
+    )
+
+    assert result.verdict == "blocked"
+    assert (finding.category, finding.severity) == ("project", "blocker")
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "ledger_provenance_invalid",
+        "current_signal_link_invalid",
+        "artifact_provenance_mismatch",
+        "playbook_provenance_invalid",
+    ],
+)
+def test_runtime_provenance_integrity_issues_are_project_blockers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    code: str,
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [DoctorIssue(code, "Runtime provenance is inconsistent.", "evidence")],
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "blocked"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        (code, "project", "blocker")
+    ]
+
+
+def test_legacy_ledger_and_schema_1_1_signals_remain_history_only(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    paths.ledger.write_text(
+        json.dumps(
+            {
+                "source_sha256": "a" * 64,
+                "meeting_id": "2026-05-04-generic-d01638d8",
+                "ingest_run_id": "20260518T030615Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    fixture = Path(__file__).parent / "fixtures" / "signals" / "schema-1.1-meeting.jsonl"
+    (paths.signals / "legacy.jsonl").write_text(
+        fixture.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "ready_with_history_warnings"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("legacy_provenance_missing", "history", "warning")
+    ]
+
+
 def test_deprecated_signal_event_file_is_a_history_warning(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     event = {
@@ -172,6 +280,7 @@ def test_uniquely_identity_matched_relocated_artifact_is_a_history_warning(tmp_p
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
+            schema_version="1.0",
             event="ingest_completed",
             source_sha256=source_sha256,
             meeting_id=meeting_id,
@@ -198,6 +307,7 @@ def test_unresolved_missing_artifact_remains_a_project_blocker(tmp_path: Path) -
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
+            schema_version="1.0",
             event="ingest_completed",
             source_sha256="a" * 64,
             meeting_id="mtg-20260713-af5978a9",
@@ -229,6 +339,7 @@ def test_ambiguous_identity_matched_artifacts_remain_a_project_blocker(tmp_path:
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
+            schema_version="1.0",
             event="ingest_completed",
             source_sha256=source_sha256,
             meeting_id=meeting_id,

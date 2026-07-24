@@ -21,8 +21,18 @@ from meeting_ingest.ledger import read_records
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, load_project
 from meeting_ingest.playbook_review import ReviewState, read_review_state
+from meeting_ingest.provider_handoff import (
+    RUNTIME_PROVENANCE_SCHEMA,
+    runtime_provenance_sha256,
+    valid_runtime_provenance_binding,
+)
 from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.readiness import DevelopmentOverride, require_write_readiness, with_runtime_provenance
+from meeting_ingest.readiness import (
+    DevelopmentOverride,
+    current_runtime_provenance,
+    require_write_readiness,
+    with_runtime_provenance,
+)
 from meeting_ingest.schema import SUPPORTED_SIGNAL_SCHEMA_VERSIONS, SignalRecord
 from meeting_ingest.signals import read_signal_jsonl
 from meeting_ingest.stakeholders import (
@@ -33,8 +43,11 @@ from meeting_ingest.stakeholders import (
 )
 
 
-DERIVATION_SCHEMA_VERSION = "1.0"
-PROFILE_SCHEMA_VERSION = "1.0"
+DERIVATION_SCHEMA_VERSION = "2.0"
+DERIVATION_PROVENANCE_INVALID_MESSAGE = (
+    "Derivation ledger 2.0 runtime-provenance binding is invalid."
+)
+PROFILE_SCHEMA_VERSION = "2.0"
 RULESET_ID = "briefing-rules-v1"
 RENDERER_VERSION = "briefing-markdown-v2"
 _DERIVATION_RUN_ID = re.compile(r"^derive-\d{8}-\d{8}T\d{6}Z-[a-z0-9]{4}$")
@@ -120,6 +133,7 @@ def _update_locked(
     trigger: str,
 ) -> RunSummary:
     recorded_at = format_iso_timestamp(now)
+    provenance_trio = _runtime_provenance_trio()
     derived_relative = _relative_to_meetings_root(paths, paths.derived)
     generation_relative = derived_relative / "generations" / run_id
     generation_path = paths.meetings_root / generation_relative
@@ -159,6 +173,8 @@ def _update_locked(
         paths.meetings_root / identity_candidates_relative,
         candidates,
         generated_at=recorded_at,
+        provenance=provenance_trio,
+        derivation_run_id=run_id,
     )
 
     observations_by_person: dict[str, list[NormalizedObservation]] = defaultdict(list)
@@ -187,6 +203,7 @@ def _update_locked(
             review_state=review_state,
             previous_profile=previous_profiles.get(person_id),
             ruleset_values=inputs.ruleset_values,
+            provenance_trio=provenance_trio,
         )
         stakeholder_relative = generation_relative / "stakeholders" / person_id
         profile_relative = stakeholder_relative / "profile.json"
@@ -228,7 +245,18 @@ def _update_locked(
         "warnings": warnings,
         "errors": [],
         "recorded_at": recorded_at,
+        **provenance_trio,
     }
+    generation_manifest_relative = generation_relative / "generation-manifest.json"
+    generation_manifest = {
+        "schema_version": DERIVATION_SCHEMA_VERSION,
+        "derivation_run_id": run_id,
+        "generated_at": recorded_at,
+        "identity_candidates_path": identity_candidates_relative.as_posix(),
+        "profiles": profile_records,
+        **provenance_trio,
+    }
+    _write_json_atomic(paths.meetings_root / generation_manifest_relative, generation_manifest)
     _append_derivation_record(ledger_path, ledger_record)
 
     index = {
@@ -243,8 +271,10 @@ def _update_locked(
         "ruleset_fingerprint": inputs.ruleset_fingerprint,
         "profiles": index_profiles,
         "identity_candidates_path": identity_candidates_relative.as_posix(),
+        "generation_manifest_path": generation_manifest_relative.as_posix(),
         "unresolved_identity_count": len(candidates),
         "committed_at": recorded_at,
+        **provenance_trio,
     }
     index_relative = derived_relative / "playbook-index.json"
     _write_json_atomic(paths.meetings_root / index_relative, index)
@@ -410,8 +440,21 @@ def repair_index(
                 "briefing_path": record["briefing_path"],
             }
         ruleset = committed.get("ruleset", {})
+        committed_schema = str(committed.get("schema_version"))
+        provenance_fields = (
+            {
+                key: committed[key]
+                for key in (
+                    "runtime_provenance_schema",
+                    "runtime_provenance_sha256",
+                    "runtime_provenance",
+                )
+            }
+            if committed_schema == DERIVATION_SCHEMA_VERSION
+            else {}
+        )
         index = {
-            "schema_version": DERIVATION_SCHEMA_VERSION,
+            "schema_version": committed_schema,
             "status": "current",
             "derivation_run_id": committed["derivation_run_id"],
             "generation_path": committed["generation_path"],
@@ -422,8 +465,18 @@ def repair_index(
             "ruleset_fingerprint": ruleset.get("fingerprint"),
             "profiles": profiles,
             "identity_candidates_path": (generation_relative / "identity-candidates.json").as_posix(),
+            **(
+                {
+                    "generation_manifest_path": (
+                        generation_relative / "generation-manifest.json"
+                    ).as_posix()
+                }
+                if committed_schema == DERIVATION_SCHEMA_VERSION
+                else {}
+            ),
             "unresolved_identity_count": committed.get("unresolved_identity_count", 0),
             "committed_at": committed["recorded_at"],
+            **provenance_fields,
         }
         index_relative = _relative_to_meetings_root(paths, paths.derived) / "playbook-index.json"
         _write_json_atomic(paths.meetings_root / index_relative, index)
@@ -661,7 +714,7 @@ def _safe_artifact_path(paths: ProjectPaths, relative_path: str) -> Path:
 def _normalize_observation(
     signal: SignalRecord, source_by_meeting: dict[str, tuple[str, str]]
 ) -> NormalizedObservation | None:
-    if signal.schema_version == "1.1" and signal.source is not None:
+    if signal.schema_version in {"1.1", "1.2"} and signal.source is not None:
         source_id = signal.source.source_id
         source_kind = signal.source.source_kind
         artifact_path = signal.source.artifact_path
@@ -723,6 +776,7 @@ def _build_profile(
     review_state: ReviewState,
     previous_profile: dict[str, Any] | None,
     ruleset_values: dict[str, int],
+    provenance_trio: dict[str, object],
 ) -> dict[str, Any]:
     observed_dates = [value for item in observations if (value := _date_part(item.occurred_at))]
     source_kinds = Counter(item.source_kind for item in observations)
@@ -738,6 +792,7 @@ def _build_profile(
         "derivation_run_id": run_id,
         "generated_at": generated_at,
         "input_fingerprint": input_fingerprint,
+        **provenance_trio,
         "coverage": {
             "source_count": len({item.source_id for item in observations}),
             "source_kinds": dict(sorted(source_kinds.items())),
@@ -976,6 +1031,7 @@ def _render_briefing(profile: dict[str, Any]) -> str:
     stakeholder = profile["stakeholder"]
     coverage = profile["coverage"]
     lines = [
+        *_briefing_front_matter(profile),
         f"# Stakeholder Briefing: {stakeholder['display_name']}",
         "",
         "## Identity And Evidence Coverage",
@@ -1017,6 +1073,32 @@ def _render_briefing(profile: dict[str, Any]) -> str:
                 f"{speaker}; {locator_text}; {excerpt}"
             )
     return "\n".join(lines) + "\n"
+
+
+def _briefing_front_matter(profile: dict[str, Any]) -> list[str]:
+    return [
+        "---",
+        'schema_version: "2.0"',
+        f"runtime_provenance_schema: {json.dumps(profile['runtime_provenance_schema'])}",
+        f"runtime_provenance_sha256: {json.dumps(profile['runtime_provenance_sha256'])}",
+        f"derivation_run_id: {json.dumps(profile['derivation_run_id'])}",
+        "runtime_provenance:",
+        *[
+            f"  {key}: {'null' if profile['runtime_provenance'][key] is None else json.dumps(str(profile['runtime_provenance'][key]))}"
+            for key in (
+                "semantic_version",
+                "build_id",
+                "source_commit",
+                "source_tree_sha256",
+                "install_mode",
+                "runtime_mode",
+                "workflow_contract_version",
+                "development_override_reason",
+            )
+        ],
+        "---",
+        "",
+    ]
 
 
 def _single_line(value: str) -> str:
@@ -1138,6 +1220,17 @@ def read_derivation_records(path: Path) -> tuple[list[dict[str, Any]], list[tupl
         except json.JSONDecodeError as exc:
             issues.append((line_number, f"Derivation ledger line is not valid JSON: {exc.msg}"))
             continue
+        if (
+            isinstance(record, dict)
+            and record.get("schema_version") == DERIVATION_SCHEMA_VERSION
+            and not valid_runtime_provenance_binding(
+                record.get("runtime_provenance_schema"),
+                record.get("runtime_provenance_sha256"),
+                record.get("runtime_provenance"),
+            )
+        ):
+            issues.append((line_number, DERIVATION_PROVENANCE_INVALID_MESSAGE))
+            continue
         if not _valid_derivation_record(record):
             issues.append((line_number, "Derivation ledger line is missing required contract fields."))
             continue
@@ -1146,7 +1239,13 @@ def read_derivation_records(path: Path) -> tuple[list[dict[str, Any]], list[tupl
 
 
 def _valid_derivation_record(value: object) -> bool:
-    if not isinstance(value, dict) or value.get("schema_version") != DERIVATION_SCHEMA_VERSION:
+    if not isinstance(value, dict) or value.get("schema_version") not in {"1.0", DERIVATION_SCHEMA_VERSION}:
+        return False
+    if value["schema_version"] == DERIVATION_SCHEMA_VERSION and not valid_runtime_provenance_binding(
+        value.get("runtime_provenance_schema"),
+        value.get("runtime_provenance_sha256"),
+        value.get("runtime_provenance"),
+    ):
         return False
     if value.get("event") not in {"briefing_derivation_completed", "briefing_derivation_failed"}:
         return False
@@ -1214,11 +1313,29 @@ def _record_failed_derivation(
             "warnings": list(inputs.warnings),
             "errors": [error.to_error_block()],
             "recorded_at": format_iso_timestamp(now),
+            **_runtime_provenance_trio(),
         }
         _append_derivation_record(paths.playbook_state / "derivation-ledger.jsonl", record)
     except Exception:
         # Preserve the original derivation failure when the failure audit cannot be written.
         return
+
+
+def _runtime_provenance_trio() -> dict[str, object]:
+    provenance = current_runtime_provenance()
+    if provenance is None:
+        raise MeetingIngestError(
+            phase="playbook_ledger",
+            code="derivation_provenance_missing",
+            message="Runtime provenance is unavailable for a playbook write.",
+            exit_code=EXIT_LEDGER_WRITE,
+            recoverable=False,
+        )
+    return {
+        "runtime_provenance_schema": RUNTIME_PROVENANCE_SCHEMA,
+        "runtime_provenance_sha256": runtime_provenance_sha256(provenance),
+        "runtime_provenance": provenance,
+    }
 
 
 def _validate_generation_profile(profile_path: Path, briefing_path: Path) -> None:
@@ -1233,7 +1350,19 @@ def _validate_generation_profile(profile_path: Path, briefing_path: Path) -> Non
             exit_code=EXIT_ARTIFACT_WRITE,
             recoverable=True,
         ) from exc
-    if profile.get("schema_version") != PROFILE_SCHEMA_VERSION or not briefing.startswith("# Stakeholder Briefing:"):
+    if (
+        profile.get("schema_version") == "1.0"
+        and briefing.startswith("# Stakeholder Briefing:")
+    ):
+        return
+    try:
+        expected_prefix = "\n".join(_briefing_front_matter(profile))
+    except (KeyError, TypeError):
+        expected_prefix = ""
+    if (
+        profile.get("schema_version") != PROFILE_SCHEMA_VERSION
+        or not briefing.startswith(expected_prefix + "\n# Stakeholder Briefing:")
+    ):
         raise MeetingIngestError(
             phase="playbook_generation",
             code="generation_validation_failed",

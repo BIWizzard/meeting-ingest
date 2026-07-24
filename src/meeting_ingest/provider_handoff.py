@@ -50,6 +50,25 @@ def runtime_provenance_sha256(provenance: dict[str, Any]) -> str:
     return f"sha256:{sha256(canonical_json(provenance).encode('utf-8')).hexdigest()}"
 
 
+def valid_runtime_provenance_binding(
+    schema: object,
+    fingerprint: object,
+    provenance: object,
+) -> bool:
+    if schema != RUNTIME_PROVENANCE_SCHEMA or not isinstance(provenance, dict):
+        return False
+    if set(provenance) != set(RUNTIME_PROVENANCE_FIELDS):
+        return False
+    nullable_fields = {"source_commit", "source_tree_sha256", "development_override_reason"}
+    for field in RUNTIME_PROVENANCE_FIELDS:
+        value = provenance[field]
+        if field in nullable_fields and value is None:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            return False
+    return fingerprint == runtime_provenance_sha256(provenance)
+
+
 def provider_request_path(paths: ProjectPaths, ingest_run_id: str) -> Path:
     return paths.cache / REQUEST_DIR / f"{ingest_run_id}.request.json"
 

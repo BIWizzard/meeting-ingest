@@ -16,13 +16,15 @@ RESERVED_KEYS = {
     "artifacts",
     "warnings",
     "errors",
+    "runtime_provenance_schema",
+    "runtime_provenance_sha256",
     "runtime_provenance",
 }
 
 
 @dataclass
 class RunSummary:
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     status: str = "success"
     exit_code: int = 0
     source_sha256: str | None = None
@@ -47,6 +49,10 @@ class RunSummary:
             "errors": self.errors,
         }
         if self.runtime_provenance is not None:
+            from meeting_ingest.provider_handoff import RUNTIME_PROVENANCE_SCHEMA, runtime_provenance_sha256
+
+            data["runtime_provenance_schema"] = RUNTIME_PROVENANCE_SCHEMA
+            data["runtime_provenance_sha256"] = runtime_provenance_sha256(self.runtime_provenance)
             data["runtime_provenance"] = self.runtime_provenance
         collisions = RESERVED_KEYS.intersection(self.details)
         if collisions:

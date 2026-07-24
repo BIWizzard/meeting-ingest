@@ -262,7 +262,7 @@ def test_init_json_outputs_run_summary(tmp_path: Path, capsys) -> None:
     summary = json.loads(captured.out)
 
     assert exit_code == 0
-    assert summary["schema_version"] == "1.0"
+    assert summary["schema_version"] == "1.1"
     assert summary["status"] == "success"
     assert summary["command"] == "init"
     assert Path(summary["meetings_root"]).is_dir()

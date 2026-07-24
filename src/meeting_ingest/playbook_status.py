@@ -8,8 +8,15 @@ from typing import Any
 
 from meeting_ingest.ids import normalize_identity_actor, normalize_identity_evidence
 from meeting_ingest.paths import ProjectPaths
-from meeting_ingest.playbook import DerivationInputs, NormalizedObservation, discover_inputs, read_derivation_records
+from meeting_ingest.playbook import (
+    DERIVATION_PROVENANCE_INVALID_MESSAGE,
+    DerivationInputs,
+    NormalizedObservation,
+    discover_inputs,
+    read_derivation_records,
+)
 from meeting_ingest.playbook_review import ReviewState, read_review_state, suppression_match
+from meeting_ingest.provider_handoff import valid_runtime_provenance_binding
 
 
 _PROFILE_ENTRY_LISTS = (
@@ -94,9 +101,12 @@ def playbook_issues(paths: ProjectPaths) -> list[dict[str, str | None]]:
     ledger_path = paths.playbook_state / "derivation-ledger.jsonl"
     records, ledger_issues = read_derivation_records(ledger_path)
     for line_number, message in ledger_issues:
+        provenance_invalid = message == DERIVATION_PROVENANCE_INVALID_MESSAGE
         issues.append(
             _issue(
-                "derivation_ledger_malformed",
+                "playbook_provenance_invalid"
+                if provenance_invalid
+                else "derivation_ledger_malformed",
                 message,
                 f"_playbook-state/derivation-ledger.jsonl:line:{line_number}",
             )
@@ -121,6 +131,18 @@ def playbook_issues(paths: ProjectPaths) -> list[dict[str, str | None]]:
     index_path = paths.derived / "playbook-index.json"
     index = _read_json_object(index_path)
     if index is not None:
+        if index.get("schema_version") == "2.0" and not valid_runtime_provenance_binding(
+            index.get("runtime_provenance_schema"),
+            index.get("runtime_provenance_sha256"),
+            index.get("runtime_provenance"),
+        ):
+            issues.append(
+                _issue(
+                    "playbook_provenance_invalid",
+                    "Playbook index 2.0 runtime-provenance binding is invalid.",
+                    str(index_path.relative_to(paths.meetings_root)),
+                )
+            )
         run_id = index.get("derivation_run_id")
         latest_success = next((record for record in reversed(records) if record.get("status") == "success"), None)
         if run_id not in committed or (
@@ -134,6 +156,17 @@ def playbook_issues(paths: ProjectPaths) -> list[dict[str, str | None]]:
                 )
             )
         issues.extend(_profile_issues(paths, index))
+        committed_record = committed.get(str(run_id))
+        if (
+            index.get("schema_version") == "2.0"
+            and committed_record is not None
+            and valid_runtime_provenance_binding(
+                index.get("runtime_provenance_schema"),
+                index.get("runtime_provenance_sha256"),
+                index.get("runtime_provenance"),
+            )
+        ):
+            issues.extend(_generation_provenance_issues(paths, index, committed_record))
     elif committed:
         issues.append(
             _issue(
@@ -178,7 +211,11 @@ def _profile_issues(paths: ProjectPaths, index: dict[str, Any]) -> list[dict[str
             issues.append(_issue("playbook_profile_missing", "Indexed playbook profile is missing.", relative))
             continue
         payload = _read_json_object(path)
-        if payload is None or payload.get("schema_version") != "1.0" or payload.get("profile_kind") != "stakeholder_briefing":
+        if (
+            payload is None
+            or payload.get("schema_version") not in {"1.0", "2.0"}
+            or payload.get("profile_kind") != "stakeholder_briefing"
+        ):
             issues.append(_issue("playbook_profile_invalid", "Indexed playbook profile is invalid.", relative))
         briefing_relative = str(record["briefing_path"])
         briefing_path = _safe_meetings_path(paths, briefing_relative)
@@ -189,6 +226,100 @@ def _profile_issues(paths: ProjectPaths, index: dict[str, Any]) -> list[dict[str
         elif not briefing_path.exists():
             issues.append(_issue("playbook_profile_missing", "Indexed stakeholder briefing is missing.", briefing_relative))
     return issues
+
+
+def _generation_provenance_issues(
+    paths: ProjectPaths,
+    index: dict[str, Any],
+    committed: dict[str, Any] | None,
+) -> list[dict[str, str | None]]:
+    expected = index.get("runtime_provenance_sha256")
+    run_id = index.get("derivation_run_id")
+    members: list[tuple[str, dict[str, Any] | None]] = [
+        ("playbook index", index),
+        ("committing derivation record", committed),
+    ]
+    for label, key in (
+        ("generation manifest", "generation_manifest_path"),
+        ("identity candidates", "identity_candidates_path"),
+    ):
+        relative = index.get(key)
+        payload = (
+            _read_json_object(_safe_meetings_path(paths, str(relative)))
+            if isinstance(relative, str)
+            else None
+        )
+        members.append((label, payload))
+    profiles = index.get("profiles")
+    briefing_members: list[tuple[str, str | None, str | None]] = []
+    if isinstance(profiles, dict):
+        for person_id, record in profiles.items():
+            if not isinstance(record, dict):
+                continue
+            profile_relative = record.get("profile_path")
+            profile_path = (
+                _safe_meetings_path(paths, str(profile_relative))
+                if isinstance(profile_relative, str)
+                else None
+            )
+            if profile_path is not None:
+                members.append((f"profile {person_id}", _read_json_object(profile_path)))
+            briefing_relative = record.get("briefing_path")
+            briefing_path = (
+                _safe_meetings_path(paths, str(briefing_relative))
+                if isinstance(briefing_relative, str)
+                else None
+            )
+            briefing_members.append(
+                (f"briefing {person_id}", *_briefing_provenance(briefing_path))
+            )
+    mismatches: list[str] = []
+    for label, payload in members:
+        if (
+            payload is None
+            or payload.get("schema_version") != "2.0"
+            or payload.get("derivation_run_id") != run_id
+            or payload.get("runtime_provenance_sha256") != expected
+            or not valid_runtime_provenance_binding(
+                payload.get("runtime_provenance_schema"),
+                payload.get("runtime_provenance_sha256"),
+                payload.get("runtime_provenance"),
+            )
+        ):
+            mismatches.append(label)
+    for label, briefing_run_id, fingerprint in briefing_members:
+        if briefing_run_id != run_id or fingerprint != expected:
+            mismatches.append(label)
+    if not mismatches:
+        return []
+    return [
+        _issue(
+            "playbook_provenance_invalid",
+            "Playbook generation members do not share the committing runtime provenance: "
+            + ", ".join(mismatches)
+            + ".",
+            str(index.get("generation_path")) if index.get("generation_path") else None,
+        )
+    ]
+
+
+def _briefing_provenance(path: Path | None) -> tuple[str | None, str | None]:
+    if path is None:
+        return None, None
+    values: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return None, None
+    if not lines or lines[0] != "---":
+        return None, None
+    for line in lines[1:]:
+        if line == "---":
+            break
+        if line.startswith(("derivation_run_id: ", "runtime_provenance_sha256: ")):
+            key, value = line.split(": ", 1)
+            values[key] = value.strip().strip('"')
+    return values.get("derivation_run_id"), values.get("runtime_provenance_sha256")
 
 
 def _orphaned_review_issues(
@@ -441,7 +572,7 @@ def _profile_entries(profile: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _index_is_usable(paths: ProjectPaths, index: dict[str, Any] | None) -> bool:
-    if index is None or index.get("schema_version") != "1.0" or index.get("status") != "current":
+    if index is None or index.get("schema_version") not in {"1.0", "2.0"} or index.get("status") != "current":
         return False
     generation_path = index.get("generation_path")
     profiles = index.get("profiles")

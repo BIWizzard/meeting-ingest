@@ -49,6 +49,7 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     done_file = paths.inbox_done / source.name
     markdown = artifact.read_text(encoding="utf-8")
     ledger_records = read_records(paths.ledger)
+    summary_payload = summary.to_dict()
 
     assert summary.status == "success"
     assert summary.meeting_id == "mtg-20260703-bf3b2898"
@@ -76,7 +77,16 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     assert "# Kushali Sync" in markdown
     assert "## Verbatim Transcript" in markdown
     assert markdown.endswith("<!-- transcript:end -->")
+    assert 'schema_version: "1.1"' in markdown
+    assert '  runtime_mode: "approved"' in markdown
+    assert '  build_id: "meeting-ingest-test-approved"' in markdown
+    assert summary_payload["schema_version"] == "1.1"
+    assert summary_payload["runtime_provenance_schema"] == "1.0"
+    assert summary_payload["runtime_provenance_sha256"].startswith("sha256:")
     assert [record["event"] for record in ledger_records] == ["primary_artifacts_ready", "ingest_completed"]
+    assert all(record["schema_version"] == "2.0" for record in ledger_records)
+    assert all(record["runtime_provenance_schema"] == "1.0" for record in ledger_records)
+    assert all(record["runtime_provenance"] == summary.runtime_provenance for record in ledger_records)
     assert ledger_records[0]["reconcile"]["status"] == "pending"
     assert ledger_records[-1]["source"] == {
         "original_path": "_inbox/2026-07-03-kushali-sync.txt",
@@ -87,6 +97,15 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["title"] == "Kushali Sync"
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["slug"] == "kushali-sync"
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["model_id"] == "none"
+    artifact_manifest = ledger_records[-1]["artifacts"]["summary-plus-verbatim"]
+    assert (
+        f"runtime_provenance_ledger_record_id: {artifact_manifest['producer_ledger_record_id']}"
+        in markdown
+    )
+    assert (
+        artifact_manifest["producer_runtime_provenance_sha256"]
+        == summary_payload["runtime_provenance_sha256"]
+    )
     assert ledger_records[-1]["signals"]["path"] == "_signals/mtg-20260703-bf3b2898.jsonl"
     assert ledger_records[-1]["reconcile"]["status"] == "completed"
     assert ledger_records[-1]["reconcile"]["path"] == "_inbox/_done/2026-07-03-kushali-sync.txt"
@@ -109,7 +128,7 @@ def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path
     markdown = artifact.read_text(encoding="utf-8")
 
     assert summary.artifacts[1]["count"] == 1
-    assert signal_payload["schema_version"] == "1.1"
+    assert signal_payload["schema_version"] == "1.2"
     assert signal_payload["signal_id"].startswith(f"sig-{summary.source_sha256[:12]}-")
     assert signal_payload["meeting_id"] == summary.meeting_id
     assert signal_payload["ingest_run_id"] == summary.ingest_run_id
@@ -123,6 +142,58 @@ def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path
     assert signal_payload["source"]["channel"] is None
     assert signal_payload["timing"]["occurred"]["value"] == "2026-07-03"
     assert signal_payload["timing"]["recorded"]["value"] == "2026-07-03T12:00:00Z"
+    producer = read_records(paths.ledger)[0]
+    assert signal_payload["runtime_provenance_ref"] == {
+        "schema_version": "1.0",
+        "producer_ledger_record_id": producer["ledger_record_id"],
+        "sha256": summary.to_dict()["runtime_provenance_sha256"],
+    }
+    producing_records = [
+        record
+        for record in read_records(paths.ledger)
+        if record["signals"]["produced_in_this_record"]
+        and record["signals"]["producer_ledger_record_id"] == record["ledger_record_id"]
+    ]
+    assert len(producing_records) == 1
+    assert all(
+        record["runtime_provenance_sha256"] == signal_payload["runtime_provenance_ref"]["sha256"]
+        for record in producing_records
+    )
+    ledger_records = read_records(paths.ledger)
+    assert ledger_records[-1]["event"] == "ingest_completed"
+    assert ledger_records[-1]["signals"] == {
+        **producing_records[0]["signals"],
+        "produced_in_this_record": False,
+    }
+
+
+def test_development_override_ingest_persists_notice_and_escaped_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-development.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "meeting_ingest.readiness._RUNTIME_INSPECTOR",
+        lambda _: _development_runtime_inspection(tmp_path),
+    )
+    reason = "exercise *local* [runtime]\ncontinued"
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        development_override=DevelopmentOverride(reason),
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    artifact = paths.meetings_root / summary.artifacts[0]["path"]
+    markdown = artifact.read_text(encoding="utf-8")
+    assert 'runtime_mode: "development"' in markdown
+    assert 'development_override_reason: "exercise *local* [runtime]\\ncontinued"' in markdown
+    assert (
+        "**Development artifact:** generated by a development runtime — "
+        "exercise \\*local\\* \\[runtime\\] continued."
+    ) in markdown
 
 
 def test_ingest_reports_rename_suggestion_for_low_signal_title(
@@ -440,6 +511,32 @@ def test_signal_write_failure_stops_before_artifact_ledger_archive_and_reconcile
     assert list(paths.meetings_root.glob("*.md")) == []
 
 
+def test_signal_producer_link_failure_stops_before_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-signal.txt"
+    source.write_text("Kushali: [mock-signal] Please clarify the source.\n", encoding="utf-8")
+    original = pipeline_module._append_ingest_snapshot
+
+    def append_then_corrupt(*args: object, **kwargs: object) -> None:
+        original(*args, **kwargs)
+        signal_path = paths.signals / "mtg-20260703-e32d5585.jsonl"
+        if not signal_path.exists():
+            signal_path = next(paths.signals.glob("*.jsonl"))
+        signal_path.write_text(signal_path.read_text(encoding="utf-8") + "{not-json\n", encoding="utf-8")
+
+    monkeypatch.setattr(pipeline_module, "_append_ingest_snapshot", append_then_corrupt)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox, clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)))
+
+    assert exc.value.phase == "ledger"
+    assert exc.value.code == "signal_producer_link_failed"
+    assert exc.value.exit_code == EXIT_LEDGER_WRITE
+    assert source.exists()
+
+
 def test_provider_failure_records_ingest_failed_and_leaves_source_in_place(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -471,6 +568,11 @@ def test_provider_failure_records_ingest_failed_and_leaves_source_in_place(
     assert records[-1]["meeting_id"] == "mtg-20260703-bf3b2898"
     assert records[-1]["ingest_run_id"].startswith("ingest-20260703-20260703T120000Z-")
     assert records[-1]["error"]["code"] == "provider_failed"
+    assert records[-1]["schema_version"] == "2.0"
+    assert records[-1]["runtime_provenance_schema"] == "1.0"
+    assert records[-1]["runtime_provenance_sha256"].startswith("sha256:")
+    assert records[-1]["signals"]["produced_in_this_record"] is False
+    assert records[-1]["signals"]["producer_ledger_record_id"] is None
 
 
 def test_provider_validation_failure_records_ingest_failed_and_leaves_source_in_place(
@@ -768,6 +870,13 @@ def test_pipeline_ingest_duplicate_source_returns_no_op_and_reconciles_inbox(tmp
     assert len(ledger_records) == 3
     assert ledger_records[-1]["event"] == "reconcile_repaired"
     assert ledger_records[-1]["reconcile"]["status"] == "completed"
+    assert ledger_records[-1]["schema_version"] == "2.0"
+    assert ledger_records[-1]["signals"]["produced_in_this_record"] is False
+    assert (
+        ledger_records[-1]["signals"]["producer_ledger_record_id"]
+        == ledger_records[0]["signals"]["producer_ledger_record_id"]
+    )
+    assert ledger_records[-1]["signals"]["fingerprint"] == ledger_records[0]["signals"]["fingerprint"]
 
 
 def test_ingest_fails_closed_for_legacy_only_source_without_side_effects(tmp_path: Path) -> None:
@@ -976,6 +1085,7 @@ def test_reingest_after_primary_snapshot_repairs_archive_and_reconcile(tmp_path:
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
+            schema_version="1.0",
             event="primary_artifacts_ready",
             source_sha256=source_sha256,
             meeting_id=meeting_id,
@@ -1219,6 +1329,7 @@ def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_pa
     )
     request_path = paths.meetings_root / request_summary.details["request_path"]
     response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
     _write_session_response(request_path, response_path, title="Session Team Sync")
 
     summary = ingest(
@@ -1230,6 +1341,9 @@ def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_pa
     )
     artifact = paths.meetings_root / summary.artifacts[0]["path"]
     markdown = artifact.read_text(encoding="utf-8")
+    signal_payload = json.loads(
+        (paths.meetings_root / summary.artifacts[1]["path"]).read_text(encoding="utf-8")
+    ) if summary.artifacts[1]["count"] else None
     records = read_records(paths.ledger)
 
     assert summary.status == "success"
@@ -1240,6 +1354,14 @@ def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_pa
     assert "provider: session" in markdown
     assert "provider_host: codex" in markdown
     assert "model_id: codex-session" in markdown
+    assert (
+        f'runtime_provenance_sha256: "{request_payload["runtime_provenance_sha256"]}"'
+        in markdown
+    )
+    if signal_payload is not None:
+        assert signal_payload["runtime_provenance_ref"]["sha256"] == request_payload[
+            "runtime_provenance_sha256"
+        ]
     assert records[-1]["artifacts"]["summary-plus-verbatim"]["provider"] == "session"
     assert records[-1]["artifacts"]["summary-plus-verbatim"]["provider_host"] == "codex"
     assert [record["event"] for record in records] == ["primary_artifacts_ready", "ingest_completed"]
@@ -1850,6 +1972,10 @@ def test_ingest_inbox_session_provider_reports_mixed_batch_outcomes(tmp_path: Pa
         "source_quarantined",
     ]
     assert records[-1]["quarantine"]["status"] == "quarantined"
+    assert records[-1]["schema_version"] == "2.0"
+    assert records[-1]["runtime_provenance_schema"] == "1.0"
+    assert records[-1]["signals"]["produced_in_this_record"] is False
+    assert records[-1]["signals"]["producer_ledger_record_id"] is None
     assert not already.exists()
     assert fresh.exists()
     assert not unsupported.exists()

@@ -16,6 +16,7 @@ from meeting_ingest.schema import (
     EvidenceLocator,
     SignalEvidence,
     SignalRecord,
+    RuntimeProvenanceRef,
     SignalSource,
     SignalTime,
     SignalTiming,
@@ -81,6 +82,8 @@ def write_signal_jsonl(path: Path, signals: list[SignalRecord]) -> SignalWriteRe
 
 def signal_record_to_dict(signal: SignalRecord) -> dict[str, Any]:
     payload = asdict(signal)
+    if signal.schema_version in {"1.0", "1.1"}:
+        payload.pop("runtime_provenance_ref", None)
     if signal.schema_version == "1.0":
         for key in ("source", "timing", "stakeholder_name_raw", "audience_id", "audience_name"):
             payload.pop(key, None)
@@ -189,8 +192,15 @@ def signal_record_from_dict(payload: dict[str, Any]) -> SignalRecord:
         timestamp=_optional_string(evidence_payload.get("timestamp")),
         locator=locator,
     )
-    source = _source_from_payload(payload.get("source")) if schema_version == "1.1" else None
-    timing = _timing_from_payload(payload.get("timing")) if schema_version == "1.1" else None
+    generalized = schema_version in {"1.1", "1.2"}
+    source = _source_from_payload(payload.get("source")) if generalized else None
+    timing = _timing_from_payload(payload.get("timing")) if generalized else None
+    provenance_payload = payload.get("runtime_provenance_ref")
+    runtime_provenance_ref = (
+        _runtime_provenance_ref_from_payload(provenance_payload)
+        if schema_version == "1.2" and provenance_payload is not None
+        else None
+    )
     return SignalRecord(
         signal_id=_required_string(payload, "signal_id"),
         meeting_id=_optional_string(payload.get("meeting_id")),
@@ -206,6 +216,7 @@ def signal_record_from_dict(payload: dict[str, Any]) -> SignalRecord:
         confidence=_required_string(payload, "confidence"),
         source=source,
         timing=timing,
+        runtime_provenance_ref=runtime_provenance_ref,
         stakeholder_name_raw=_optional_string(payload.get("stakeholder_name_raw")),
         audience_id=_optional_string(payload.get("audience_id")),
         audience_name=_optional_string(payload.get("audience_name")),
@@ -290,6 +301,21 @@ def _timing_from_payload(value: object) -> SignalTiming:
         occurred=_time_from_payload(payload["occurred"], "timing.occurred"),
         acquired=_time_from_payload(acquired, "timing.acquired") if acquired is not None else None,
         recorded=_time_from_payload(payload["recorded"], "timing.recorded"),
+    )
+
+
+def _runtime_provenance_ref_from_payload(value: object) -> RuntimeProvenanceRef:
+    payload = _mapping(value, "runtime_provenance_ref")
+    return RuntimeProvenanceRef(
+        schema_version=_required_string(
+            payload, "schema_version", field="runtime_provenance_ref.schema_version"
+        ),
+        producer_ledger_record_id=_required_string(
+            payload,
+            "producer_ledger_record_id",
+            field="runtime_provenance_ref.producer_ledger_record_id",
+        ),
+        sha256=_required_string(payload, "sha256", field="runtime_provenance_ref.sha256"),
     )
 
 

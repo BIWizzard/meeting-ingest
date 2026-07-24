@@ -8,8 +8,8 @@ import re
 from meeting_ingest.errors import MeetingIngestError
 
 
-SCHEMA_VERSION = "1.1"
-SUPPORTED_SIGNAL_SCHEMA_VERSIONS = ("1.0", SCHEMA_VERSION)
+SCHEMA_VERSION = "1.2"
+SUPPORTED_SIGNAL_SCHEMA_VERSIONS = ("1.0", "1.1", SCHEMA_VERSION)
 SUPPORTED_OUTPUT_MODES = ("summary-plus-verbatim",)
 SUPPORTED_PROVIDERS = ("mock", "anthropic", "session")
 SUPPORTED_QUALITIES = ("fast", "balanced", "deep")
@@ -155,6 +155,13 @@ class SignalTiming:
 
 
 @dataclass(frozen=True)
+class RuntimeProvenanceRef:
+    producer_ledger_record_id: str
+    sha256: str
+    schema_version: str = "1.0"
+
+
+@dataclass(frozen=True)
 class SignalRecord:
     signal_id: str
     meeting_id: str | None
@@ -170,6 +177,7 @@ class SignalRecord:
     confidence: str
     source: SignalSource | None = None
     timing: SignalTiming | None = None
+    runtime_provenance_ref: RuntimeProvenanceRef | None = None
     stakeholder_name_raw: str | None = None
     audience_id: str | None = None
     audience_name: str | None = None
@@ -335,7 +343,7 @@ def _signal_record_issues(signal: SignalRecord, *, prefix: str = "") -> list[str
             issues.append(f"{prefix}{field_name} is required.")
     if signal.schema_version == "1.0" and not (signal.meeting_id or "").strip():
         issues.append(f"{prefix}meeting_id is required.")
-    allowed_signal_types = GENERALIZED_SIGNAL_TYPES if signal.schema_version == "1.1" else SIGNAL_TYPES
+    allowed_signal_types = GENERALIZED_SIGNAL_TYPES if signal.schema_version in {"1.1", "1.2"} else SIGNAL_TYPES
     if signal.signal_type not in allowed_signal_types:
         issues.append(f"{prefix}signal_type {signal.signal_type!r} is unsupported.")
     if not signal.stakeholder_name.strip():
@@ -352,8 +360,23 @@ def _signal_record_issues(signal: SignalRecord, *, prefix: str = "") -> list[str
         issues.append(f"{prefix}confidence {signal.confidence!r} is unsupported.")
     if signal.recurrence not in RECURRENCE_VALUES:
         issues.append(f"{prefix}recurrence {signal.recurrence!r} is unsupported.")
-    if signal.schema_version == "1.1":
+    if signal.schema_version in {"1.1", "1.2"}:
         issues.extend(_generalized_signal_issues(signal, prefix=prefix))
+    if signal.schema_version == "1.2":
+        if signal.runtime_provenance_ref is None:
+            issues.append(f"{prefix}runtime_provenance_ref is required for schema 1.2.")
+        else:
+            reference = signal.runtime_provenance_ref
+            if reference.schema_version != "1.0":
+                issues.append(f"{prefix}runtime_provenance_ref.schema_version must be '1.0'.")
+            if re.fullmatch(r"lr-[0-9a-f]{32}", reference.producer_ledger_record_id) is None:
+                issues.append(
+                    f"{prefix}runtime_provenance_ref.producer_ledger_record_id must be a ledger record ID."
+                )
+            if re.fullmatch(r"sha256:[0-9a-f]{64}", reference.sha256) is None:
+                issues.append(
+                    f"{prefix}runtime_provenance_ref.sha256 must be a canonical sha256 fingerprint."
+                )
     return issues
 
 

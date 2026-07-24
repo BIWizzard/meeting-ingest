@@ -201,11 +201,20 @@ def collect_identity_candidates(
     return candidates
 
 
-def write_identity_candidates(path: Path, candidates: list[IdentityCandidate], *, generated_at: str) -> None:
+def write_identity_candidates(
+    path: Path,
+    candidates: list[IdentityCandidate],
+    *,
+    generated_at: str,
+    provenance: dict[str, object] | None = None,
+    derivation_run_id: str | None = None,
+) -> None:
     payload = {
-        "schema_version": "1.0",
+        "schema_version": "2.0" if provenance is not None else "1.0",
         "generated_at": generated_at,
+        **({"derivation_run_id": derivation_run_id} if derivation_run_id is not None else {}),
         "candidates": [asdict(candidate) for candidate in candidates],
+        **(provenance or {}),
     }
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

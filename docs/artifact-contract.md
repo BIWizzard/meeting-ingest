@@ -1281,32 +1281,77 @@ Rules:
 - If the requested title/slug already matches current state, the command returns `status: "no_op"` and exit `0` without appending a ledger record.
 - If any expected artifact file cannot be moved, the command must fail without appending `title_repaired`; partially moved files must be surfaced as a repair-required error for `doctor` rather than silently normalized.
 
-Legacy schema `1.0` `title_repaired` compatibility example (new Track 1 repairs use the ledger `2.0` producer fields defined above):
+Schema `2.0` `title_repaired` example:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
+  "ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+  "source_record_sequence": 3,
   "event": "title_repaired",
+  "recorded_at": "2026-07-03T12:00:00Z",
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
   "source_sha256": "2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a",
   "meeting_id": "mtg-20260612-71e6b28b",
   "ingest_run_id": null,
+  "source": {
+    "original_path": "_inbox/Call with G, Kushali (5).docx",
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx",
+    "source_type": "docx"
+  },
   "artifacts": {
     "summary-plus-verbatim": {
+      "kind": "markdown",
       "status": "ready",
       "path": "2026-06-12-kushali-adbook-revenue-design.md",
-      "schema_version": "1.0",
+      "provider": "anthropic",
+      "model_alias": "balanced",
+      "model_id": "claude-sonnet-placeholder",
+      "schema_version": "1.1",
       "title": "Kushali x Ken - AdBook revenue design",
       "slug": "kushali-adbook-revenue-design",
       "title_confidence": "manual",
-      "filename_confidence": "manual"
+      "filename_confidence": "manual",
+      "producer_ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+      "producer_runtime_provenance_sha256": "sha256:...",
+      "produced_in_this_record": true
     }
+  },
+  "signals": {
+    "status": "ready",
+    "path": "_signals/mtg-20260612-71e6b28b.jsonl",
+    "count": 5,
+    "schema_version": "1.2",
+    "fingerprint": "sha256:91aa2c80b731...",
+    "producer_ledger_record_id": "lr-fedcba9876543210fedcba9876543210",
+    "producer_runtime_provenance_sha256": "sha256:...",
+    "produced_in_this_record": false
+  },
+  "derived": {
+    "playbook_update_status": "not_applicable"
+  },
+  "error": null,
+  "quarantine": null,
+  "reconcile": {
+    "status": "completed",
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx"
   },
   "repair": {
     "previous_title": "Kushali x Ken - AdBook fact_revenue detail design",
     "previous_slug": "kushali-adbook-fact-revenue-detail",
     "changed_modes": ["summary-plus-verbatim"]
-  },
-  "recorded_at": "2026-07-03T12:00:00Z"
+  }
 }
 ```
 
@@ -1508,11 +1553,31 @@ Minimum `artifact_regenerated` ledger fields:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
+  "ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+  "source_record_sequence": 4,
   "event": "artifact_regenerated",
+  "recorded_at": "2026-07-03T13:00:00Z",
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
   "source_sha256": "2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a",
   "meeting_id": "mtg-20260612-71e6b28b",
   "ingest_run_id": "ingest-20260612-20260703T130000Z-c3d4",
+  "source": {
+    "original_path": "_inbox/Call with G, Kushali (5).docx",
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx",
+    "source_type": "docx"
+  },
   "regeneration": {
     "mode": "summary",
     "source_path": "_processed/2d17d59a-Call with G, Kushali (5).docx",
@@ -1520,18 +1585,36 @@ Minimum `artifact_regenerated` ledger fields:
   },
   "artifacts": {
     "summary": {
+      "kind": "markdown",
       "status": "ready",
       "path": "2026-06-12-kushali-adbook-revenue-design-summary.md",
-      "schema_version": "1.0",
+      "provider": "anthropic",
+      "model_alias": "balanced",
+      "model_id": "claude-sonnet-placeholder",
+      "schema_version": "1.1",
       "title": "Kushali x Ken - AdBook revenue design",
-      "slug": "kushali-adbook-revenue-design-summary"
+      "slug": "kushali-adbook-revenue-design-summary",
+      "title_confidence": "high",
+      "filename_confidence": "high",
+      "producer_ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+      "producer_runtime_provenance_sha256": "sha256:...",
+      "produced_in_this_record": true
     },
     "summary-plus-verbatim": {
+      "kind": "markdown",
       "status": "ready",
       "path": "2026-06-12-kushali-adbook-revenue-design.md",
-      "schema_version": "1.0",
+      "provider": "anthropic",
+      "model_alias": "balanced",
+      "model_id": "claude-sonnet-placeholder",
+      "schema_version": "1.1",
       "title": "Kushali x Ken - AdBook revenue design",
-      "slug": "kushali-adbook-revenue-design"
+      "slug": "kushali-adbook-revenue-design",
+      "title_confidence": "high",
+      "filename_confidence": "high",
+      "producer_ledger_record_id": "lr-fedcba9876543210fedcba9876543210",
+      "producer_runtime_provenance_sha256": "sha256:...",
+      "produced_in_this_record": false
     }
   },
   "signals": {
@@ -1540,9 +1623,21 @@ Minimum `artifact_regenerated` ledger fields:
     "count": 5,
     "fingerprint": "sha256:91aa2c80b731...",
     "previous_fingerprint": "sha256:80aa1b70a620...",
-    "refreshed": true
+    "refreshed": true,
+    "schema_version": "1.2",
+    "producer_ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+    "producer_runtime_provenance_sha256": "sha256:...",
+    "produced_in_this_record": true
   },
-  "recorded_at": "2026-07-03T13:00:00Z"
+  "derived": {
+    "playbook_update_status": "not_applicable"
+  },
+  "error": null,
+  "quarantine": null,
+  "reconcile": {
+    "status": "completed",
+    "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx"
+  }
 }
 ```
 
@@ -1578,8 +1673,23 @@ Example:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
+  "ledger_record_id": "lr-0123456789abcdef0123456789abcdef",
+  "source_record_sequence": 2,
   "event": "ingest_completed",
+  "recorded_at": "2026-07-03T12:00:00Z",
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
   "source_sha256": "2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a",
   "meeting_id": "mtg-20260612-71e6b28b",
   "ingest_run_id": "ingest-20260612-20260703T120000Z-a1b2",
@@ -1590,9 +1700,10 @@ Example:
   },
   "artifacts": {
     "summary-plus-verbatim": {
+      "kind": "markdown",
       "status": "ready",
       "path": "2026-06-12-kushali-adbook-fact-revenue-detail.md",
-      "schema_version": "1.0",
+      "schema_version": "1.1",
       "title": "Kushali x Ken - AdBook fact_revenue detail design",
       "slug": "kushali-adbook-fact-revenue-detail",
       "title_confidence": "high",
@@ -1600,17 +1711,24 @@ Example:
       "provider": "anthropic",
       "model_alias": "balanced",
       "model_id": "claude-sonnet-placeholder",
-      "provider_host": null
+      "provider_host": null,
+      "producer_ledger_record_id": "lr-fedcba9876543210fedcba9876543210",
+      "producer_runtime_provenance_sha256": "sha256:...",
+      "produced_in_this_record": false
     }
   },
   "signals": {
     "status": "ready",
     "path": "_signals/mtg-20260612-71e6b28b.jsonl",
     "count": 5,
-    "fingerprint": "sha256:91aa2c80b731..."
+    "schema_version": "1.2",
+    "fingerprint": "sha256:91aa2c80b731...",
+    "producer_ledger_record_id": "lr-fedcba9876543210fedcba9876543210",
+    "producer_runtime_provenance_sha256": "sha256:...",
+    "produced_in_this_record": false
   },
   "derived": {
-    "playbook_input_status": "pending"
+    "playbook_update_status": "not_applicable"
   },
   "error": null,
   "quarantine": null,
@@ -1618,8 +1736,7 @@ Example:
     "status": "completed",
     "path": "_inbox/_done/Call with G, Kushali (5).docx",
     "processed_path": "_processed/2d17d59a-Call with G, Kushali (5).docx"
-  },
-  "recorded_at": "2026-07-03T12:00:00Z"
+  }
 }
 ```
 
@@ -1697,6 +1814,7 @@ _derived/
   playbook-index.json
   generations/
     <derivation-run-id>/
+      generation-manifest.json
       identity-candidates.json
       stakeholders/
         <person-id>/
@@ -1712,6 +1830,40 @@ Rules:
 - A generation may be pruned when it is not current in the index and is not required to recover the current generation.
 - Project-local ignored storage is not a backup. User documentation should recommend an approved local or encrypted backup for `_playbook-state/`.
 - Profiles and briefings are concentrated sensitive artifacts. iQ Context and other capture integrations must not copy profile bodies or concentrated evidence by default.
+
+### Generation Manifest
+
+Each immutable generation contains `<generation-dir>/generation-manifest.json`. Its schema `2.0` object contains `derivation_run_id`, `generated_at`, `identity_candidates_path`, the generation's `profiles` array, and the runtime-provenance trio:
+
+```json
+{
+  "schema_version": "2.0",
+  "derivation_run_id": "derive-20260710-20260710T180000Z-a1b2",
+  "generated_at": "2026-07-10T18:00:00Z",
+  "identity_candidates_path": "_derived/generations/derive-20260710-20260710T180000Z-a1b2/identity-candidates.json",
+  "profiles": [
+    {
+      "person_id": "person-kushali-g",
+      "profile_path": "_derived/generations/derive-20260710-20260710T180000Z-a1b2/stakeholders/person-kushali-g/profile.json",
+      "briefing_path": "_derived/generations/derive-20260710-20260710T180000Z-a1b2/stakeholders/person-kushali-g/briefing.md"
+    }
+  ],
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  }
+}
+```
+
+Every member of one generation carries the same canonical runtime-provenance fingerprint. `doctor` verifies that the manifest, identity candidates, profiles, briefings, index, and committing derivation record agree on that fingerprint and generation membership.
 
 ### Stakeholder Registry
 
@@ -1745,8 +1897,9 @@ Unresolved names and suggested registry entries are written only to the current 
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "generated_at": "2026-07-10T18:00:00Z",
+  "derivation_run_id": "derive-20260710-20260710T180000Z-a1b2",
   "candidates": [
     {
       "raw_name": "Presenter",
@@ -1756,7 +1909,19 @@ Unresolved names and suggested registry entries are written only to the current 
       "suggested_person_id": null,
       "reason": "generic_or_ambiguous_label"
     }
-  ]
+  ],
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  }
 }
 ```
 
@@ -1846,7 +2011,7 @@ Successful commit record:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "event": "briefing_derivation_completed",
   "derivation_run_id": "derive-20260710-20260710T180000Z-a1b2",
   "status": "success",
@@ -1876,7 +2041,19 @@ Successful commit record:
   "unresolved_identity_count": 1,
   "warnings": [],
   "errors": [],
-  "recorded_at": "2026-07-10T18:00:00Z"
+  "recorded_at": "2026-07-10T18:00:00Z",
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  }
 }
 ```
 
@@ -1892,7 +2069,7 @@ Allowed Briefing V1 `trigger` values are `explicit_cli` and `agent_wrapper`. Fut
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "status": "current",
   "derivation_run_id": "derive-20260710-20260710T180000Z-a1b2",
   "generation_path": "_derived/generations/derive-20260710-20260710T180000Z-a1b2",
@@ -1908,8 +2085,21 @@ Allowed Briefing V1 `trigger` values are `explicit_cli` and `agent_wrapper`. Fut
     }
   },
   "identity_candidates_path": "_derived/generations/derive-20260710-20260710T180000Z-a1b2/identity-candidates.json",
+  "generation_manifest_path": "_derived/generations/derive-20260710-20260710T180000Z-a1b2/generation-manifest.json",
   "unresolved_identity_count": 1,
-  "committed_at": "2026-07-10T18:00:00Z"
+  "committed_at": "2026-07-10T18:00:00Z",
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  }
 }
 ```
 
@@ -1994,7 +2184,7 @@ Top-level shape:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "profile_kind": "stakeholder_briefing",
   "stakeholder": {
     "person_id": "person-kushali-g",
@@ -2005,6 +2195,18 @@ Top-level shape:
   "derivation_run_id": "derive-20260710-20260710T180000Z-a1b2",
   "generated_at": "2026-07-10T18:00:00Z",
   "input_fingerprint": "sha256:...",
+  "runtime_provenance_schema": "1.0",
+  "runtime_provenance_sha256": "sha256:...",
+  "runtime_provenance": {
+    "semantic_version": "0.1.0",
+    "build_id": "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab",
+    "source_commit": "3bc917de8c6072239848ed190c4c45889d6cf227",
+    "source_tree_sha256": "sha256:...",
+    "install_mode": "approved_frozen",
+    "runtime_mode": "approved",
+    "workflow_contract_version": "claude-code-session-v1",
+    "development_override_reason": null
+  },
   "coverage": {
     "source_count": 6,
     "source_kinds": {"meeting_transcript": 6},
@@ -2126,6 +2328,22 @@ Entry lineage:
 The Markdown renderer mirrors profile JSON and uses this stable section order:
 
 ```markdown
+---
+schema_version: "2.0"
+runtime_provenance_schema: "1.0"
+runtime_provenance_sha256: "sha256:..."
+derivation_run_id: "derive-20260710-20260710T180000Z-a1b2"
+runtime_provenance:
+  semantic_version: "0.1.0"
+  build_id: "meeting-ingest-0.1.0-g3bc917de8c60-s0123456789ab"
+  source_commit: "3bc917de8c6072239848ed190c4c45889d6cf227"
+  source_tree_sha256: "sha256:..."
+  install_mode: "approved_frozen"
+  runtime_mode: "approved"
+  workflow_contract_version: "claude-code-session-v1"
+  development_override_reason: null
+---
+
 # Stakeholder Briefing: <Display Name>
 
 ## Identity And Evidence Coverage

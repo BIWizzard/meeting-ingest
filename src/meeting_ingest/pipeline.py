@@ -17,6 +17,7 @@ from meeting_ingest.errors import (
     ConfigError,
     EXIT_ARTIFACT_WRITE,
     EXIT_GENERAL_FAILURE,
+    EXIT_LEDGER_WRITE,
     EXIT_RUNTIME_READINESS,
     EXIT_USAGE_OR_CONFIG,
     MeetingIngestError,
@@ -33,6 +34,7 @@ from meeting_ingest.ledger import (
     append_snapshot,
     has_legacy_record_for_source,
     latest_record_for_source,
+    mint_ledger_identity,
     read_records,
 )
 from meeting_ingest.locking import ProjectLock, lock_path
@@ -60,6 +62,7 @@ from meeting_ingest.schema import (
     ProviderValidationError,
     EvidenceLocator,
     SignalEvidence,
+    RuntimeProvenanceRef,
     SignalRecord,
     SignalSource,
     SignalTime,
@@ -68,7 +71,6 @@ from meeting_ingest.schema import (
 )
 from meeting_ingest.signals import (
     SignalIdentityResult,
-    SignalWriteResult,
     assign_deterministic_signal_ids,
     read_signal_jsonl,
     write_signal_jsonl,
@@ -202,6 +204,7 @@ def ingest(
                 selected_provider=selected_provider,
                 selected_quality=selected_quality,
                 meeting_date=meeting_date,
+                runtime_provenance=asdict(readiness.runtime_provenance),
                 clock=clock,
             )
     return with_runtime_provenance(summary, readiness)
@@ -279,11 +282,24 @@ def repair_date(
     _, paths = load_project(start or Path.cwd())
     readiness = require_write_readiness(paths.project_root, operation="repair-date", development_override=development_override)
     with ProjectLock(lock_path(paths.cache), clock=clock):
-        summary = _repair_date_locked(selector, new_date=new_date, paths=paths, clock=clock)
+        summary = _repair_date_locked(
+            selector,
+            new_date=new_date,
+            paths=paths,
+            runtime_provenance=asdict(readiness.runtime_provenance),
+            clock=clock,
+        )
     return with_runtime_provenance(summary, readiness)
 
 
-def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, clock: Clock | None) -> RunSummary:
+def _repair_date_locked(
+    selector: str,
+    *,
+    new_date: str,
+    paths: ProjectPaths,
+    runtime_provenance: dict[str, Any],
+    clock: Clock | None,
+) -> RunSummary:
     target: dict[str, Any] | None = None
     for record in read_records(paths.ledger):
         if selector in (record.get("meeting_id"), record.get("source_sha256")) and _record_has_primary_artifacts(record):
@@ -312,7 +328,7 @@ def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, cl
                 details={"mode": mode, "path": entry.get("path")},
             )
 
-    signals_state = dict(target.get("signals", {})) if isinstance(target.get("signals"), dict) else {}
+    signals_state = _carried_signal_state(target)
     if signals_state.get("path"):
         signal_path = paths.meetings_root / str(signals_state["path"])
         if not signal_path.exists():
@@ -339,8 +355,16 @@ def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, cl
             details={"command": "repair-date", "date": new_date, "reason": "date_already_current"},
         )
 
+    producer_ledger_record_id, producer_sequence = mint_ledger_identity(
+        paths.ledger,
+        source_sha256=str(target["source_sha256"]),
+        event="date_repaired",
+        ingest_run_id=None,
+    )
+    producer_runtime_sha256 = runtime_provenance_sha256(runtime_provenance)
     warnings: list[str] = []
     changed_modes: list[str] = []
+    artifact_paths: dict[str, str] = {}
     for mode, entry in artifacts.items():
         old_path = paths.meetings_root / str(entry["path"])
         slug = str(entry.get("slug") or re.sub(r"^\d{4}-\d{2}-\d{2}-", "", old_path.stem))
@@ -348,23 +372,48 @@ def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, cl
         content = _rewrite_front_matter_date(
             old_path.read_text(encoding="utf-8"), date=new_date, confidence="manual", source="repair"
         )
-        destination.path.write_text(content, encoding="utf-8")
+        content = _rewrite_front_matter_provenance(
+            content,
+            runtime_provenance=runtime_provenance,
+            ledger_record_id=producer_ledger_record_id,
+        )
+        _write_artifact(destination.path, content)
         if destination.path != old_path:
             old_path.unlink()
         if destination.collision:
             warnings.append(f"artifact filename collision; wrote {destination.path.relative_to(paths.meetings_root)}")
         entry["path"] = str(destination.path.relative_to(paths.meetings_root))
+        entry["producer_ledger_record_id"] = producer_ledger_record_id
+        entry["producer_runtime_provenance_sha256"] = producer_runtime_sha256
+        entry["produced_in_this_record"] = True
+        artifact_paths[mode] = str(entry["path"])
         changed_modes.append(mode)
 
     if signals_state.get("path"):
-        repaired_artifact_path = str(next(iter(artifacts.values()))["path"])
-        repaired_signal_path = paths.meetings_root / str(signals_state["path"])
-        repaired_signals = _rewrite_signal_effective_at(
-            repaired_signal_path,
-            new_date=new_date,
-            artifact_path=repaired_artifact_path,
+        signal_path = paths.meetings_root / str(signals_state["path"])
+        signal_records = read_signal_jsonl(signal_path)
+        primary_artifact_path = artifact_paths.get(
+            "summary-plus-verbatim", next(iter(artifact_paths.values()))
         )
-        signals_state["fingerprint"] = repaired_signals.fingerprint
+        repaired_signals = _migrate_repaired_signals(
+            signal_records,
+            new_date=new_date,
+            artifact_path=primary_artifact_path,
+            source_sha256=str(target["source_sha256"]),
+            producer_ledger_record_id=producer_ledger_record_id,
+            producer_runtime_sha256=producer_runtime_sha256,
+        )
+        signal_result = write_signal_jsonl(signal_path, repaired_signals)
+        signals_state.update(
+            {
+                "count": signal_result.count,
+                "fingerprint": signal_result.fingerprint,
+                "schema_version": "1.2",
+                "producer_ledger_record_id": producer_ledger_record_id,
+                "producer_runtime_provenance_sha256": producer_runtime_sha256,
+                "produced_in_this_record": True,
+            }
+        )
 
     append_snapshot(
         paths.ledger,
@@ -385,9 +434,17 @@ def _repair_date_locked(selector: str, *, new_date: str, paths: ProjectPaths, cl
                 "date": new_date,
                 "changed_modes": changed_modes,
             },
+            ledger_record_id=producer_ledger_record_id,
+            source_record_sequence=producer_sequence,
         ),
         clock=clock,
     )
+    if signals_state.get("path"):
+        _verify_signal_producer_link(
+            paths.meetings_root / str(signals_state["path"]),
+            paths.ledger,
+            expected_fingerprint=str(signals_state["fingerprint"]),
+        )
     return RunSummary(
         status="success",
         exit_code=0,
@@ -672,6 +729,7 @@ def _ingest_locked(
     selected_provider: str,
     selected_quality: str,
     meeting_date: str | None,
+    runtime_provenance: dict[str, Any],
     clock: Clock | None,
 ) -> RunSummary:
     try:
@@ -734,6 +792,7 @@ def _ingest_locked(
         provider_response=provider_response,
         model_id=provider_impl.model_id,
         provider_host=None,
+        runtime_provenance=runtime_provenance,
         clock=clock,
     )
 
@@ -873,6 +932,7 @@ def _complete_session_ingest_locked(
         provider_response=envelope.response,
         model_id=envelope.metadata.model_id,
         provider_host=envelope.metadata.provider_host,
+        runtime_provenance=dict(envelope.request["runtime_provenance"]),
         clock=clock,
     )
     summary.warnings.extend(_session_phase2_option_warnings(selected_mode, selected_quality, request_mode, request_quality))
@@ -890,6 +950,7 @@ def _finish_ingest(
     provider_response: ProviderResponse,
     model_id: str,
     provider_host: str | None,
+    runtime_provenance: dict[str, Any],
     clock: Clock | None,
 ) -> RunSummary:
     source = prepared.source
@@ -908,6 +969,13 @@ def _finish_ingest(
     artifact_path = artifact_destination.path
     signal_path = paths.signals / f"{meeting_id}.jsonl"
     recorded_at = format_iso_timestamp((clock or SystemClock()).now_utc())
+    producer_ledger_record_id, producer_sequence = mint_ledger_identity(
+        paths.ledger,
+        source_sha256=source_sha256,
+        event="primary_artifacts_ready",
+        ingest_run_id=ingest_run_id,
+    )
+    producer_runtime_sha256 = runtime_provenance_sha256(runtime_provenance)
     signal_identity = _signal_records_from_provider(
         provider_response.communication_signals,
         source=source,
@@ -919,6 +987,8 @@ def _finish_ingest(
         date_confidence=extraction.effective_date.confidence,
         date_source=extraction.effective_date.source,
         recorded_at=recorded_at,
+        runtime_provenance=runtime_provenance,
+        producer_ledger_record_id=producer_ledger_record_id,
     )
     signal_records = signal_identity.signals
     signal_result = write_signal_jsonl(signal_path, signal_records)
@@ -941,6 +1011,8 @@ def _finish_ingest(
             model_alias=selected_quality,
             model_id=model_id,
             provider_host=provider_host,
+            runtime_provenance=runtime_provenance,
+            runtime_provenance_ledger_record_id=producer_ledger_record_id,
         ),
         clock=clock,
     )
@@ -956,11 +1028,14 @@ def _finish_ingest(
             "provider": selected_provider,
             "model_alias": selected_quality,
             "model_id": model_id,
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "title": provider_response.title,
             "slug": artifact_slug,
             "title_confidence": title_metadata.confidence,
             "filename_confidence": title_metadata.confidence,
+            "producer_ledger_record_id": producer_ledger_record_id,
+            "producer_runtime_provenance_sha256": producer_runtime_sha256,
+            "produced_in_this_record": True,
         }
     }
     if provider_host:
@@ -969,8 +1044,11 @@ def _finish_ingest(
         "status": "ready",
         "path": str(relative_signal_path),
         "count": signal_result.count,
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "fingerprint": signal_result.fingerprint,
+        "produced_in_this_record": True,
+        "producer_ledger_record_id": producer_ledger_record_id,
+        "producer_runtime_provenance_sha256": producer_runtime_sha256,
     }
     source_state = _source_state(paths, source, extraction.source_format)
     _append_ingest_snapshot(
@@ -983,12 +1061,24 @@ def _finish_ingest(
         artifacts=artifact_state,
         signals=signal_state,
         reconcile={"status": "pending"},
+        ledger_record_id=producer_ledger_record_id,
+        source_record_sequence=producer_sequence,
         clock=clock,
+    )
+    _verify_signal_producer_link(
+        signal_path,
+        paths.ledger,
+        expected_fingerprint=signal_result.fingerprint,
     )
     archive_result = archive_and_reconcile(source, source_sha256, paths)
     processed_path = archive_result.processed_path.relative_to(paths.meetings_root)
     completed_reconcile = {**archive_result.reconcile, "processed_path": str(processed_path)}
     completed_source_state = {**source_state, "processed_path": str(processed_path)}
+    completed_signal_state = {**signal_state, "produced_in_this_record": False}
+    completed_artifact_state = {
+        mode: {**entry, "produced_in_this_record": False}
+        for mode, entry in artifact_state.items()
+    }
     append_snapshot(
         paths.ledger,
         LedgerSnapshot(
@@ -997,8 +1087,8 @@ def _finish_ingest(
             meeting_id=meeting_id,
             ingest_run_id=ingest_run_id,
             source=completed_source_state,
-            artifacts=artifact_state,
-            signals=signal_state,
+            artifacts=completed_artifact_state,
+            signals=completed_signal_state,
             reconcile=completed_reconcile,
         ),
         clock=clock,
@@ -1336,6 +1426,78 @@ def _rewrite_front_matter_date(content: str, *, date: str, confidence: str, sour
     return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
 
 
+def _rewrite_front_matter_provenance(
+    content: str,
+    *,
+    runtime_provenance: dict[str, Any],
+    ledger_record_id: str,
+) -> str:
+    lines = content.splitlines()
+    if not lines or lines[0] != "---":
+        raise MeetingIngestError(
+            phase="repair",
+            code="repair_artifact_invalid",
+            message="Meeting artifact does not begin with YAML front matter.",
+            exit_code=EXIT_ARTIFACT_WRITE,
+            recoverable=False,
+        )
+    try:
+        closing = lines.index("---", 1)
+    except ValueError as exc:
+        raise MeetingIngestError(
+            phase="repair",
+            code="repair_artifact_invalid",
+            message="Meeting artifact front matter is not terminated.",
+            exit_code=EXIT_ARTIFACT_WRITE,
+            recoverable=False,
+        ) from exc
+    removed_keys = {
+        "runtime_mode",
+        "runtime_build_id",
+        "runtime_semantic_version",
+        "runtime_source_commit",
+        "runtime_install_mode",
+        "workflow_contract_version",
+        "development_override_reason",
+        "runtime_provenance_schema",
+        "runtime_provenance_sha256",
+        "runtime_provenance_ledger_record_id",
+        "runtime_provenance",
+    }
+    front: list[str] = []
+    skipping_nested = False
+    for line in lines[1:closing]:
+        if skipping_nested and (line.startswith(" ") or not line.strip()):
+            continue
+        skipping_nested = False
+        key = line.split(":", 1)[0] if ":" in line else ""
+        if key in removed_keys:
+            skipping_nested = key == "runtime_provenance"
+            continue
+        front.append(line)
+    provenance_lines = [
+        'runtime_provenance_schema: "1.0"',
+        f"runtime_provenance_sha256: {json.dumps(runtime_provenance_sha256(runtime_provenance))}",
+        f"runtime_provenance_ledger_record_id: {ledger_record_id}",
+        "runtime_provenance:",
+        *[
+            f"  {key}: {'null' if runtime_provenance[key] is None else json.dumps(str(runtime_provenance[key]))}"
+            for key in (
+                "semantic_version",
+                "build_id",
+                "source_commit",
+                "source_tree_sha256",
+                "install_mode",
+                "runtime_mode",
+                "workflow_contract_version",
+                "development_override_reason",
+            )
+        ],
+    ]
+    suffix = "\n" if content.endswith("\n") else ""
+    return "\n".join(["---", *front, *provenance_lines, "---", *lines[closing + 1 :]]) + suffix
+
+
 def _repaired_artifact_path(paths: ProjectPaths, new_date: str, slug: str, *, current: Path) -> _ArtifactPath:
     base = f"{new_date}-{slug}"
     candidate = paths.meetings_root / f"{base}.md"
@@ -1346,28 +1508,6 @@ def _repaired_artifact_path(paths: ProjectPaths, new_date: str, slug: str, *, cu
         candidate = paths.meetings_root / f"{base}-{counter}.md"
         counter += 1
     return _ArtifactPath(path=candidate, collision=collision)
-
-
-def _rewrite_signal_effective_at(path: Path, *, new_date: str, artifact_path: str) -> SignalWriteResult:
-    updated: list[SignalRecord] = []
-    for record in read_signal_jsonl(path):
-        timing = record.timing
-        if timing is not None:
-            timing = replace(
-                timing,
-                occurred=replace(
-                    timing.occurred,
-                    value=new_date,
-                    end_value=None,
-                    precision="date",
-                    timezone=None,
-                    source="repair",
-                    confidence="manual",
-                ),
-            )
-        source = replace(record.source, artifact_path=artifact_path) if record.source is not None else None
-        updated.append(replace(record, effective_at=new_date, timing=timing, source=source))
-    return write_signal_jsonl(path, updated)
 
 
 def _next_artifact_path(paths: ProjectPaths, effective_date: str, title: str) -> _ArtifactPath:
@@ -1519,8 +1659,8 @@ def _repair_duplicate_source(
                 meeting_id=str(record.get("meeting_id")),
                 ingest_run_id=str(record.get("ingest_run_id") or "repair"),
                 source=source_state,
-                artifacts=_dict_value(record.get("artifacts")),
-                signals=_dict_value(record.get("signals")),
+                artifacts=_carried_artifact_state(record),
+                signals=_carried_signal_state(record),
                 reconcile=reconcile,
             ),
             clock=clock,
@@ -1530,6 +1670,110 @@ def _repair_duplicate_source(
 
 def _dict_value(value: object) -> dict:
     return value if isinstance(value, dict) else {}
+
+
+def _carried_signal_state(record: dict[str, object]) -> dict[str, object]:
+    state = dict(_dict_value(record.get("signals")))
+    if state.get("path"):
+        state["produced_in_this_record"] = False
+    return state
+
+
+def _carried_artifact_state(record: dict[str, object]) -> dict[str, dict[str, object]]:
+    return {
+        str(mode): {**entry, "produced_in_this_record": False}
+        for mode, entry in _dict_value(record.get("artifacts")).items()
+        if isinstance(entry, dict)
+    }
+
+
+def _migrate_repaired_signals(
+    signals: list[SignalRecord],
+    *,
+    new_date: str,
+    artifact_path: str,
+    source_sha256: str,
+    producer_ledger_record_id: str,
+    producer_runtime_sha256: str,
+) -> list[SignalRecord]:
+    migrated: list[SignalRecord] = []
+    has_schema_1_0 = False
+    for signal in signals:
+        evidence = signal.evidence
+        source = signal.source
+        timing = signal.timing
+        stakeholder_name_raw = signal.stakeholder_name_raw
+        if signal.schema_version == "1.0":
+            has_schema_1_0 = True
+            locator = (
+                EvidenceLocator(scheme="timestamp", value=evidence.timestamp)
+                if (evidence.timestamp or "").strip()
+                else EvidenceLocator(scheme="none", value=None)
+            )
+            evidence = replace(evidence, locator=locator)
+            source = SignalSource(
+                source_id=mint_source_id(source_sha256),
+                source_kind="meeting_transcript",
+                source_sha256=source_sha256,
+                meeting_id=signal.meeting_id,
+                artifact_path=artifact_path,
+                channel=None,
+                evidence_locator_scheme=locator.scheme,
+            )
+            timing = SignalTiming(
+                occurred=_repaired_occurrence(new_date),
+                acquired=SignalTime(
+                    value=None,
+                    end_value=None,
+                    precision="unknown",
+                    timezone=None,
+                    source="unavailable",
+                    confidence="low",
+                ),
+                recorded=SignalTime(
+                    value=signal.recorded_at,
+                    end_value=None,
+                    precision="datetime",
+                    timezone="UTC" if signal.recorded_at.endswith("Z") else None,
+                    source="legacy_record",
+                    confidence="high",
+                ),
+            )
+            stakeholder_name_raw = signal.stakeholder_name
+        else:
+            if source is not None:
+                source = replace(source, artifact_path=artifact_path)
+            if timing is not None:
+                timing = replace(timing, occurred=_repaired_occurrence(new_date))
+        migrated.append(
+            replace(
+                signal,
+                effective_at=new_date,
+                evidence=evidence,
+                source=source,
+                timing=timing,
+                stakeholder_name_raw=stakeholder_name_raw,
+                runtime_provenance_ref=RuntimeProvenanceRef(
+                    producer_ledger_record_id=producer_ledger_record_id,
+                    sha256=producer_runtime_sha256,
+                ),
+                schema_version="1.2",
+            )
+        )
+    if has_schema_1_0:
+        return assign_deterministic_signal_ids(migrated).signals
+    return migrated
+
+
+def _repaired_occurrence(new_date: str) -> SignalTime:
+    return SignalTime(
+        value=new_date,
+        end_value=None,
+        precision="date",
+        timezone=None,
+        source="repair",
+        confidence="manual",
+    )
 
 
 def _record_has_primary_artifacts(record: dict[str, object] | None) -> bool:
@@ -1574,6 +1818,8 @@ def _signal_records_from_provider(
     date_confidence: str,
     date_source: str,
     recorded_at: str,
+    runtime_provenance: dict[str, Any],
+    producer_ledger_record_id: str,
 ) -> SignalIdentityResult:
     records: list[SignalRecord] = []
     source_id = mint_source_id(source_sha256)
@@ -1645,11 +1891,15 @@ def _signal_records_from_provider(
                             confidence="high",
                         ),
                     ),
+                    runtime_provenance_ref=RuntimeProvenanceRef(
+                        producer_ledger_record_id=producer_ledger_record_id,
+                        sha256=runtime_provenance_sha256(runtime_provenance),
+                    ),
                     topics=signal.topics,
                     project_refs=signal.project_refs,
                     recurrence=signal.recurrence,
                     status=signal.status,
-                    schema_version="1.1",
+                    schema_version="1.2",
                 )
             )
             continue
@@ -1685,6 +1935,8 @@ def _append_ingest_snapshot(
     artifacts: dict[str, dict[str, str]],
     signals: dict[str, str | int],
     reconcile: dict[str, str],
+    ledger_record_id: str | None = None,
+    source_record_sequence: int | None = None,
     clock: Clock | None,
 ) -> None:
     append_snapshot(
@@ -1698,9 +1950,62 @@ def _append_ingest_snapshot(
             artifacts=artifacts,
             signals=signals,
             reconcile=reconcile,
+            ledger_record_id=ledger_record_id,
+            source_record_sequence=source_record_sequence,
         ),
         clock=clock,
     )
+
+
+def _verify_signal_producer_link(
+    signal_path: Path,
+    ledger_path: Path,
+    *,
+    expected_fingerprint: str,
+) -> None:
+    try:
+        signals = read_signal_jsonl(signal_path)
+        actual_fingerprint = f"sha256:{sha256_file(signal_path)}"
+        records = read_records(ledger_path)
+        if actual_fingerprint != expected_fingerprint:
+            raise ValueError("signal fingerprint changed after write")
+        for signal in signals:
+            if (
+                signal.schema_version != "1.2"
+                or signal.runtime_provenance_ref is None
+                or signal.source is None
+            ):
+                raise ValueError("written signal generation is not fully schema 1.2")
+            producer = signal.runtime_provenance_ref
+            matches = [
+                record
+                for record in records
+                if record.get("schema_version") == "2.0"
+                and record.get("source_sha256") == signal.source.source_sha256
+                and record.get("ledger_record_id") == producer.producer_ledger_record_id
+                and record.get("runtime_provenance_sha256") == producer.sha256
+                and isinstance(record.get("signals"), dict)
+                and record["signals"].get("producer_ledger_record_id")
+                == producer.producer_ledger_record_id
+                and record["signals"].get("producer_runtime_provenance_sha256") == producer.sha256
+                and record["signals"].get("produced_in_this_record") is True
+                and record["signals"].get("schema_version") == "1.2"
+                and record["signals"].get("fingerprint") == actual_fingerprint
+                and record["signals"].get("count") == len(signals)
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"producer {producer.producer_ledger_record_id!r} resolved to {len(matches)} ledger records"
+                )
+    except (MeetingIngestError, OSError, ValueError) as exc:
+        raise MeetingIngestError(
+            phase="ledger",
+            code="signal_producer_link_failed",
+            message="Written signal provenance could not be linked to its producing ledger record.",
+            exit_code=EXIT_LEDGER_WRITE,
+            recoverable=False,
+            details={"signal_path": str(signal_path), "ledger_path": str(ledger_path)},
+        ) from exc
 
 
 def _record_source_failure(
@@ -1733,7 +2038,14 @@ def _record_source_failure(
             ingest_run_id=ingest_run_id,
             source=source_state,
             artifacts={},
-            signals={"status": "skipped", "path": None, "count": 0},
+            signals={
+                "status": "skipped",
+                "path": None,
+                "count": 0,
+                "produced_in_this_record": False,
+                "producer_ledger_record_id": None,
+                "producer_runtime_provenance_sha256": None,
+            },
             reconcile={"status": "skipped", "reason": "primary_artifacts_not_ready"},
             error=error.to_error_block(),
             quarantine=quarantine_block,

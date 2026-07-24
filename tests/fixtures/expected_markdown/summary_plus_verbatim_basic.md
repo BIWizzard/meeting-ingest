@@ -1,5 +1,5 @@
 ---
-schema_version: "1.0"
+schema_version: "1.1"
 artifact_type: meeting
 meeting_id: mtg-20260703-f953bbd2
 ingest_run_id: ingest-20260703-20260703T120000Z-abcd1234
@@ -18,6 +18,18 @@ model_alias: balanced
 model_id: none
 generated_by: meeting-ingest 0.1.0
 generated_at: 2026-07-03T12:00:00Z
+runtime_provenance_schema: "1.0"
+runtime_provenance_sha256: "sha256:df03cf9e8606c528b0481bcc82b6b82196230f935e74350e469c3659390c3712"
+runtime_provenance_ledger_record_id: lr-cccccccccccccccccccccccccccccccc
+runtime_provenance:
+  semantic_version: "0.1.0"
+  build_id: "meeting-ingest-test-approved"
+  source_commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  source_tree_sha256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  install_mode: "approved_frozen"
+  runtime_mode: "approved"
+  workflow_contract_version: "claude-code-session-v1"
+  development_override_reason: null
 ---
 
 # Kushali Sync
@@ -33,6 +45,7 @@ generated_at: 2026-07-03T12:00:00Z
 | Type | unknown |
 | Source | `2026-07-03-kushali-sync.txt` |
 | Output Mode | `summary-plus-verbatim` |
+| Runtime | approved (meeting-ingest-test-approved) |
 
 ## Attendees And Identity
 

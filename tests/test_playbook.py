@@ -7,7 +7,8 @@ import pytest
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.paths import init_project
-from meeting_ingest.playbook import discover_inputs, update
+from meeting_ingest.playbook import discover_inputs, repair_index, update
+from meeting_ingest.readiness import RuntimeReadinessError
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -52,6 +53,13 @@ def test_playbook_update_commits_generation_ledger_then_index(tmp_path: Path) ->
     assert index["derivation_run_id"] == run_id
     assert index["generation_path"] == f"_derived/generations/{run_id}"
     assert index["input_fingerprint"] == ledger[0]["input_fingerprint"]
+    assert index["schema_version"] == "2.0"
+    assert ledger[0]["schema_version"] == "2.0"
+    assert index["runtime_provenance_schema"] == "1.0"
+    assert ledger[0]["runtime_provenance_schema"] == "1.0"
+    assert index["runtime_provenance"] == summary.runtime_provenance
+    assert ledger[0]["runtime_provenance"] == summary.runtime_provenance
+    assert index["runtime_provenance_sha256"] == ledger[0]["runtime_provenance_sha256"]
     assert ledger[0]["event"] == "briefing_derivation_completed"
     assert ledger[0]["profiles"][0]["person_id"] == "person-kushali-g"
     assert profile["coverage"] == {
@@ -77,6 +85,67 @@ def test_playbook_update_commits_generation_ledger_then_index(tmp_path: Path) ->
     assert "`2026-07-03-kushali-adbook.md`; paraphrase; G, Kushali; timestamp:09:18" in briefing
     assert (generation / "stakeholders" / "person-kushali-g" / "briefing.md").exists()
     assert (generation / "identity-candidates.json").exists()
+    manifest = json.loads((generation / "generation-manifest.json").read_text(encoding="utf-8"))
+    candidates = json.loads((generation / "identity-candidates.json").read_text(encoding="utf-8"))
+    fingerprints = {
+        index["runtime_provenance_sha256"],
+        ledger[0]["runtime_provenance_sha256"],
+        manifest["runtime_provenance_sha256"],
+        candidates["runtime_provenance_sha256"],
+        profile["runtime_provenance_sha256"],
+    }
+    assert fingerprints == {summary.to_dict()["runtime_provenance_sha256"]}
+    assert briefing.startswith("---\nschema_version: \"2.0\"\n")
+    assert f"runtime_provenance_sha256: {json.dumps(next(iter(fingerprints)))}" in briefing
+
+
+def test_repair_index_can_replace_an_index_with_invalid_provenance(
+    tmp_path: Path,
+) -> None:
+    paths = _configured_project(tmp_path)
+    update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "indexbad")
+    index_path = paths.derived / "playbook-index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["runtime_provenance_sha256"] = "sha256:" + "0" * 64
+    index_path.write_text(json.dumps(index) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeReadinessError) as excinfo:
+        update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "stillbad")
+    assert excinfo.value.code == "playbook_provenance_invalid"
+
+    summary = repair_index(tmp_path, clock=FrozenClock(NOW))
+
+    repaired = json.loads(index_path.read_text(encoding="utf-8"))
+    ledger_record = json.loads(
+        (paths.playbook_state / "derivation-ledger.jsonl").read_text(encoding="utf-8")
+    )
+    assert summary.status == "success"
+    assert repaired["runtime_provenance_sha256"] == ledger_record[
+        "runtime_provenance_sha256"
+    ]
+    assert repaired["runtime_provenance"] == ledger_record["runtime_provenance"]
+
+
+def test_repair_index_remains_blocked_by_derivation_ledger_provenance(
+    tmp_path: Path,
+) -> None:
+    paths = _configured_project(tmp_path)
+    update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "ledgerbad")
+    ledger_path = paths.playbook_state / "derivation-ledger.jsonl"
+    record = json.loads(ledger_path.read_text(encoding="utf-8"))
+    record["runtime_provenance_sha256"] = "sha256:" + "0" * 64
+    ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeReadinessError) as excinfo:
+        repair_index(tmp_path, clock=FrozenClock(NOW))
+
+    assert excinfo.value.code == "playbook_provenance_invalid"
+    assert any(
+        finding.code == "playbook_provenance_invalid"
+        and finding.path is not None
+        and "derivation-ledger.jsonl:line:" in finding.path
+        for finding in excinfo.value.result.findings
+    )
 
 
 def test_rebuild_keeps_fingerprint_and_entry_identity_stable_across_generations(tmp_path: Path) -> None:
@@ -133,6 +202,27 @@ def test_schema_1_0_file_requires_source_ledger_mapping_for_eligibility(tmp_path
     assert included.observations[0].artifact_path == "2026-07-03-legacy-meeting.md"
 
 
+def test_schema_1_2_signal_uses_generalized_source_metadata(tmp_path: Path) -> None:
+    paths = _configured_project(tmp_path)
+    signal_path = paths.signals / "mtg-20260703-a1b2c3d4.jsonl"
+    signal = json.loads(signal_path.read_text(encoding="utf-8"))
+    signal["schema_version"] = "1.2"
+    signal["runtime_provenance_ref"] = {
+        "schema_version": "1.0",
+        "producer_ledger_record_id": "lr-" + "b" * 32,
+        "sha256": "sha256:" + "a" * 64,
+    }
+    signal_path.write_text(json.dumps(signal) + "\n", encoding="utf-8")
+
+    inputs = discover_inputs(paths)
+
+    assert inputs.warnings == ()
+    assert len(inputs.observations) == 1
+    assert inputs.observations[0].source_id == signal["source"]["source_id"]
+    assert inputs.observations[0].artifact_path == signal["source"]["artifact_path"]
+    assert inputs.observations[0].source_kind == signal["source"]["source_kind"]
+
+
 def test_index_does_not_advance_when_derivation_ledger_commit_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -154,6 +244,34 @@ def test_index_does_not_advance_when_derivation_ledger_commit_fails(
 
     assert not (paths.derived / "playbook-index.json").exists()
     assert (paths.derived / "generations" / "derive-20260719-20260719T163000Z-dead").is_dir()
+
+
+def test_failed_derivation_record_carries_runtime_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _configured_project(tmp_path)
+
+    def fail_generation(*args, **kwargs):
+        raise MeetingIngestError(
+            phase="playbook_generation",
+            code="test_generation_failed",
+            message="generation failed",
+            exit_code=7,
+            recoverable=True,
+        )
+
+    monkeypatch.setattr("meeting_ingest.playbook._write_text_atomic", fail_generation)
+
+    with pytest.raises(MeetingIngestError, match="generation failed"):
+        update(tmp_path, clock=FrozenClock(NOW), suffix_factory=lambda: "fail1234")
+
+    record = json.loads(
+        (paths.playbook_state / "derivation-ledger.jsonl").read_text(encoding="utf-8")
+    )
+    assert record["schema_version"] == "2.0"
+    assert record["event"] == "briefing_derivation_failed"
+    assert record["runtime_provenance_schema"] == "1.0"
+    assert record["runtime_provenance_sha256"].startswith("sha256:")
 
 
 def test_playbook_update_honors_configured_derived_directory(tmp_path: Path) -> None:

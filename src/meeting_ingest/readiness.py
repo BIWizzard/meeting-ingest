@@ -76,14 +76,18 @@ _HISTORY_ISSUE_CODES = {
     "stale_provider_response": "corpus_adoption_pending",
 }
 _PROJECT_BLOCKER_CODES = {
+    "artifact_provenance_mismatch",
+    "current_signal_link_invalid",
     "derivation_ledger_malformed",
     "incomplete_reconcile",
     "identity_registry_invalid",
     "invalid_ledger_record",
+    "ledger_provenance_invalid",
     "malformed_ledger_json",
     "missing_artifact",
     "missing_processed_source",
     "missing_signal_file",
+    "playbook_provenance_invalid",
     "playbook_profile_invalid",
     "review_event_malformed",
     "session_handoff_invalid",
@@ -394,6 +398,12 @@ def _doctor_findings(
             continue
         if issue.code == "incomplete_reconcile" and operation in {"ingest", "reconcile", "validate-response"}:
             continue
+        if (
+            issue.code == "playbook_provenance_invalid"
+            and operation == "playbook-repair-index"
+            and _is_playbook_index_path(issue.path)
+        ):
+            continue
         if issue.code == "playbook_profile_invalid" and operation in {
             "playbook-update",
             "playbook-repair-index",
@@ -430,6 +440,10 @@ def _doctor_findings(
                 )
             )
     return findings
+
+
+def _is_playbook_index_path(path: str | None) -> bool:
+    return path is not None and Path(path).name == "playbook-index.json"
 
 
 def _classify_runtime_findings(findings: Iterable[ReadinessFinding]) -> list[ReadinessFinding]:

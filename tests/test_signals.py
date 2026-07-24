@@ -11,6 +11,7 @@ from meeting_ingest.signals import (
     assign_deterministic_signal_ids,
     is_deprecated_signal_event_jsonl,
     read_signal_jsonl,
+    signal_record_to_dict,
     write_signal_jsonl,
 )
 
@@ -99,6 +100,42 @@ def test_read_signal_jsonl_accepts_schema_1_0_and_1_1() -> None:
     assert generalized[0].source is not None
     assert generalized[0].source.source_id == "src-a1b2c3d4e5f6"
     assert generalized[0].stakeholder_name_raw == "G, Kushali"
+
+
+def test_schema_1_0_and_1_1_serialization_remains_unchanged() -> None:
+    for fixture_name in ("schema-1.0-meeting.jsonl", "schema-1.1-meeting.jsonl"):
+        path = FIXTURES / fixture_name
+        record = read_signal_jsonl(path)[0]
+        serialized = json.dumps(signal_record_to_dict(record), sort_keys=True) + "\n"
+        expected = json.dumps(json.loads(path.read_text(encoding="utf-8")), sort_keys=True) + "\n"
+        assert serialized == expected
+        assert "runtime_provenance_ref" not in json.loads(serialized)
+
+
+def test_schema_1_2_requires_well_formed_runtime_provenance_ref(tmp_path: Path) -> None:
+    payload = json.loads((FIXTURES / "schema-1.1-meeting.jsonl").read_text(encoding="utf-8"))
+    payload["schema_version"] = "1.2"
+    path = tmp_path / "missing-producer.jsonl"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(MeetingIngestError, match="runtime_provenance_ref is required"):
+        read_signal_jsonl(path)
+
+    payload["runtime_provenance_ref"] = {
+        "schema_version": "1.0",
+        "producer_ledger_record_id": "lr-" + "b" * 32,
+        "sha256": "sha256:" + "a" * 64,
+    }
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    record = read_signal_jsonl(path)[0]
+    assert record.schema_version == "1.2"
+    assert record.runtime_provenance_ref is not None
+    assert record.runtime_provenance_ref.producer_ledger_record_id == "lr-" + "b" * 32
+
+    payload["runtime_provenance_ref"]["sha256"] = "not-a-fingerprint"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    with pytest.raises(MeetingIngestError, match="canonical sha256 fingerprint"):
+        read_signal_jsonl(path)
 
 
 def test_deprecated_signal_event_detection_requires_the_exact_legacy_shape(tmp_path: Path) -> None:
