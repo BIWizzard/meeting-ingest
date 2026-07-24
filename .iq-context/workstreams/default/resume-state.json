@@ -5,9 +5,11 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Verify the contract-conformance rework against docs/artifact-contract.md sections directly, rerun independent review, merge Task 7 to the main tree, run the full suite, and commit; then take up Approved Runtime Task 8 (replace ambiguous Claude commands and retire hook-based global refresh) and execute the ~/.claude pin-edit work item from Decision 32 in an agent-orchestration session."
+    "Take up Approved Runtime Task 8: replace ambiguous Claude commands with the canonical approved executable, start inbox workflows with readiness, retire the hook-based global uv tool refresh (it fired on every commit this session), and document the release flow.",
+    "Execute the Decision 32 work item in a ~/.claude agent-orchestration session: edit the meeting-extraction registry row and both extraction agent model pins to the claude-implementer tier, then run scripts/claude-md-lint.sh (fires OB-003-3).",
+    "After Tasks 1-8 pass review and an approved wheel/receipt exists, execute Task 9 HTV cutover with rollback preserved, then Task 10 fresh reference-host proof and product-truth reconciliation."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Verify the contract-conformance rework against docs/artifact-contract.md sections directly, rerun independent review, merge Task 7 to the main tree, run the full suite, and commit; then take up Approved Runtime Task 8 (replace ambiguous Claude commands and retire hook-based global refresh) and execute the ~/.claude pin-edit work item from Decision 32 in an agent-orchestration session.",
-  "updated_at": "2026-07-24T05:31:06.835Z"
+  "resume_from": "Resume with: Take up Approved Runtime Task 8: replace ambiguous Claude commands with the canonical approved executable, start inbox workflows with readiness, retire the hook-based global uv tool refresh (it fired on every commit this session), and document the release flow.",
+  "updated_at": "2026-07-24T06:04:49.487Z"
 }
