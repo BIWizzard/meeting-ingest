@@ -340,6 +340,14 @@ Ledger `2.0` distinguishes the runtime that appended a complete snapshot from th
 
 The durable Claude skill is a portable template. Its only installation-time substitution is the strict marker for the consumer's absolute approved executable. The receipt hashes the template; the consumer pin hashes the rendered installed copy.
 
+### 32. Session extraction raises the meeting-extraction role to the claude-implementer tier (2026-07-24)
+
+A controlled comparison (per `docs/plans/2026-07-24-extraction-model-evaluation.md`) re-ran session-provider extraction on hash-verified identical normalized transcripts and identical briefs for two already-shipped meetings of different types — a twelve-speaker daily standup and a short 1:1 working call. Neither tier hallucinated, but the claude-implementer tier showed a material, transcript-verified recall lift on both types: on the standup it recovered two genuine directive decisions the shipped envelope missed entirely (UAT preparation irrespective of dev sign-off; demo handling for the known non-working feature) and doubled grounded action-item recall; on the working call it recovered the change date, discrepancy magnitude with correct uncertainty hedging, workaround authorship, a process risk, and a reverse-direction stakeholder ask. Missed directive decisions in standups sit exactly where this product earns its keep, so the lift is material by the evaluation's own criterion across all tested types.
+
+Decision: the meeting-extraction role's pin moves to the claude-implementer tier's model. The `quality` alias remains a single fixed mapping — the response contract pins `model_alias` to the request's `quality` as a schema const, so a quality-to-tier map would be agent-side and cheap, but per-meeting tier selection adds decision burden for no demonstrated need while the pin is right; revisit only under cost pressure. The pin edit is not made from this repo: it routes to the role registry and agent definitions in `~/.claude` as a work item for an agent-orchestration session, firing the global pin lint.
+
+Privacy stance reaffirmed unchanged: transcript content stays session-side by architecture; API-backed providers remain behind the privacy gate, and extraction never routes to non-Anthropic models regardless of code-plane delegation policy.
+
 ## Working Assumptions
 
 - The deterministic parts of the current engine are worth preserving.
