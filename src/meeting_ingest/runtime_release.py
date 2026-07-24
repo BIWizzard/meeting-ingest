@@ -81,6 +81,15 @@ class PinnedRuntime:
     pin_sha256: str
 
 
+@dataclass(frozen=True)
+class WorkflowInstallResult:
+    build_id: str
+    skill_destination: Path
+    rendered_skill_sha256: str
+    agent_destination: Path | None
+    agent_sha256: str | None
+
+
 def default_application_data_root() -> Path:
     if sys.platform == "darwin":
         return Path.home() / "Library/Application Support/meeting-ingest"
@@ -221,6 +230,192 @@ def _write_atomic(path: Path, payload: bytes) -> None:
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
+
+
+def _stage_atomic(path: Path, payload: bytes) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".pending", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    return temporary
+
+
+def _write_atomic_pair(
+    first_path: Path,
+    first_payload: bytes,
+    second_path: Path,
+    second_payload: bytes,
+) -> None:
+    first_temporary: Path | None = None
+    second_temporary: Path | None = None
+    first_backup: Path | None = None
+    second_backup: Path | None = None
+    first_existed = first_path.exists() or first_path.is_symlink()
+    second_existed = second_path.exists() or second_path.is_symlink()
+    first_replaced = False
+    second_replaced = False
+    try:
+        first_temporary = _stage_atomic(first_path, first_payload)
+        second_temporary = _stage_atomic(second_path, second_payload)
+        if first_existed:
+            first_backup = _stage_atomic(first_path, first_path.read_bytes())
+        if second_existed:
+            second_backup = _stage_atomic(second_path, second_path.read_bytes())
+
+        try:
+            os.replace(first_temporary, first_path)
+            first_temporary = None
+            first_replaced = True
+            _fsync_directory(first_path.parent)
+            os.replace(second_temporary, second_path)
+            second_temporary = None
+            second_replaced = True
+            _fsync_directory(second_path.parent)
+        except BaseException:
+            if second_replaced:
+                if second_backup is not None:
+                    os.replace(second_backup, second_path)
+                    second_backup = None
+                else:
+                    second_path.unlink(missing_ok=True)
+                _fsync_directory(second_path.parent)
+            if first_replaced:
+                if first_backup is not None:
+                    os.replace(first_backup, first_path)
+                    first_backup = None
+                else:
+                    first_path.unlink(missing_ok=True)
+                _fsync_directory(first_path.parent)
+            raise
+    finally:
+        for temporary in (
+            first_temporary,
+            second_temporary,
+            first_backup,
+            second_backup,
+        ):
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+
+def install_workflow_artifacts(
+    receipt_path: Path,
+    *,
+    template_path: Path,
+    executable: str | Path,
+    skill_destination: Path,
+    agent_path: Path | None = None,
+    agent_destination: Path | None = None,
+) -> WorkflowInstallResult:
+    """Render and install receipt-verified workflow artifacts atomically."""
+
+    receipt, _ = read_receipt(receipt_path)
+    workflow = receipt["workflow"]
+    if (agent_path is None) != (agent_destination is None):
+        raise RuntimeReleaseError(
+            "Claude agent source and destination must be provided together",
+            code="workflow_agent_arguments_invalid",
+        )
+
+    template = template_path.expanduser().absolute()
+    try:
+        template_bytes = template.read_bytes()
+    except OSError as exc:
+        raise RuntimeReleaseError(
+            f"Unable to read Claude skill template: {exc}",
+            code="workflow_template_hash_mismatch",
+        ) from exc
+    if sha256_bytes(template_bytes) != workflow["claude_skill_template_sha256"]:
+        raise RuntimeReleaseError(
+            "Claude skill template does not match the approved receipt",
+            code="workflow_template_hash_mismatch",
+        )
+    marker_bytes = APPROVED_EXECUTABLE_MARKER.encode("utf-8")
+    if template_bytes.count(marker_bytes) != 1:
+        raise RuntimeReleaseError(
+            "Claude skill template must contain the approved executable marker exactly once",
+            code="workflow_template_marker_invalid",
+        )
+
+    executable_candidate = Path(executable).expanduser()
+    if not executable_candidate.is_absolute():
+        raise RuntimeReleaseError(
+            f"Workflow executable must be an absolute path: {executable_candidate}",
+            code="workflow_executable_invalid",
+        )
+    resolved_executable = _resolve_executable(executable_candidate)
+    executable_text = str(resolved_executable)
+    if APPROVED_EXECUTABLE_MARKER in executable_text:
+        raise RuntimeReleaseError(
+            "Workflow executable must not contain the approved executable marker",
+            code="workflow_executable_invalid",
+        )
+    try:
+        executable_bytes = executable_text.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise RuntimeReleaseError(
+            "Workflow executable must be representable as UTF-8",
+            code="workflow_executable_invalid",
+        ) from exc
+    rendered_skill = template_bytes.replace(marker_bytes, executable_bytes, 1)
+
+    agent_bytes: bytes | None = None
+    verified_agent_sha256: str | None = None
+    final_agent_destination: Path | None = None
+    if agent_path is not None and agent_destination is not None:
+        agent = agent_path.expanduser().absolute()
+        try:
+            agent_bytes = agent.read_bytes()
+        except OSError as exc:
+            raise RuntimeReleaseError(
+                f"Unable to read Claude agent: {exc}",
+                code="workflow_agent_hash_mismatch",
+            ) from exc
+        verified_agent_sha256 = sha256_bytes(agent_bytes)
+        if verified_agent_sha256 != workflow["claude_agent_sha256"]:
+            raise RuntimeReleaseError(
+                "Claude agent does not match the approved receipt",
+                code="workflow_agent_hash_mismatch",
+            )
+        if marker_bytes in agent_bytes:
+            raise RuntimeReleaseError(
+                "Claude agent must not contain the approved executable marker",
+                code="workflow_agent_marker_unexpected",
+            )
+        final_agent_destination = agent_destination.expanduser().absolute()
+
+    final_skill_destination = skill_destination.expanduser().absolute()
+    if final_agent_destination == final_skill_destination:
+        raise RuntimeReleaseError(
+            "Claude skill and agent destinations must be different",
+            code="workflow_agent_arguments_invalid",
+        )
+
+    if final_agent_destination is not None and agent_bytes is not None:
+        _write_atomic_pair(
+            final_skill_destination,
+            rendered_skill,
+            final_agent_destination,
+            agent_bytes,
+        )
+    else:
+        _write_atomic(final_skill_destination, rendered_skill)
+    return WorkflowInstallResult(
+        build_id=receipt["build"]["build_id"],
+        skill_destination=final_skill_destination,
+        rendered_skill_sha256=sha256_bytes(rendered_skill),
+        agent_destination=final_agent_destination,
+        agent_sha256=verified_agent_sha256,
+    )
 
 
 def _copy_immutable(source: Path, destination: Path, expected_sha256: str) -> None:

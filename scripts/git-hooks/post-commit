@@ -1,2 +1,2 @@
 #!/bin/sh
-exec "$(git rev-parse --show-toplevel)/scripts/git-hooks/refresh-global-tool.sh"
+exec "$(git rev-parse --show-toplevel)/scripts/git-hooks/release-candidate-reminder.sh"

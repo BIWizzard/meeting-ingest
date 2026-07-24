@@ -9,6 +9,10 @@ Use this skill to process transcript files through the `meeting-ingest` CLI.
 
 The CLI engine is the source of truth for transcript extraction, provider request/response validation, markdown rendering, signal enrichment, ledger writes, archive, and inbox reconcile behavior.
 
+## Reference-Host Boundary
+
+Claude Code is the reference host for the approved Meeting Ingest runtime. Codex is not a reference host. Codex runs are development/non-release evidence only until separately approved. A Codex run must not claim approved-runtime, `Ready`, or approved-client status. Label all Codex results as development/non-release evidence in the completion output.
+
 ## Defaults
 
 - Use `provider=session` unless the user explicitly asks for another provider.
@@ -219,5 +223,6 @@ After processing, report:
 - signal path and count
 - archive/reconcile completion
 - whether any direct inbox files remain
+- that these results are Codex development/non-release evidence, not approved-runtime output
 
 If processing fails, report the engine error phase and code.

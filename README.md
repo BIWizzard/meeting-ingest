@@ -240,6 +240,67 @@ Phase 2 requires the persisted request file that matches the response `ingest_ru
 
 For a reusable extraction sub-agent prompt, see [Session Provider Sub-Agent Prompt](docs/session-provider-subagent-prompt.md). For host-specific wrapper starting points, see [Session Provider Host Wrapper Snippets](docs/session-provider-host-wrappers.md). For the current agent-operated inbox workflow, see [Session Provider Inbox Agent Workflow](docs/session-provider-inbox-agent-workflow.md).
 
+## Release Flow
+
+`meeting-ingest` ships to consumers as an explicitly approved, frozen wheel — never a working-tree snapshot or editable install. Claude Code is the reference host for the approved runtime. Codex remains development/non-release evidence until separately approved.
+
+The maintainer-only release flow is explicit end to end:
+
+1. Review and approve an exact commit.
+2. Build twice-reproducibly from that commit, producing a wheel and an external receipt:
+
+   ```bash
+   scripts/build-approved-runtime.py \
+     --commit <sha> \
+     --output-dir <dir> \
+     --approved-by owner \
+     --approved-at <utc> \
+     --source-commit-reviewed
+   ```
+
+3. Publish the receipt, atomically advancing the advisory private-alpha channel:
+
+   ```bash
+   scripts/publish-approved-runtime.py --receipt <path> --published-at <utc>
+   ```
+
+   The channel manifest is advisory. It identifies the latest approved receipt/build and retained rollback artifacts, but it never installs, selects, or repins a consumer.
+4. Install the frozen wheel explicitly:
+
+   ```bash
+   uv tool install <published-wheel-path>
+   ```
+
+5. Render and install the workflow artifacts:
+
+   ```bash
+   scripts/install-approved-skill.py \
+     --receipt <receipt> \
+     --template docs/claude-skills/meeting-ingest/SKILL.md \
+     --executable /Users/kmgdev/.local/bin/meeting-ingest \
+     --skill-destination ~/.claude/skills/meeting-ingest/SKILL.md \
+     --agent docs/claude-agents/meeting-ingest-session-provider.md \
+     --agent-destination ~/.claude/agents/meeting-ingest-session-provider.md \
+     --json
+   ```
+
+   The installer verifies the template hash against the receipt, substitutes only the `{{MEETING_INGEST_APPROVED_EXECUTABLE}}` marker with the machine-local absolute path, copies the agent byte-identical, and writes atomically. It reports the rendered skill hash; the pin step below records that hash in the consumer pin.
+6. Pin the consumer to the approved receipt:
+
+   ```bash
+   meeting-ingest runtime pin --receipt <path> --root <consumer-root>
+   ```
+
+7. Verify:
+
+   ```bash
+   meeting-ingest readiness --host claude-code --json
+   ```
+
+Release-store publishing, installation, and `runtime pin` are bootstrap/release mutations outside project readiness. They use strict receipt/build/workflow verification and atomic writes instead of bypassing themselves through the project guard.
+
+Git hooks never build, publish, install, pin, or update the consumer tool. On main-moving commits or merges they may only print an informational reminder that a release candidate may exist. The old automatic `uv tool install --reinstall` hook is retired.
+
 ## Start Here
 
 - [Product Status](docs/product-status.md)

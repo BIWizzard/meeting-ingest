@@ -15,7 +15,7 @@ The CLI engine is the source of truth for transcript extraction, provider reques
 - Do not use `mock` for real workflow tests.
 - Do not use API-backed providers unless the user explicitly asks and the privacy gate is enabled.
 - Run commands from the project root that contains `_local/project-context/meetings/`.
-- Prefer `uv run meeting-ingest ...` in this repo.
+- Invoke the CLI only through the approved executable set in the next section. Do not use `uv run meeting-ingest` or ambient PATH resolution.
 
 Before processing, verify `_local/project-context/meetings/meeting-ingest.toml` contains:
 
@@ -27,6 +27,32 @@ allow_session_provider = true
 ```
 
 If those values are missing or set differently, update the local workflow config before processing.
+
+## Approved Executable
+
+Set the approved executable once per session and use it for every `meeting-ingest` command in this skill:
+
+```bash
+MEETING_INGEST="{{MEETING_INGEST_APPROVED_EXECUTABLE}}"
+```
+
+This is the canonical executable recorded in the consumer pin for the maintainer-only private-alpha channel. Every command below runs as `"$MEETING_INGEST" <args>`. Never substitute `uv run meeting-ingest`, an editable checkout, or ambient PATH resolution.
+
+## Step 0: Runtime Readiness Gate
+
+Before any natural-language inbox processing, check runtime readiness:
+
+```bash
+"$MEETING_INGEST" readiness --host claude-code --json
+```
+
+Read `verdict` from the JSON and continue only as follows:
+
+- `ready` or `ready_with_history_warnings`: proceed with the workflow.
+- `development_override`: proceed only when the user has explicitly authorized the override reason in this session. Pass `--development-override "<reason>"` on every mutating command (`session-inbox`, `provider-request`, `ingest`), using the exact authorized reason, and state in the completion message that the results are development-marked.
+- `blocked` (exit `12`): stop and report the findings. Do not process the inbox. Read-only commands (`status`, `doctor`, `readiness`, `runtime inspect`) remain usable while blocked.
+
+Keep the readiness JSON for the completion report. It carries `running_build`, `runtime_provenance`, and `verdict`, which the completion message must echo.
 
 ## Process The Inbox
 
@@ -51,7 +77,7 @@ To abandon after review, use the exact `details.request_path` and `details.expec
 Phase 1:
 
 ```bash
-uv run meeting-ingest session-inbox --quality balanced --json
+"$MEETING_INGEST" session-inbox --quality balanced --json
 ```
 
 For each result with `status: "pending_provider_response"`, read the returned `details.request_path` and `details.expected_response_path`. They are relative to the meetings root.
@@ -59,7 +85,7 @@ For each result with `status: "pending_provider_response"`, read the returned `d
 Before extraction, inspect `details.effective_date` (or the request's `date_confidence`). If confidence is `low`, do not write a response or run phase 2. Confirm the occurrence date with the user, then create a fresh request for that source with:
 
 ```bash
-uv run meeting-ingest provider-request "$SOURCE" --provider session --quality balanced --meeting-date YYYY-MM-DD --json
+"$MEETING_INGEST" provider-request "$SOURCE" --provider session --quality balanced --meeting-date YYYY-MM-DD --json
 ```
 
 Use only the fresh request and response paths. Never allow an unconfirmed low-confidence date to mint the final meeting artifact.
@@ -138,7 +164,7 @@ Use `provider.host: "claude-code"` when running inside Claude Code. Use the actu
 Validate the completed response before phase 2:
 
 ```bash
-uv run meeting-ingest validate-response "$RESPONSE_PATH" --source "$SOURCE" --json
+"$MEETING_INGEST" validate-response "$RESPONSE_PATH" --source "$SOURCE" --json
 ```
 
 Proceed only when it reports `status: "success"`, `provider_response.status: "valid"`, and `runtime_readiness.verdict` is not `blocked`. For provider-validation failures, correct every entry in `errors[0].details.issues`; for a `source_read` failure, correct the `--source` path. A blocked readiness verdict uses exit `12` even when the response payload itself is valid. Then re-run the preflight. The preflight has no ledger, artifact, archive, reconcile, or cache-cleanup side effects.
@@ -146,7 +172,7 @@ Proceed only when it reports `status: "success"`, `provider_response.status: "va
 Phase 2:
 
 ```bash
-uv run meeting-ingest ingest "$SOURCE" --provider session --provider-response "$RESPONSE_PATH" --json
+"$MEETING_INGEST" ingest "$SOURCE" --provider session --provider-response "$RESPONSE_PATH" --json
 ```
 
 Confirm the run summary reports:
@@ -210,10 +236,15 @@ Lead the note with the meeting title and effective date, summarize outcomes in o
 
 After processing, report:
 
+- readiness verdict (`verdict` from step 0)
+- build ID (`running_build` from the readiness JSON)
+- runtime mode (`runtime_provenance.runtime_mode` from the readiness JSON)
 - each source processed
 - generated markdown path
 - signal path and count
 - archive/reconcile completion
 - whether any direct inbox files remain
+
+If the run used a development override, state that the results are development-marked and include the override reason.
 
 If processing fails, report the engine error phase and code.

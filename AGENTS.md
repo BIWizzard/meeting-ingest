@@ -106,12 +106,23 @@ If the config is missing or still defaults to `mock`, update it for this local w
 
 `meeting-ingest session-inbox --json` is the active-agent wrapper surface. It scans existing provider requests first, completes ready responses before creating fresh requests, and skips fresh phase 1 while unresolved handoffs remain. In plain CLI use it reports `pending_provider_response` entries because the CLI cannot invoke the active model session by itself.
 
-`meeting-ingest ingest-inbox --provider session --json` is the lower-level batch phase-1 command. It creates session-provider requests for each direct inbox file. It does not complete session extraction by itself because the active agent must produce the provider response JSON. Process the inbox with this loop:
+`meeting-ingest ingest-inbox --provider session --json` is the lower-level batch phase-1 command. It creates session-provider requests for each direct inbox file. It does not complete session extraction by itself because the active agent must produce the provider response JSON.
 
-1. Run `uv run meeting-ingest session-inbox --quality balanced --json`.
+Claude Code is the reference host for the approved runtime. On Claude Code, invoke the CLI only through the approved executable recorded in the consumer pin, not through `uv run meeting-ingest` or ambient PATH:
+
+```bash
+MEETING_INGEST="/Users/kmgdev/.local/bin/meeting-ingest"
+```
+
+Codex, Supa Code, and T3 Code are not reference hosts. Their runs are development/non-release evidence until separately approved, and they run the equivalent repo-checkout development invocation `uv run meeting-ingest <args>` in place of `"$MEETING_INGEST"` below.
+
+Process the inbox with this loop:
+
+0. Check runtime readiness with `"$MEETING_INGEST" readiness --host claude-code --json`. Continue only when `verdict` is `ready` or `ready_with_history_warnings`, or when the user has explicitly authorized a `development_override` reason (then pass `--development-override "<reason>"` on every mutating command and mark the results development-generated). On `blocked` (exit `12`), stop and report the findings; read-only `status`, `doctor`, `readiness`, and `runtime inspect` remain usable while blocked.
+1. Run `"$MEETING_INGEST" session-inbox --quality balanced --json`.
 2. For each result with `status: "pending_provider_response"`, read the generated request file from `details.request_path`.
 3. Produce the expected provider response JSON at `details.expected_response_path`.
-4. Run `uv run meeting-ingest ingest <source> --provider session --provider-response <expected_response_path> --json`.
+4. Run `"$MEETING_INGEST" ingest <source> --provider session --provider-response <expected_response_path> --json`.
 5. Confirm the run summary reports `status: "success"`, `provider: "session"`, a markdown artifact path, signal artifact path, archive path, and completed reconcile path.
 6. Record the meeting in iQ Context — one capture per successfully processed meeting, after ledger/signal writes succeed (not per intermediate artifact):
 
@@ -134,10 +145,6 @@ This is currently a lightweight local continuity layer. Semantic retrieval and r
 
 ## Tool Distribution
 
-The `meeting-ingest` CLI used outside this repo is a frozen `uv tool` install, not an editable one: consumer projects only ever run code that has merged to `main`, never in-progress working-tree state. After merging changes to `main`, refresh the global install from the repo root:
+The `meeting-ingest` CLI used outside this repo is a frozen approved-wheel install, never an editable one or a working-tree snapshot. Consumer projects only run an explicitly approved, reviewed, and pinned build. Installing or updating that build is the maintainer-only release flow documented in the [README Release Flow](README.md#release-flow): build twice-reproducibly, publish to the advisory private-alpha channel, install the frozen wheel, render and install the workflow artifacts, pin the consumer, and verify with `readiness`.
 
-```bash
-uv tool install --reinstall .
-```
-
-In this clone the refresh is automatic: post-commit/post-merge hooks under `scripts/git-hooks/` reinstall the tool whenever `main` moves, enabled via `git config core.hooksPath scripts/git-hooks`. That config is local-only, so fresh clones must run it once.
+Git hooks never build, publish, install, pin, or update the consumer tool. On main-moving commits or merges they may only print an informational reminder that a release candidate may exist. The old automatic `uv tool install --reinstall` hook is retired.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from meeting_ingest.runtime_release import (
     APPROVED_EXECUTABLE_MARKER,
     RuntimeReleaseError,
     _channel_lock,
+    install_workflow_artifacts,
     pin_runtime,
     publish_approved_runtime,
     update_check,
@@ -63,6 +65,196 @@ def _release(
     receipt_path = release / "receipt.json"
     receipt_path.write_text(json.dumps(receipt, sort_keys=True) + "\n", encoding="utf-8")
     return receipt_path, wheel, skill, agent
+
+
+def test_install_workflow_artifacts_renders_skill_and_copies_agent(tmp_path: Path) -> None:
+    receipt, _, template, agent = _release(tmp_path / "artifacts")
+    executable = tmp_path / "bin/meeting-ingest"
+    skill_destination = tmp_path / "installed/skills/meeting-ingest/SKILL.md"
+    agent_destination = tmp_path / "installed/agents/meeting-ingest.md"
+
+    result = install_workflow_artifacts(
+        receipt,
+        template_path=template,
+        executable=str(executable),
+        skill_destination=skill_destination,
+        agent_path=agent,
+        agent_destination=agent_destination,
+    )
+
+    expected_skill = f"Run {executable} session-inbox --json\n".encode()
+    assert skill_destination.read_bytes() == expected_skill
+    assert agent_destination.read_bytes() == agent.read_bytes()
+    assert result.build_id == "meeting-ingest-0.1.0-gaaaaaaaaaaaa-sbbbbbbbbbbbb"
+    assert result.skill_destination == skill_destination
+    assert result.rendered_skill_sha256 == "sha256:" + hashlib.sha256(expected_skill).hexdigest()
+    assert result.agent_destination == agent_destination
+    assert result.agent_sha256 == _digest(agent)
+
+
+def test_install_workflow_artifacts_rejects_template_hash_mismatch(tmp_path: Path) -> None:
+    receipt, _, template, agent = _release(tmp_path / "artifacts")
+    template.write_text("changed\n", encoding="utf-8")
+    skill_destination = tmp_path / "installed/SKILL.md"
+    agent_destination = tmp_path / "installed/agent.md"
+
+    with pytest.raises(RuntimeReleaseError) as error:
+        install_workflow_artifacts(
+            receipt,
+            template_path=template,
+            executable="/opt/meeting-ingest",
+            skill_destination=skill_destination,
+            agent_path=agent,
+            agent_destination=agent_destination,
+        )
+
+    assert error.value.code == "workflow_template_hash_mismatch"
+    assert not skill_destination.exists()
+    assert not agent_destination.exists()
+
+
+@pytest.mark.parametrize(
+    "template_text",
+    [
+        "Run meeting-ingest session-inbox --json\n",
+        (
+            f"Run {APPROVED_EXECUTABLE_MARKER} session-inbox --json\n"
+            f"Then {APPROVED_EXECUTABLE_MARKER} reconcile\n"
+        ),
+    ],
+)
+def test_install_workflow_artifacts_rejects_invalid_template_marker(
+    tmp_path: Path, template_text: str
+) -> None:
+    receipt, _, template, agent = _release(tmp_path / "artifacts")
+    template.write_text(template_text, encoding="utf-8")
+    receipt_value = json.loads(receipt.read_text(encoding="utf-8"))
+    receipt_value["workflow"]["claude_skill_template_sha256"] = _digest(template)
+    receipt.write_text(json.dumps(receipt_value, sort_keys=True) + "\n", encoding="utf-8")
+    skill_destination = tmp_path / "installed/SKILL.md"
+    agent_destination = tmp_path / "installed/agent.md"
+
+    with pytest.raises(RuntimeReleaseError) as error:
+        install_workflow_artifacts(
+            receipt,
+            template_path=template,
+            executable="/opt/meeting-ingest",
+            skill_destination=skill_destination,
+            agent_path=agent,
+            agent_destination=agent_destination,
+        )
+
+    assert error.value.code == "workflow_template_marker_invalid"
+    assert not skill_destination.exists()
+    assert not agent_destination.exists()
+
+
+def test_install_workflow_artifacts_rejects_relative_executable(tmp_path: Path) -> None:
+    receipt, _, template, agent = _release(tmp_path / "artifacts")
+    skill_destination = tmp_path / "installed/SKILL.md"
+    agent_destination = tmp_path / "installed/agent.md"
+
+    with pytest.raises(RuntimeReleaseError) as error:
+        install_workflow_artifacts(
+            receipt,
+            template_path=template,
+            executable="bin/meeting-ingest",
+            skill_destination=skill_destination,
+            agent_path=agent,
+            agent_destination=agent_destination,
+        )
+
+    assert error.value.code == "workflow_executable_invalid"
+    assert not skill_destination.exists()
+    assert not agent_destination.exists()
+
+
+def test_install_workflow_artifacts_validates_agent_before_writing_skill(tmp_path: Path) -> None:
+    receipt, _, template, agent = _release(tmp_path / "artifacts")
+    agent.write_text("changed agent\n", encoding="utf-8")
+    skill_destination = tmp_path / "installed/SKILL.md"
+    agent_destination = tmp_path / "installed/agent.md"
+
+    with pytest.raises(RuntimeReleaseError) as error:
+        install_workflow_artifacts(
+            receipt,
+            template_path=template,
+            executable="/opt/meeting-ingest",
+            skill_destination=skill_destination,
+            agent_path=agent,
+            agent_destination=agent_destination,
+        )
+
+    assert error.value.code == "workflow_agent_hash_mismatch"
+    assert not skill_destination.exists()
+    assert not agent_destination.exists()
+
+
+def test_install_workflow_artifacts_requires_agent_destination(tmp_path: Path) -> None:
+    receipt, _, template, agent = _release(tmp_path / "artifacts")
+    skill_destination = tmp_path / "installed/SKILL.md"
+
+    with pytest.raises(RuntimeReleaseError) as error:
+        install_workflow_artifacts(
+            receipt,
+            template_path=template,
+            executable="/opt/meeting-ingest",
+            skill_destination=skill_destination,
+            agent_path=agent,
+        )
+
+    assert error.value.code == "workflow_agent_arguments_invalid"
+    assert not skill_destination.exists()
+
+
+@pytest.mark.parametrize("existing_skill", [b"previous skill bytes\n", None])
+def test_install_workflow_artifacts_rolls_back_skill_when_agent_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing_skill: bytes | None,
+) -> None:
+    receipt, _, template, agent = _release(tmp_path / "artifacts")
+    skill_destination = tmp_path / "installed/skills/SKILL.md"
+    agent_destination = tmp_path / "installed/agents/agent.md"
+    skill_destination.parent.mkdir(parents=True)
+    if existing_skill is not None:
+        skill_destination.write_bytes(existing_skill)
+    original_replace = os.replace
+
+    def fail_agent_replace(source: Path, destination: Path) -> None:
+        if Path(destination) == agent_destination:
+            raise PermissionError("agent destination is unwritable")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", fail_agent_replace)
+
+    with pytest.raises(PermissionError, match="agent destination is unwritable"):
+        install_workflow_artifacts(
+            receipt,
+            template_path=template,
+            executable="/opt/meeting-ingest",
+            skill_destination=skill_destination,
+            agent_path=agent,
+            agent_destination=agent_destination,
+        )
+
+    if existing_skill is None:
+        assert not skill_destination.exists()
+    else:
+        assert skill_destination.read_bytes() == existing_skill
+    assert not agent_destination.exists()
+    assert not any(path.name.endswith(".pending") for path in skill_destination.parent.iterdir())
+    assert not any(path.name.endswith(".pending") for path in agent_destination.parent.iterdir())
+
+
+def test_git_hooks_do_not_reinstall_global_tools() -> None:
+    hook_root = Path(__file__).parents[1] / "scripts/git-hooks"
+    forbidden = ("uv tool install", "pip install", "--reinstall")
+
+    for hook in hook_root.iterdir():
+        if hook.is_file():
+            contents = hook.read_text(encoding="utf-8")
+            assert all(command not in contents for command in forbidden), hook
 
 
 def test_publish_retains_prior_release_and_atomically_advances_channel(tmp_path: Path) -> None:

@@ -1,7 +1,7 @@
 ---
 name: meeting-ingest-session-provider
 description: Use this agent only for Meeting Ingest provider=session extraction handoffs. The agent reads a meeting-ingest provider request JSON file, uses the normalized transcript inside it, and writes the expected provider response JSON envelope for the meeting-ingest CLI to validate and render. It must not create final markdown, signal JSONL, ledger entries, archives, or inbox reconcile moves.
-model: sonnet
+model: claude-opus-4-8
 color: blue
 ---
 
@@ -69,6 +69,17 @@ The top-level envelope must be:
   }
 }
 ```
+
+## Runtime Provenance
+
+The request carries runtime provenance fields, including `runtime_provenance` and `runtime_provenance_sha256`. Echo them into the response exactly as given.
+
+Rules:
+
+- Copy `runtime_provenance_sha256` byte-for-byte from the request. Do not recompute, reformat, or shorten it.
+- When the response contract asks for the `runtime_provenance` block, copy it verbatim from the request.
+- Never interpret, recompute, normalize, re-derive, or rewrite any runtime provenance field. It is an opaque echo, not evidence you produce.
+- The engine verifies the echoed provenance against the persisted request; any alteration fails phase 2.
 
 ## Response Payload Requirements
 
