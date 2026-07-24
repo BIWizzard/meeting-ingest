@@ -770,6 +770,143 @@ def test_pipeline_ingest_duplicate_source_returns_no_op_and_reconciles_inbox(tmp
     assert ledger_records[-1]["reconcile"]["status"] == "completed"
 
 
+def test_ingest_fails_closed_for_legacy_only_source_without_side_effects(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-legacy-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    source_sha256 = sha256_file(source)
+    _append_legacy_record(paths.ledger, source_sha256)
+    before = _file_snapshot(paths.meetings_root)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(source, start=paths.inbox)
+
+    assert exc.value.phase == "ledger"
+    assert exc.value.code == "legacy_source_unresolved"
+    assert exc.value.exit_code == EXIT_RUNTIME_READINESS
+    assert exc.value.recoverable is False
+    assert exc.value.details == {
+        "source_path": str(source),
+        "source_sha256": source_sha256,
+    }
+    assert source.name in exc.value.message
+    assert "cannot be re-ingested" in exc.value.message
+    assert _file_snapshot(paths.meetings_root) == before
+
+
+def test_provider_request_fails_closed_for_legacy_only_source_without_minting_request(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-legacy-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    source_sha256 = sha256_file(source)
+    _append_legacy_record(paths.ledger, source_sha256)
+    before = _file_snapshot(paths.meetings_root)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        provider_request(source, start=paths.inbox)
+
+    assert exc.value.phase == "ledger"
+    assert exc.value.code == "legacy_source_unresolved"
+    assert exc.value.exit_code == EXIT_RUNTIME_READINESS
+    assert exc.value.recoverable is False
+    assert exc.value.details == {
+        "source_path": str(source),
+        "source_sha256": source_sha256,
+    }
+    assert _file_snapshot(paths.meetings_root) == before
+    assert list((paths.cache / "provider-requests").glob("*.request.json")) == []
+
+
+def test_session_phase2_fails_closed_for_legacy_only_source_without_side_effects(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-legacy-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details["expected_response_path"]
+    _write_session_response(request_path, response_path)
+    _append_legacy_record(paths.ledger, request_summary.source_sha256)
+    before = _file_snapshot(paths.meetings_root)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(
+            source,
+            start=paths.inbox,
+            provider="session",
+            provider_response=response_path,
+        )
+
+    assert exc.value.phase == "ledger"
+    assert exc.value.code == "legacy_source_unresolved"
+    assert exc.value.exit_code == EXIT_RUNTIME_READINESS
+    assert exc.value.recoverable is False
+    assert exc.value.details == {
+        "source_path": str(source),
+        "source_sha256": request_summary.source_sha256,
+    }
+    assert _file_snapshot(paths.meetings_root) == before
+
+
+def test_reconcile_fails_closed_for_legacy_only_source_without_side_effects(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-legacy-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    source_sha256 = sha256_file(source)
+    _append_legacy_record(paths.ledger, source_sha256)
+    before = _file_snapshot(paths.meetings_root)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        reconcile(tmp_path)
+
+    assert exc.value.code == "legacy_source_unresolved"
+    assert exc.value.exit_code == EXIT_RUNTIME_READINESS
+    assert _file_snapshot(paths.meetings_root) == before
+
+
+def test_reconcile_preflights_legacy_sources_before_repairing_duplicates(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+    ingest(source, start=paths.inbox)
+    duplicate = paths.inbox / "a-duplicate.txt"
+    duplicate.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+    legacy = paths.inbox / "z-legacy.txt"
+    legacy.write_text("Legacy content\n", encoding="utf-8")
+    _append_legacy_record(paths.ledger, sha256_file(legacy))
+    ledger_before = paths.ledger.read_bytes()
+
+    with pytest.raises(MeetingIngestError) as exc:
+        reconcile(tmp_path)
+
+    assert exc.value.code == "legacy_source_unresolved"
+    assert duplicate.exists()
+    assert not (paths.inbox_done / duplicate.name).exists()
+    assert paths.ledger.read_bytes() == ledger_before
+    assert all(record["event"] != "reconcile_repaired" for record in read_records(paths.ledger))
+
+
+def test_current_primary_record_wins_over_matching_legacy_record(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-legacy-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    first = ingest(source, start=paths.inbox)
+    _append_legacy_record(paths.ledger, first.source_sha256)
+    redrop = paths.inbox / source.name
+    redrop.write_text("Ken: Hello\n", encoding="utf-8")
+
+    summary = ingest(redrop, start=paths.inbox)
+
+    assert summary.status == "no_op"
+    assert summary.meeting_id == first.meeting_id
+    assert summary.details["reconcile"]["reason"] == "source_already_ingested"
+
+
 def test_duplicate_external_source_no_op_does_not_append_repair_snapshot(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     source = tmp_path / "2026-07-03-external-sync.txt"
@@ -2081,6 +2218,28 @@ def test_reconcile_skipped_failed_record_reports_known_meeting_id(tmp_path: Path
 def _allow_session_provider(config_path: Path) -> None:
     config_text = config_path.read_text(encoding="utf-8")
     config_path.write_text(config_text.replace("allow_session_provider = false", "allow_session_provider = true"), encoding="utf-8")
+
+
+def _append_legacy_record(ledger_path: Path, source_sha256: str) -> None:
+    with ledger_path.open("a", encoding="utf-8") as ledger:
+        ledger.write(
+            json.dumps(
+                {
+                    "source_sha256": source_sha256,
+                    "meeting_id": "2026-05-04-generic-d01638d8",
+                    "ingest_run_id": "20260518T030615Z",
+                }
+            )
+            + "\n"
+        )
+
+
+def _file_snapshot(root: Path) -> dict[str, bytes]:
+    return {
+        str(path.relative_to(root)): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
 
 
 def _development_runtime_inspection(root: Path):

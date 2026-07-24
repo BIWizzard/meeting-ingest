@@ -131,6 +131,19 @@ def latest_record_for_source(ledger_path: Path, source_sha256: str) -> dict[str,
     return latest
 
 
+def has_legacy_record_for_source(ledger_path: Path, source_sha256: str) -> bool:
+    if not ledger_path.exists():
+        return False
+    for line in ledger_path.read_text(encoding="utf-8").splitlines():
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if _is_legacy_record(record) and record["source_sha256"] == source_sha256:
+            return True
+    return False
+
+
 def _is_valid_record(record: object) -> bool:
     if not isinstance(record, dict):
         return False

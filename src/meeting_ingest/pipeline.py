@@ -17,6 +17,7 @@ from meeting_ingest.errors import (
     ConfigError,
     EXIT_ARTIFACT_WRITE,
     EXIT_GENERAL_FAILURE,
+    EXIT_RUNTIME_READINESS,
     EXIT_USAGE_OR_CONFIG,
     MeetingIngestError,
     ProviderError,
@@ -27,7 +28,13 @@ from meeting_ingest.errors import (
 from meeting_ingest.extract import extract_source
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id, mint_source_id
-from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, latest_record_for_source, read_records
+from meeting_ingest.ledger import (
+    LedgerSnapshot,
+    append_snapshot,
+    has_legacy_record_for_source,
+    latest_record_for_source,
+    read_records,
+)
 from meeting_ingest.locking import ProjectLock, lock_path
 from meeting_ingest.paths import ProjectPaths, init_project, load_project
 from meeting_ingest.provider import ProviderRequest
@@ -821,6 +828,7 @@ def _complete_session_ingest_locked(
     existing_record = latest_record_for_source(paths.ledger, source_sha256)
     if _record_has_primary_artifacts(existing_record):
         return _no_op_summary(source, paths, source_sha256, existing_record, clock=clock)
+    _raise_if_legacy_source_unresolved(source, paths, source_sha256, existing_record)
 
     response_path = _resolve_provider_response_path(provider_response, paths)
     try:
@@ -1058,6 +1066,7 @@ def _prepare_ingest(
     existing_record = latest_record_for_source(paths.ledger, source_sha256)
     if _record_has_primary_artifacts(existing_record):
         raise _PreparedNoOp(_no_op_summary(source, paths, source_sha256, existing_record, clock=clock))
+    _raise_if_legacy_source_unresolved(source, paths, source_sha256, existing_record)
 
     try:
         extraction = extract_source(source, meeting_date=meeting_date)
@@ -1193,9 +1202,17 @@ def reconcile(
     repaired: list[dict[str, object]] = []
     skipped: list[dict[str, object]] = []
     with ProjectLock(lock_path(paths.cache)):
+        inbox_sources: list[tuple[Path, str, dict[str, object] | None]] = []
         for source in _inbox_sources(paths):
             source_sha256 = sha256_file(source)
             existing_record = latest_record_for_source(paths.ledger, source_sha256)
+            inbox_sources.append((source, source_sha256, existing_record))
+
+        for source, source_sha256, existing_record in inbox_sources:
+            if not _record_has_primary_artifacts(existing_record):
+                _raise_if_legacy_source_unresolved(source, paths, source_sha256, existing_record)
+
+        for source, source_sha256, existing_record in inbox_sources:
             if not _record_has_primary_artifacts(existing_record):
                 skipped.append(
                     {
@@ -1522,6 +1539,27 @@ def _record_has_primary_artifacts(record: dict[str, object] | None) -> bool:
         return False
     artifacts = record.get("artifacts")
     return isinstance(artifacts, dict) and bool(artifacts)
+
+
+def _raise_if_legacy_source_unresolved(
+    source: Path,
+    paths: ProjectPaths,
+    source_sha256: str,
+    existing_record: dict[str, object] | None,
+) -> None:
+    if existing_record is not None or not has_legacy_record_for_source(paths.ledger, source_sha256):
+        return
+    raise MeetingIngestError(
+        phase="ledger",
+        code="legacy_source_unresolved",
+        message=(
+            f"The content of source file {source} matches a deprecated legacy ledger record and cannot be "
+            "re-ingested until that history is explicitly adopted or the re-ingest is explicitly authorized."
+        ),
+        exit_code=EXIT_RUNTIME_READINESS,
+        recoverable=False,
+        details={"source_path": str(source), "source_sha256": source_sha256},
+    )
 
 
 def _signal_records_from_provider(
