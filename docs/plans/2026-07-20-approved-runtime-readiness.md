@@ -395,14 +395,14 @@ uv run pytest tests/test_runtime_build.py -q
 - Test: modify `tests/test_doctor_status.py`
 - Test: modify playbook tests
 
-- [ ] Add canonical runtime provenance to all run summaries and durable surfaces listed in the contract.
-- [ ] Make session artifacts adopt the phase-1 bound provenance after phase-2 equality succeeds.
-- [ ] Mark development artifacts prominently in front matter and the rendered overview; do not hide the mode in machine-only fields.
-- [ ] Record development override reason in provenance while escaping it safely for JSON/YAML/Markdown.
-- [ ] Add doctor checks for missing, malformed, contradictory, or unresolvable runtime provenance on ledger `2.0` and other explicitly provenance-aware artifacts and derived outputs.
-- [ ] Emit signal schema `1.2` with a compact producer-ledger/runtime reference; distinguish operation provenance from carried signal-generation provenance; enforce write-time producer linkage and latest-state standing-doctor linkage with ledger `2.0`.
-- [ ] Preserve legacy readability: absent runtime provenance on ledger `1.0` and other explicitly legacy records is a history warning, not automatic current-write corruption.
-- [ ] Test approved, development, no-op, failure, repair, reconcile, and playbook derivation provenance.
+- [x] Add canonical runtime provenance to all run summaries and durable surfaces listed in the contract.
+- [x] Make session artifacts adopt the phase-1 bound provenance after phase-2 equality succeeds.
+- [x] Mark development artifacts prominently in front matter and the rendered overview; do not hide the mode in machine-only fields.
+- [x] Record development override reason in provenance while escaping it safely for JSON/YAML/Markdown.
+- [x] Add doctor checks for missing, malformed, contradictory, or unresolvable runtime provenance on ledger `2.0` and other explicitly provenance-aware artifacts and derived outputs.
+- [x] Emit signal schema `1.2` with a compact producer-ledger/runtime reference; distinguish operation provenance from carried signal-generation provenance; enforce write-time producer linkage and latest-state standing-doctor linkage with ledger `2.0`.
+- [x] Preserve legacy readability: absent runtime provenance on ledger `1.0` and other explicitly legacy records is a history warning, not automatic current-write corruption.
+- [x] Test approved, development, no-op, failure, repair, reconcile, and playbook derivation provenance.
 
 ## Task 8: Replace Ambiguous Claude Commands And Silent Global Refresh
 
@@ -419,29 +419,29 @@ uv run pytest tests/test_runtime_build.py -q
 - Modify or remove: `scripts/git-hooks/post-commit`, `scripts/git-hooks/post-merge`
 - Modify: `README.md`
 
-- [ ] Replace every Claude Code `uv run meeting-ingest` instruction with the canonical absolute approved executable used by the maintainer-only channel.
-- [ ] Start every natural-language inbox workflow with `readiness --host claude-code --json`; continue only for Ready/Ready-with-history-warnings or an explicitly user-authorized development override.
-- [ ] Make the skill report build ID, runtime mode, and readiness verdict in completion output.
-- [ ] Require the session-provider agent to echo request-bound runtime provenance without interpreting or rewriting it.
-- [ ] Hash the portable durable skill template in the build receipt; render only its strict approved-executable marker during consumer installation; hash the rendered installed skill in the consumer pin; verify the installed agent byte-for-byte when it requires no machine-local substitution.
-- [ ] Retire hook-based `uv tool install --reinstall` completely. Hooks may emit an informational reminder that a candidate exists, but they cannot build, publish, install, pin, or update.
-- [ ] Document the explicit release flow and reference-host boundary; Codex remains development/non-release evidence until separately approved.
+- [x] Replace every Claude Code `uv run meeting-ingest` instruction with the canonical absolute approved executable used by the maintainer-only channel.
+- [x] Start every natural-language inbox workflow with `readiness --host claude-code --json`; continue only for Ready/Ready-with-history-warnings or an explicitly user-authorized development override.
+- [x] Make the skill report build ID, runtime mode, and readiness verdict in completion output.
+- [x] Require the session-provider agent to echo request-bound runtime provenance without interpreting or rewriting it.
+- [x] Hash the portable durable skill template in the build receipt; render only its strict approved-executable marker during consumer installation; hash the rendered installed skill in the consumer pin; verify the installed agent byte-for-byte when it requires no machine-local substitution.
+- [x] Retire hook-based `uv tool install --reinstall` completely. Hooks may emit an informational reminder that a candidate exists, but they cannot build, publish, install, pin, or update.
+- [x] Document the explicit release flow and reference-host boundary; Codex remains development/non-release evidence until separately approved.
 
 ## Task 9: Cut HTV Over With Rollback Preserved
 
 **Scope:** This task is authorized only after Tasks 1-8 pass review and an approved wheel/receipt exists. It changes runtime installation/configuration but does not mutate meeting corpus content.
 
-- [ ] Record the existing HTV editable distribution metadata, executable/module paths, source target, Git state, and environment package snapshot for rollback.
-- [ ] Build, review, approve, publish, and explicitly install the selected frozen wheel into the canonical global tool location.
-- [ ] Verify global runtime identity and package integrity before writing the HTV pin.
-- [ ] Pin HTV to the exact receipt/build/executable/workflow.
-- [ ] Render the approved executable into the installed Claude skill's strict marker, then verify its hash against the consumer pin; hash-verify the extraction agent against the receipt/pin contract.
-- [ ] Uninstall only `meeting-ingest` from the explicit HTV `.venv` interpreter. Do not delete or recreate the virtual environment.
-- [ ] Verify the editable `.pth`, distribution metadata, and local console script are gone and no activated/`uv run` path can import the Meeting Ingest working tree.
-- [ ] Run read-only runtime inspection and readiness. Expected verdict is `Ready with history warnings` until historical qualification is complete.
-- [ ] Run `status` and `doctor` through the pinned executable and confirm legacy findings are categorized, not silently repaired.
-- [ ] Keep the prior approved wheel/receipt and the recorded editable-install instructions as rollback evidence; rollback is explicit and development-marked.
-- [ ] Do not process a real transcript until the cutover checklist and review pass.
+- [x] Record the existing HTV editable distribution metadata, executable/module paths, source target, Git state, and environment package snapshot for rollback.
+- [x] Build, review, approve, publish, and explicitly install the selected frozen wheel into the canonical global tool location.
+- [x] Verify global runtime identity and package integrity before writing the HTV pin.
+- [x] Pin HTV to the exact receipt/build/executable/workflow.
+- [x] Render the approved executable into the installed Claude skill's strict marker, then verify its hash against the consumer pin; hash-verify the extraction agent against the receipt/pin contract.
+- [x] Uninstall only `meeting-ingest` from the explicit HTV `.venv` interpreter. Do not delete or recreate the virtual environment.
+- [x] Verify the editable `.pth`, distribution metadata, and local console script are gone and no activated/`uv run` path can import the Meeting Ingest working tree.
+- [x] Run read-only runtime inspection and readiness. Expected verdict is `Ready with history warnings` until historical qualification is complete.
+- [x] Run `status` and `doctor` through the pinned executable and confirm legacy findings are categorized, not silently repaired.
+- [x] Keep the prior approved wheel/receipt and the recorded editable-install instructions as rollback evidence; rollback is explicit and development-marked.
+- [x] Do not process a real transcript until the cutover checklist and review pass.
 
 ## Task 10: Fresh Reference-Host Proof And Product-Truth Reconciliation
 
@@ -453,14 +453,14 @@ uv run pytest tests/test_runtime_build.py -q
 - Modify: `CURRENT-QUESTIONS.md`
 - Create: dated session/acceptance evidence under `docs/sessions/`
 
-- [ ] From HTV, submit one normal Claude Code request with one new non-synthetic transcript.
-- [ ] Require the skill to show readiness and build identity without source, PATH, package, ledger, or cache inspection.
-- [ ] Complete phase 1/extraction/phase 2 using the same bound runtime and workflow.
-- [ ] Confirm completion reports artifact, signals, ledger, archive, reconcile, provider, host, effective date/confidence, build ID, runtime mode, and workflow contract.
-- [ ] Confirm the output surfaces preserve the same provenance and post-run readiness remains safe.
-- [ ] Exercise explicit update availability without installing it, then an approved update/repin in a disposable consumer before touching HTV.
-- [ ] Record elapsed time, interventions, failures, rollback evidence, and human trust assessment.
-- [ ] Update product truth only with demonstrated claims; Track 1 completion does not claim semantic guardrails or qualified history.
+- [x] From HTV, submit one normal Claude Code request with one new non-synthetic transcript.
+- [x] Require the skill to show readiness and build identity without source, PATH, package, ledger, or cache inspection.
+- [x] Complete phase 1/extraction/phase 2 using the same bound runtime and workflow.
+- [x] Confirm completion reports artifact, signals, ledger, archive, reconcile, provider, host, effective date/confidence, build ID, runtime mode, and workflow contract.
+- [x] Confirm the output surfaces preserve the same provenance and post-run readiness remains safe.
+- [x] Exercise explicit update availability without installing it, then an approved update/repin in a disposable consumer before touching HTV.
+- [x] Record elapsed time, interventions, failures, rollback evidence, and human trust assessment.
+- [x] Update product truth only with demonstrated claims; Track 1 completion does not claim semantic guardrails or qualified history.
 
 ## Required Test Matrix
 

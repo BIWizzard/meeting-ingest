@@ -373,7 +373,7 @@ Current stance:
 - session phase 1 and phase 2 must use exactly matching runtime and workflow provenance
 - no corpus adoption, repair, or generated-output mutation is authorized by the runtime cutover
 
-Runtime identity, approval, readiness verdicts, development override scope, handoff binding, and update behavior are closed Track 1 policy. Remaining relevant questions are corpus class disposition under 8a and the bounded recovery/generated-output mutation questions under 7a; neither may be resolved by mutating HTV or Spelman history during Track 1.
+Runtime identity, approval, readiness verdicts, development override scope, handoff binding, and update behavior are closed Track 1 policy, now implemented and demonstrated complete as of 2026-07-24: the reference host runs an approved frozen wheel under a runtime pin and processed one fresh non-synthetic transcript end to end through one normal Claude Code request. The frozen shapes remain authoritative in `DECISIONS.md` and `docs/artifact-contract.md`; the demonstration is recorded in `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Demonstration does not claim semantic guardrails or qualified history. Remaining relevant questions are corpus class disposition under 8a and the bounded recovery/generated-output mutation questions under 7a; neither was resolved by mutating HTV or Spelman history during Track 1.
 
 ## Not In Scope Right Now
 

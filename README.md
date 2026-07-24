@@ -24,6 +24,8 @@ But raw transcripts are noisy and hard to reuse directly.
 
 The current release posture is a maintainer-only private alpha. Claude Code is the reference host for the approved **Just Works Continuity** milestone. Broader productization may come later, but the current work must first prove the maintainer's real workflow and accumulated history.
 
+The Approved Runtime and Pre-Meeting Readiness track is demonstrated complete as of 2026-07-24: the reference host runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. This does not claim semantic guardrails or qualified history. See `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`.
+
 The long-term architecture remains host-neutral. The following are design targets, not current support claims:
 
 - Codex
@@ -93,6 +95,8 @@ Python CLI/library implementation with:
 - append-only ledger
 - archive/reconcile behavior
 - doctor/status/reconcile and `repair-date` commands
+- approved-runtime readiness gating, consumer runtime pins, and update checks
+- persisted runtime provenance across artifacts, ledgers, and signals
 
 ## Development
 

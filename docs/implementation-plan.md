@@ -66,10 +66,10 @@ The reference host is Claude Code and the initial audience is the maintainer in 
 
 Implementation must sequence the milestone as:
 
-1. Approved Runtime and Pre-Meeting Readiness.
-2. Read-Only Power-User Corpus Reckoning.
-3. Fresh Claude Code Meeting Proof and Recovery.
-4. Approval-Gated Historical Qualification and Continuity Proof.
+1. Approved Runtime and Pre-Meeting Readiness — demonstrated complete 2026-07-24.
+2. Read-Only Power-User Corpus Reckoning — read-only reckoning complete; adoption approval-gated.
+3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is not started.
+4. Approval-Gated Historical Qualification and Continuity Proof — not started; approval-gated.
 
 The read-only corpus reckoning is complete. It does not authorize adoption or repair. No consumer-corpus mutation may occur until a deterministic, fingerprinted adoption plan is reviewed and separately approved.
 
@@ -87,6 +87,8 @@ Approved Runtime policy:
 ### Track 1 Contract Freeze
 
 The approved execution plan is `docs/plans/2026-07-20-approved-runtime-readiness.md`. Runtime implementation must follow the normative shapes in `docs/artifact-contract.md` and `docs/provider-handoff-contract.md`; this section freezes sequencing and module ownership.
+
+**Status:** Track 1 is demonstrated complete as of 2026-07-24. All ten plan tasks are implemented, reviewed, and proven on a fresh reference host: the HTV consumer runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. See `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Completion demonstrates approved-runtime readiness and persisted provenance only; it does not claim semantic guardrails or qualified history, and no HTV/Spelman history was mutated.
 
 Frozen contracts:
 

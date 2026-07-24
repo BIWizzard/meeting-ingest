@@ -20,6 +20,8 @@ It can turn `.txt`, `.vtt`, and `.docx` meeting artifacts into durable project k
 - provider-backed structured extraction
 - session-provider handoffs for active agent hosts
 - doctor/status visibility into incomplete or pending state
+- approved-runtime readiness gating before writes
+- persisted runtime provenance across artifacts, ledgers, and signals
 
 The current reference user is the maintainer, the reference host is Claude Code, and the release posture is maintainer-only private alpha. The engine remains host-neutral by design, but other host experiences are not current release claims. It is not yet a general self-serve product.
 
@@ -29,16 +31,16 @@ The next milestone is **Just Works Continuity**:
 
 > Know which approved logic will run, process the next meeting through one normal Claude Code request, and keep accumulated history usable and explainable without silent mutation.
 
-The ordered milestone tracks are:
+The ordered milestone tracks and their status are:
 
-1. Approved Runtime and Pre-Meeting Readiness.
-2. Read-Only Power-User Corpus Reckoning.
-3. Fresh Claude Code Meeting Proof and Recovery.
-4. Approval-Gated Historical Qualification and Continuity Proof.
+1. Approved Runtime and Pre-Meeting Readiness — demonstrated complete 2026-07-24.
+2. Read-Only Power-User Corpus Reckoning — read-only reckoning complete; adoption approval-gated.
+3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is not started.
+4. Approval-Gated Historical Qualification and Continuity Proof — not started; approval-gated.
 
 The read-only HTV/Spelman reckoning is complete. Corpus adoption remains separately approval-gated.
 
-The Approved Runtime policy is now decided:
+The Approved Runtime policy is implemented and demonstrated as of 2026-07-24:
 
 - each consumer pins one exact immutable build tied to a reviewed commit and packaged build;
 - a stable channel may announce updates but never silently changes the selected build;
@@ -46,7 +48,9 @@ The Approved Runtime policy is now decided:
 - approved Claude Code client work blocks editable builds by default;
 - a deliberate maintainer override is available for testing and must remain unmistakable in readiness and generated provenance.
 
-See `docs/north-star-board/reviews/2026-07-20-reconvened/`.
+The HTV consumer now runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. Track 1 completion demonstrates approved-runtime readiness and persisted provenance only; it does not claim semantic guardrails or qualified history. The 177 legacy findings remain classified history warnings awaiting the separately approval-gated qualification track.
+
+See `docs/north-star-board/reviews/2026-07-20-reconvened/`, `docs/sessions/2026-07-24-task9-htv-cutover.md`, and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`.
 
 ## Current Development State
 
