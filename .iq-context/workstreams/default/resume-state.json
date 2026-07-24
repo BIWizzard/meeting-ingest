@@ -5,11 +5,11 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Take up Approved Runtime Task 8: replace ambiguous Claude commands with the canonical approved executable, start inbox workflows with readiness, retire the hook-based global uv tool refresh (it fired on every commit this session), and document the release flow.",
-    "Execute the Decision 32 work item in a ~/.claude agent-orchestration session: edit the meeting-extraction registry row and both extraction agent model pins to the claude-implementer tier, then run scripts/claude-md-lint.sh (fires OB-003-3).",
-    "After Tasks 1-8 pass review and an approved wheel/receipt exists, execute Task 9 HTV cutover with rollback preserved, then Task 10 fresh reference-host proof and product-truth reconciliation."
+    "Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
+    "Decide when to start the Semantic Integrity Guardrails plan (docs/plans/2026-07-20-semantic-integrity-guardrails.md) — the remaining gate inside Track 3.",
+    "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4)."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Take up Approved Runtime Task 8: replace ambiguous Claude commands with the canonical approved executable, start inbox workflows with readiness, retire the hook-based global uv tool refresh (it fired on every commit this session), and document the release flow.",
-  "updated_at": "2026-07-24T06:04:49.487Z"
+  "resume_from": "Resume with: Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
+  "updated_at": "2026-07-24T07:24:03.378Z"
 }
