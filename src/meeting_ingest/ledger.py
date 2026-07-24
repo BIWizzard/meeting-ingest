@@ -6,9 +6,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import json
+import re
 
 from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
 from meeting_ingest.errors import EXIT_LEDGER_WRITE, MeetingIngestError
+
+
+_LEGACY_RECORD_KEYS = frozenset({"source_sha256", "meeting_id", "ingest_run_id"})
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_LEGACY_RUN_ID_RE = re.compile(r"(?:\d{8}T\d{6}Z|ingest-\d{8}-[a-z0-9-]+)")
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,15 @@ def read_records_with_issues(ledger_path: Path) -> tuple[list[dict[str, Any]], l
                 )
             )
             continue
+        if _is_legacy_record(record):
+            issues.append(
+                LedgerReadIssue(
+                    line_number=line_number,
+                    code="legacy_ledger_record",
+                    message="Ledger line uses the deprecated three-field record format.",
+                )
+            )
+            continue
         if not _is_valid_record(record):
             issues.append(
                 LedgerReadIssue(
@@ -124,3 +139,19 @@ def _is_valid_record(record: object) -> bool:
     if record.get("event") not in {"ingest_failed", "source_quarantined"} and not record.get("meeting_id"):
         return False
     return True
+
+
+def _is_legacy_record(record: object) -> bool:
+    if not isinstance(record, dict) or frozenset(record) != _LEGACY_RECORD_KEYS:
+        return False
+    source_sha256 = record.get("source_sha256")
+    meeting_id = record.get("meeting_id")
+    ingest_run_id = record.get("ingest_run_id")
+    return (
+        isinstance(source_sha256, str)
+        and _SHA256_RE.fullmatch(source_sha256) is not None
+        and isinstance(meeting_id, str)
+        and bool(meeting_id.strip())
+        and isinstance(ingest_run_id, str)
+        and _LEGACY_RUN_ID_RE.fullmatch(ingest_run_id) is not None
+    )

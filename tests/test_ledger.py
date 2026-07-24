@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,25 @@ def test_read_records_ignores_malformed_and_invalid_lines(tmp_path: Path) -> Non
         }
     ]
     assert [issue.code for issue in issues] == ["malformed_ledger_json", "invalid_ledger_record"]
+
+
+def test_read_records_classifies_only_the_exact_deprecated_shape_as_legacy(tmp_path: Path) -> None:
+    ledger = tmp_path / "_ledger.jsonl"
+    legacy = {
+        "source_sha256": "a" * 64,
+        "meeting_id": "2026-05-04-generic-d01638d8",
+        "ingest_run_id": "20260518T030615Z",
+    }
+    invalid_lookalike = {**legacy, "source_sha256": "not-a-sha256"}
+    ledger.write_text(
+        "\n".join(json.dumps(record) for record in (legacy, invalid_lookalike)) + "\n",
+        encoding="utf-8",
+    )
+
+    records, issues = read_records_with_issues(ledger)
+
+    assert records == []
+    assert [issue.code for issue in issues] == ["legacy_ledger_record", "invalid_ledger_record"]
 
 
 def test_append_snapshot_wraps_write_failures(tmp_path: Path) -> None:

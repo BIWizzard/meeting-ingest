@@ -7,7 +7,12 @@ import pytest
 from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.ids import observation_identity_hash
 from meeting_ingest.schema import ProviderValidationError, SignalEvidence, SignalRecord
-from meeting_ingest.signals import assign_deterministic_signal_ids, read_signal_jsonl, write_signal_jsonl
+from meeting_ingest.signals import (
+    assign_deterministic_signal_ids,
+    is_deprecated_signal_event_jsonl,
+    read_signal_jsonl,
+    write_signal_jsonl,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "signals"
@@ -94,6 +99,48 @@ def test_read_signal_jsonl_accepts_schema_1_0_and_1_1() -> None:
     assert generalized[0].source is not None
     assert generalized[0].source.source_id == "src-a1b2c3d4e5f6"
     assert generalized[0].stakeholder_name_raw == "G, Kushali"
+
+
+def test_deprecated_signal_event_detection_requires_the_exact_legacy_shape(tmp_path: Path) -> None:
+    path = tmp_path / "legacy-events.jsonl"
+    event = {
+        "schema_version": "1.0",
+        "event": "stakeholder_signal_recorded",
+        "event_id": "event-1",
+        "ingest_run_id": "ingest-20260518-batch1",
+        "effective_at": "2026-05-04",
+        "recorded_at": "2026-05-18T03:06:15Z",
+        "origin": "meeting",
+        "payload": {},
+        "provenance": {},
+    }
+    path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    assert is_deprecated_signal_event_jsonl(path) is True
+
+    event["unexpected"] = True
+    path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+    assert is_deprecated_signal_event_jsonl(path) is False
+
+
+def test_deprecated_signal_event_detection_fails_closed_for_mixed_and_empty_files(tmp_path: Path) -> None:
+    path = tmp_path / "mixed.jsonl"
+    event = {
+        "schema_version": "1.0",
+        "event": "stakeholder_signal_recorded",
+        "event_id": "event-1",
+        "ingest_run_id": "ingest-20260518-batch1",
+        "effective_at": "2026-05-04",
+        "recorded_at": "2026-05-18T03:06:15Z",
+        "origin": "meeting",
+        "payload": {},
+        "provenance": {},
+    }
+    path.write_text(json.dumps(event) + "\n{}\n", encoding="utf-8")
+    assert is_deprecated_signal_event_jsonl(path) is False
+
+    path.write_text("", encoding="utf-8")
+    assert is_deprecated_signal_event_jsonl(path) is False
 
 
 def test_schema_1_1_rejects_unknown_source_kind(tmp_path: Path) -> None:

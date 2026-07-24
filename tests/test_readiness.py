@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import pytest
@@ -79,6 +80,172 @@ def test_history_issue_is_renamed_and_does_not_block(tmp_path: Path, monkeypatch
     assert result.findings[0].code == "historical_date_low_confidence"
     assert result.findings[0].category == "history"
     assert result.findings[0].severity == "warning"
+
+
+def test_deprecated_three_field_ledger_record_is_a_history_warning(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    paths.ledger.write_text(
+        json.dumps(
+            {
+                "source_sha256": "a" * 64,
+                "meeting_id": "2026-05-04-generic-d01638d8",
+                "ingest_run_id": "20260518T030615Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "ready_with_history_warnings"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("legacy_provenance_missing", "history", "warning")
+    ]
+
+
+def test_invalid_legacy_lookalike_remains_a_project_blocker(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    paths.ledger.write_text(
+        json.dumps(
+            {
+                "source_sha256": "not-a-sha256",
+                "meeting_id": "2026-05-04-generic-d01638d8",
+                "ingest_run_id": "20260518T030615Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "blocked"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("invalid_ledger_record", "project", "blocker")
+    ]
+
+
+def test_deprecated_signal_event_file_is_a_history_warning(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    event = {
+        "schema_version": "1.0",
+        "event": "stakeholder_signal_recorded",
+        "event_id": "event-1",
+        "ingest_run_id": "ingest-20260518-batch1",
+        "effective_at": "2026-05-04",
+        "recorded_at": "2026-05-18T03:06:15Z",
+        "origin": "meeting",
+        "payload": {},
+        "provenance": {},
+    }
+    (paths.signals / "legacy.jsonl").write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "ready_with_history_warnings"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("legacy_signal_link_missing", "history", "warning")
+    ]
+
+
+def test_uniquely_identity_matched_relocated_artifact_is_a_history_warning(tmp_path: Path) -> None:
+    from meeting_ingest.ledger import LedgerSnapshot, append_snapshot
+
+    paths = init_project(tmp_path)
+    source_sha256 = "a" * 64
+    meeting_id = "mtg-20260713-af5978a9"
+    relocated = paths.meetings_root / "2026-07-10-relocated.md"
+    relocated.write_text(
+        "\n".join(
+            [
+                "---",
+                f"meeting_id: {meeting_id}",
+                f"source_sha256: {source_sha256}",
+                "---",
+                "# Relocated",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="ingest_completed",
+            source_sha256=source_sha256,
+            meeting_id=meeting_id,
+            ingest_run_id="ingest-20260713-test",
+            source={},
+            artifacts={"summary-plus-verbatim": {"path": "2026-07-13-missing.md"}},
+            signals={},
+            reconcile={"status": "completed"},
+        ),
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "ready_with_history_warnings"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("corpus_adoption_pending", "history", "warning")
+    ]
+
+
+def test_unresolved_missing_artifact_remains_a_project_blocker(tmp_path: Path) -> None:
+    from meeting_ingest.ledger import LedgerSnapshot, append_snapshot
+
+    paths = init_project(tmp_path)
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="ingest_completed",
+            source_sha256="a" * 64,
+            meeting_id="mtg-20260713-af5978a9",
+            ingest_run_id="ingest-20260713-test",
+            source={},
+            artifacts={"summary-plus-verbatim": {"path": "missing.md"}},
+            signals={},
+            reconcile={"status": "completed"},
+        ),
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "blocked"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("missing_artifact", "project", "blocker")
+    ]
+
+
+def test_ambiguous_identity_matched_artifacts_remain_a_project_blocker(tmp_path: Path) -> None:
+    from meeting_ingest.ledger import LedgerSnapshot, append_snapshot
+
+    paths = init_project(tmp_path)
+    source_sha256 = "a" * 64
+    meeting_id = "mtg-20260713-af5978a9"
+    front_matter = f"---\nmeeting_id: {meeting_id}\nsource_sha256: {source_sha256}\n---\n"
+    (paths.meetings_root / "candidate-one.md").write_text(front_matter, encoding="utf-8")
+    (paths.meetings_root / "candidate-two.md").write_text(front_matter, encoding="utf-8")
+    append_snapshot(
+        paths.ledger,
+        LedgerSnapshot(
+            event="ingest_completed",
+            source_sha256=source_sha256,
+            meeting_id=meeting_id,
+            ingest_run_id="ingest-20260713-test",
+            source={},
+            artifacts={"summary-plus-verbatim": {"path": "missing.md"}},
+            signals={},
+            reconcile={"status": "completed"},
+        ),
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "blocked"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("missing_artifact", "project", "blocker")
+    ]
 
 
 def test_development_override_marks_provenance_and_waives_only_selection(tmp_path: Path) -> None:

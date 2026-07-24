@@ -24,6 +24,21 @@ from meeting_ingest.schema import (
 )
 
 
+_DEPRECATED_EVENT_KEYS = frozenset(
+    {
+        "schema_version",
+        "event",
+        "event_id",
+        "ingest_run_id",
+        "effective_at",
+        "recorded_at",
+        "origin",
+        "payload",
+        "provenance",
+    }
+)
+
+
 @dataclass(frozen=True)
 class SignalWriteResult:
     path: Path
@@ -121,6 +136,39 @@ def read_signal_jsonl(path: Path) -> list[SignalRecord]:
             ) from exc
         records.append(record)
     return records
+
+
+def is_deprecated_signal_event_jsonl(path: Path) -> bool:
+    """Recognize the pre-Meeting-Ingest event envelope without adopting it as a signal."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    found = False
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            return False
+        if not _is_deprecated_signal_event(payload):
+            return False
+        found = True
+    return found
+
+
+def _is_deprecated_signal_event(payload: object) -> bool:
+    if not isinstance(payload, dict) or frozenset(payload) != _DEPRECATED_EVENT_KEYS:
+        return False
+    return (
+        payload.get("schema_version") == "1.0"
+        and all(
+            isinstance(payload.get(key), str) and bool(str(payload[key]).strip())
+            for key in ("event", "event_id", "ingest_run_id", "effective_at", "recorded_at", "origin")
+        )
+        and all(isinstance(payload.get(key), dict) for key in ("payload", "provenance"))
+    )
 
 
 def signal_record_from_dict(payload: dict[str, Any]) -> SignalRecord:

@@ -13,7 +13,7 @@ from meeting_ingest.locking import inspect_lock, lock_path
 from meeting_ingest.paths import ProjectPaths
 from meeting_ingest.playbook_status import live_playbook_status, playbook_issues
 from meeting_ingest.provider_handoff import REQUEST_DIR, RESPONSE_DIR
-from meeting_ingest.signals import read_signal_jsonl
+from meeting_ingest.signals import is_deprecated_signal_event_jsonl, read_signal_jsonl
 from meeting_ingest.session_handoffs import pending_session_handoffs, session_handoff_counts
 from meeting_ingest.stakeholders import collect_identity_candidates, read_stakeholder_registry
 
@@ -88,12 +88,23 @@ def find_issues(paths: ProjectPaths) -> list[DoctorIssue]:
             )
         )
 
+    artifact_identity_index: dict[tuple[str, str], list[Path]] | None = None
     for record in _current_records(records):
         artifacts = record.get("artifacts", {})
         if isinstance(artifacts, dict):
             for artifact in artifacts.values():
                 if isinstance(artifact, dict) and artifact.get("path"):
-                    _append_missing_path_issue(paths, issues, "missing_artifact", str(artifact["path"]))
+                    relative_path = str(artifact["path"])
+                    if not (paths.meetings_root / relative_path).exists():
+                        if artifact_identity_index is None:
+                            artifact_identity_index = _artifact_identity_index(paths)
+                        _append_artifact_path_issue(
+                            paths,
+                            issues,
+                            record,
+                            relative_path,
+                            artifact_identity_index,
+                        )
         signals = record.get("signals", {})
         if isinstance(signals, dict) and signals.get("path"):
             _append_missing_path_issue(paths, issues, "missing_signal_file", str(signals["path"]))
@@ -162,6 +173,15 @@ def _signal_contract_issues(
     if not paths.signals.exists():
         return issues
     for path in sorted(paths.signals.glob("*.jsonl")):
+        if is_deprecated_signal_event_jsonl(path):
+            issues.append(
+                DoctorIssue(
+                    code="legacy_signal_format",
+                    message="Signal JSONL uses the deprecated event-envelope format.",
+                    path=str(path.relative_to(paths.meetings_root)),
+                )
+            )
+            continue
         try:
             records = read_signal_jsonl(path)
         except MeetingIngestError as exc:
@@ -290,6 +310,38 @@ def _append_missing_path_issue(paths: ProjectPaths, issues: list[DoctorIssue], c
         )
 
 
+def _append_artifact_path_issue(
+    paths: ProjectPaths,
+    issues: list[DoctorIssue],
+    record: dict[str, object],
+    relative_path: str,
+    identity_index: dict[tuple[str, str], list[Path]],
+) -> None:
+    identity = (str(record.get("meeting_id") or ""), str(record.get("source_sha256") or ""))
+    relocated = identity_index.get(identity, [])
+    if len(relocated) == 1:
+        actual_path = str(relocated[0].relative_to(paths.meetings_root))
+        issues.append(
+            DoctorIssue(
+                code="historical_artifact_path_drift",
+                message=f"Ledger artifact path differs from the uniquely identity-matched file: {actual_path}",
+                path=relative_path,
+            )
+        )
+        return
+    _append_missing_path_issue(paths, issues, "missing_artifact", relative_path)
+
+
+def _artifact_identity_index(paths: ProjectPaths) -> dict[tuple[str, str], list[Path]]:
+    index: dict[tuple[str, str], list[Path]] = {}
+    for path in paths.meetings_root.glob("*.md"):
+        fields = _front_matter_fields(path)
+        identity = (fields.get("meeting_id", ""), fields.get("source_sha256", ""))
+        if all(identity):
+            index.setdefault(identity, []).append(path)
+    return index
+
+
 def _has_primary_artifacts(record: dict[str, object]) -> bool:
     if record.get("event") not in {"primary_artifacts_ready", "ingest_completed", "reconcile_repaired", "date_repaired"}:
         return False
@@ -323,19 +375,24 @@ def _low_confidence_date_issues(paths: ProjectPaths, records: list[dict[str, obj
 
 
 def _front_matter_value(path: Path, key: str) -> str | None:
+    return _front_matter_fields(path).get(key)
+
+
+def _front_matter_fields(path: Path) -> dict[str, str]:
+    fields: dict[str, str] = {}
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return None
-    if not lines or lines[0].strip() != "---":
-        return None
-    prefix = f"{key}: "
-    for line in lines[1:]:
-        if line.strip() == "---":
-            return None
-        if line.startswith(prefix):
-            return line[len(prefix):].strip()
-    return None
+        with path.open(encoding="utf-8") as source:
+            if source.readline().strip() != "---":
+                return fields
+            for line in source:
+                if line.strip() == "---":
+                    break
+                if ": " in line:
+                    key, value = line.split(": ", 1)
+                    fields[key] = value.strip().strip('"')
+    except (OSError, UnicodeError):
+        return {}
+    return fields
 
 
 def _current_records(records: list[dict[str, object]]) -> list[dict[str, object]]:
