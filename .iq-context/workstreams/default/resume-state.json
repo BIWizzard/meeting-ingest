@@ -5,9 +5,9 @@
   "next_wave": null,
   "completed_tasks": [],
   "remaining_tasks": [
-    "Implement Task 7 provenance persistence: ledger 2.0 + signal 1.2 + markdown 1.1 + run summary 1.1 + playbook provenance writers with phase-2 adoption and write-time producer linkage, then doctor/readiness checks, tests, independent review, commit."
+    "Verify the contract-conformance rework against docs/artifact-contract.md sections directly, rerun independent review, merge Task 7 to the main tree, run the full suite, and commit; then take up Approved Runtime Task 8 (replace ambiguous Claude commands and retire hook-based global refresh) and execute the ~/.claude pin-edit work item from Decision 32 in an agent-orchestration session."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Implement Task 7 provenance persistence: ledger 2.0 + signal 1.2 + markdown 1.1 + run summary 1.1 + playbook provenance writers with phase-2 adoption and write-time producer linkage, then doctor/readiness checks, tests, independent review, commit.",
-  "updated_at": "2026-07-24T04:56:52.110Z"
+  "resume_from": "Resume with: Verify the contract-conformance rework against docs/artifact-contract.md sections directly, rerun independent review, merge Task 7 to the main tree, run the full suite, and commit; then take up Approved Runtime Task 8 (replace ambiguous Claude commands and retire hook-based global refresh) and execute the ~/.claude pin-edit work item from Decision 32 in an agent-orchestration session.",
+  "updated_at": "2026-07-24T05:31:06.835Z"
 }

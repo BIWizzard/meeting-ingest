@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Closed the legacy-source dedup safety gap: sources whose hash appears only in a deprecated three-field ledger record now fail closed with legacy_source_unresolved (exit 12, no side effects) at ingest, provider-request, and reconcile; reconcile preflights all inbox sources before repairs after an independent review caught partial-mutation ordering. 386 tests pass. Committed and pushed to main as three commits: readiness compatibility hotfix (6ba9543), legacy dedup guard (ea0c473), context checkpoint (7b0ff13). Post-commit hook refreshed the global uv tool from main (known Task 8 retirement target). Starting Approved Runtime Task 7 design.",
+  "status_summary": "Task 7 halted at final review and re-specced: the combined implementation (writers 394→ doctor/readiness 412 tests) deviated from docs/artifact-contract.md — missing ledger_record_id/source_record_sequence minting, wrong signal reference shape (producer_ref instead of the documented runtime_provenance_ref with producer_ledger_record_id), flattened front-matter aliases instead of the required nested runtime_provenance payload plus runtime_provenance_ledger_record_id, repair-date carrying the old producer instead of minting a new signal generation, and playbook generation members without the shared fingerprint. Root cause: the implementation brief was specced from the plan paraphrase and a code survey without reading the artifact contract; two review findings restating contract clauses were wrongly rejected during arbitration. A full conformance rework against the contract text is running in the Task 7 worktree; lesson persisted to orchestrator memory. Extraction model evaluation completed earlier: Decision 32 recorded and pushed (a45c1be) — meeting-extraction role rises to the claude-implementer tier; pin edit routed to ~/.claude as a work item.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
@@ -23,16 +23,16 @@
     "Decide when to begin the separately planned Semantic Integrity Guardrails work after the Approved Runtime track."
   ],
   "next_actions": [
-    "Implement Task 7 provenance persistence: ledger 2.0 + signal 1.2 + markdown 1.1 + run summary 1.1 + playbook provenance writers with phase-2 adoption and write-time producer linkage, then doctor/readiness checks, tests, independent review, commit."
+    "Verify the contract-conformance rework against docs/artifact-contract.md sections directly, rerun independent review, merge Task 7 to the main tree, run the full suite, and commit; then take up Approved Runtime Task 8 (replace ambiguous Claude commands and retire hook-based global refresh) and execute the ~/.claude pin-edit work item from Decision 32 in an agent-orchestration session."
   ],
   "assumptions": [],
-  "continuation_hint": "Next: Implement Task 7 provenance persistence: ledger 2.0 + signal 1.2 + markdown 1.1 + run summary 1.1 + playbook provenance writers with phase-2 adoption and write-time producer linkage, then doctor/readiness checks, tests, independent review, commit.",
+  "continuation_hint": "Next: Verify the contract-conformance rework against docs/artifact-contract.md sections directly, rerun independent review, merge Task 7 to the main tree, run the full suite, and commit; then take up Approved Runtime Task 8 (replace ambiguous Claude commands and retire hook-based global refresh) and execute the ~/.claude pin-edit work item from Decision 32 in an agent-orchestration session.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-24T04:56:52.110Z",
+  "last_saved_at": "2026-07-24T05:31:06.835Z",
   "last_wrapped_at": "2026-07-24T04:17:40.354Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-24T04:56:52.110Z"
+  "updated_at": "2026-07-24T05:31:06.835Z"
 }
