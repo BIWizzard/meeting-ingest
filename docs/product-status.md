@@ -50,7 +50,7 @@ The Approved Runtime policy is implemented and demonstrated as of 2026-07-24:
 
 The HTV consumer now runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. Track 1 completion demonstrates approved-runtime readiness and persisted provenance only; it does not claim semantic guardrails or qualified history. The 177 legacy findings remain classified history warnings awaiting the separately approval-gated qualification track.
 
-See `docs/north-star-board/reviews/2026-07-20-reconvened/`, `docs/sessions/2026-07-24-task9-htv-cutover.md`, and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`.
+See `docs/north-star-board/002-just-works-continuity/`, `docs/sessions/2026-07-24-task9-htv-cutover.md`, and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`.
 
 ## Current Development State
 
