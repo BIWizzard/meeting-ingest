@@ -18,6 +18,5 @@ Binding records: [docs/north-star-board/board-log.md](docs/north-star-board/boar
 
 <!-- north-star-board:open-obligations -->
 - OB-002-1: corpus adoption ratification — no corpus adoption or mutation without a deterministic fingerprinted adoption plan and separate owner approval; a proposed plan convenes the board.
-- OB-002-2: close the ready-with-history-warnings later-decision — record 002 addendum owed; trigger fired 2026-07-24 when Tasks 9–10 ran production ingest under that verdict.
 <!-- /north-star-board:open-obligations -->
 
