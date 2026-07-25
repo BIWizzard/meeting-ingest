@@ -5,11 +5,12 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Decision 33 recorded: raise the meeting-extraction pin to claude-opus-5. Re-ran the Decision 32 controlled comparison (opus-5 candidate vs opus-4-8 incumbent) on hash-verified byte-identical transcripts for the TRACE3 standup and Kushali working call, identical canonical briefs, fresh incumbent reruns, per-run model identity verified from harness environment and recorded in provider.model_id. All four scratch envelopes contract-valid, zero engine writes. Result: no hallucinations either arm; candidate a transcript-verified superset on both meetings; standup action-item recall doubled (6 to 12) and candidate recovered the environment-freeze announcement, snapshot-vs-deadline scope correction, validation-scope assignment, and owned Microsoft contingency that the incumbent missed. Ruling: raise at cost parity; pin edit routes to ~/.claude (registry + both agent files, fires OB-003-3), not made from this repo.",
+  "status_summary": "Decision 33 execution addendum recorded after HTV dogfood (2026-07-25): the registry-driven direct edit of the installed session-provider agent tripped the approved-runtime readiness gate fail-closed (exit 12, receipt hash mismatch); field remediation restored claude-opus-4-8 and six meetings ingested validly on the incumbent tier — fail-closed contract worked as designed. Corrected routing: agent-file half of the meeting-extraction swap flows through this repo (source docs/claude-agents/meeting-ingest-session-provider.md, now flipped to claude-opus-5) then a new approved release/receipt, owner publish + HTV install/repin. 431 tests pass. Ruling stands; not effective at HTV until the next approved release.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "DECISIONS.md"
+    "DECISIONS.md",
+    "docs/claude-agents/meeting-ingest-session-provider.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -24,16 +25,17 @@
     "Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
     "Decide when to start the Semantic Integrity Guardrails plan (docs/plans/2026-07-20-semantic-integrity-guardrails.md) — the remaining gate inside Track 3.",
     "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4).",
-    "Agent-orchestration session executes the Decision 33 pin edit in ~/.claude (meeting-extraction registry row + meeting-ingest-session-provider.md + meeting-transcript-analyzer.md to claude-opus-5) and runs the pin lint; meeting-ingest continues HTV spot-checks per the owner trust ruling."
+    "Agent-orchestration session executes the Decision 33 pin edit in ~/.claude (meeting-extraction registry row + meeting-ingest-session-provider.md + meeting-transcript-analyzer.md to claude-opus-5) and runs the pin lint; meeting-ingest continues HTV spot-checks per the owner trust ruling.",
+    "Owner cuts the next approved release carrying the claude-opus-5 session-provider pin (build twice-reproducibly, publish to private-alpha, install + repin at HTV); then agent-orchestration re-runs the pin lint and fixes the registry swap-point column to name this repo's release flow; then retire the HTV memory that restores claude-opus-4-8. The six 2026-07-25 HTV meetings are Opus 4.8 spot-check candidates under the owner trust ruling."
   ],
   "assumptions": [],
   "continuation_hint": "Next: Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-25T00:45:49.197Z",
+  "last_saved_at": "2026-07-25T13:28:42.589Z",
   "last_wrapped_at": "2026-07-24T07:24:03.378Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-25T00:45:49.197Z"
+  "updated_at": "2026-07-25T13:28:42.589Z"
 }

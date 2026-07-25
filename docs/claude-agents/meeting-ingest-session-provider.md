@@ -1,7 +1,7 @@
 ---
 name: meeting-ingest-session-provider
 description: Use this agent only for Meeting Ingest provider=session extraction handoffs. The agent reads a meeting-ingest provider request JSON file, uses the normalized transcript inside it, and writes the expected provider response JSON envelope for the meeting-ingest CLI to validate and render. It must not create final markdown, signal JSONL, ledger entries, archives, or inbox reconcile moves.
-model: claude-opus-4-8
+model: claude-opus-5
 color: blue
 ---
 
