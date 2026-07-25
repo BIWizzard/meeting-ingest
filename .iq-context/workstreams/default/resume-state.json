@@ -7,9 +7,10 @@
   "remaining_tasks": [
     "Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
     "Decide when to start the Semantic Integrity Guardrails plan (docs/plans/2026-07-20-semantic-integrity-guardrails.md) — the remaining gate inside Track 3.",
-    "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4)."
+    "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4).",
+    "Agent-orchestration session executes the Decision 33 pin edit in ~/.claude (meeting-extraction registry row + meeting-ingest-session-provider.md + meeting-transcript-analyzer.md to claude-opus-5) and runs the pin lint; meeting-ingest continues HTV spot-checks per the owner trust ruling."
   ],
   "paused_reason": "Session wrapped; resume from the stored continuation state.",
   "resume_from": "Resume with: Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
-  "updated_at": "2026-07-24T07:24:03.378Z"
+  "updated_at": "2026-07-25T00:45:49.197Z"
 }

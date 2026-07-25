@@ -5,13 +5,11 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Closed the entire Approved Runtime track and codified the board registry in one session. Task 8 (0d6cf58): Claude skill template rebuilt around a single strict approved-executable marker with a mandatory readiness gate and identity-bearing completion output; session-provider agent echoes request-bound provenance verbatim with the Decision 32 claude-opus-4-8 pin reconciled; receipt-verified installer (install_workflow_artifacts + scripts/install-approved-skill.py) with atomic two-destination writes; hook-based uv tool install retired to an informational reminder; T2 verified (codex + implementer reviews), 431 tests. Decision 32 registry work verified already committed in ~/.claude (a39c149); Task 8's governed-path sync linted clean and recorded as OB-003-3 third firing (e132eb1). Task 9 (9a8f1ac): first approved release g0d6cf58bb4d9 built twice-reproducibly, published, installed, rendered, pinned at HTV; editable install removed with rollback preserved; readiness ready_with_history_warnings, all 177 findings classified. Task 10 (5b80a17): owner ran the fresh-host proof from HTV (5m55s, one by-design date intervention, zero failures); provenance chain verified on artifact 1.1/ledger 2.0/signal 1.2; update path proven live with second release g9a8f1aca8e95 (advisory-only, fail-closed mismatch, disposable-consumer bootstrap, explicit HTV repin); product truth reconciled with a codex over-claim catch fixed (Track 3 partial); owner trust: with spot-checks. Board (c29858e, 9e02de5): registry migrated byte-identical to codified layout (001 superseded, 002 ratified), reconciler green, OB-002-2 ratified and closed via addendum 10; OB-002-1 corpus adoption gate remains the sole open obligation.",
+  "status_summary": "Decision 33 recorded: raise the meeting-extraction pin to claude-opus-5. Re-ran the Decision 32 controlled comparison (opus-5 candidate vs opus-4-8 incumbent) on hash-verified byte-identical transcripts for the TRACE3 standup and Kushali working call, identical canonical briefs, fresh incumbent reruns, per-run model identity verified from harness environment and recorded in provider.model_id. All four scratch envelopes contract-valid, zero engine writes. Result: no hallucinations either arm; candidate a transcript-verified superset on both meetings; standup action-item recall doubled (6 to 12) and candidate recovered the environment-freeze announcement, snapshot-vs-deadline scope correction, validation-scope assignment, and owned Microsoft contingency that the incumbent missed. Ruling: raise at cost parity; pin edit routes to ~/.claude (registry + both agent files, fires OB-003-3), not made from this repo.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "docs/artifact-contract.md",
-    "docs/session-provider-host-wrappers.md",
-    "docs/session-provider-subagent-prompt.md"
+    "DECISIONS.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -25,16 +23,17 @@
   "next_actions": [
     "Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
     "Decide when to start the Semantic Integrity Guardrails plan (docs/plans/2026-07-20-semantic-integrity-guardrails.md) — the remaining gate inside Track 3.",
-    "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4)."
+    "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4).",
+    "Agent-orchestration session executes the Decision 33 pin edit in ~/.claude (meeting-extraction registry row + meeting-ingest-session-provider.md + meeting-transcript-analyzer.md to claude-opus-5) and runs the pin lint; meeting-ingest continues HTV spot-checks per the owner trust ruling."
   ],
   "assumptions": [],
   "continuation_hint": "Next: Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-24T07:22:24.356Z",
+  "last_saved_at": "2026-07-25T00:45:49.197Z",
   "last_wrapped_at": "2026-07-24T07:24:03.378Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-24T07:24:03.378Z"
+  "updated_at": "2026-07-25T00:45:49.197Z"
 }
