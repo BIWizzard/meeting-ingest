@@ -234,9 +234,8 @@ uv run pytest tests/test_provider_render.py tests/test_pipeline_ingest.py tests/
 - Modify: `docs/claude-agents/meeting-ingest-session-provider.md`
 - Modify: `docs/claude-skills/meeting-ingest/SKILL.md`
 - Modify: `docs/codex-skills/meeting-ingest/SKILL.md`
-- Modify: installed `~/.claude/agents/meeting-ingest-session-provider.md`
-- Modify: installed `~/.claude/skills/meeting-ingest/SKILL.md`
-- Modify: installed `~/.codex/skills/meeting-ingest/SKILL.md`
+- Installed Claude copies (`~/.claude/agents/meeting-ingest-session-provider.md`, `~/.claude/skills/meeting-ingest/SKILL.md`, and consumer project-level `.claude` copies): **never edited directly** — receipt-managed since the Approved Runtime landed (2026-07-24, post-dating this plan). They update only through the release flow: source edits above → new approved receipt → receipt-verified install to every destination → repin (README "Release Flow", including the project-level shadow-copy step added 2026-07-25).
+- Modify: installed `~/.codex/skills/meeting-ingest/SKILL.md` (not receipt-managed; keep byte-for-byte with the durable Codex source)
 - Create: `tests/fixtures/semantic-integrity/session-provider-eval.vtt`
 - Create: `tests/fixtures/semantic-integrity/expected-review.json`
 - Create: `docs/testing/semantic-integrity-acceptance.md`
@@ -245,8 +244,8 @@ uv run pytest tests/test_provider_render.py tests/test_pipeline_ingest.py tests/
 - [ ] State plainly that `raw_labels` are exact copies, not normalized display names or inferred affiliations.
 - [ ] Add the six semantic responsibilities verbatim or reference the request-carried list without weakening it.
 - [ ] Keep durable Codex skill source and installed copy byte-for-byte synchronized.
-- [ ] Keep durable Claude agent/skill sources and installed copies synchronized.
-- [ ] Add explicit `cmp -s` or SHA-256 verification commands to the acceptance document for each durable/installed pair; installed home-directory copies are not covered by `pytest`.
+- [ ] Keep durable Claude agent/skill sources and installed copies synchronized **via the release flow only**: after the source edits land, cut a new approved receipt and run the receipt-verified installer against user-level and every consumer project-level destination, then repin. Direct edits to installed Claude copies fail readiness (`workflow_hash_mismatch`) by design.
+- [ ] Verification for the Claude pairs is the receipt: `claude_agent_sha256` / rendered-skill hash from the pinned receipt must match the installed files, checked by `meeting-ingest readiness`. Keep explicit `cmp -s` or SHA-256 commands in the acceptance document only for the non-receipt-managed Codex pair; installed home-directory copies are not covered by `pytest`.
 - [ ] Create a wholly synthetic VTT using invented people and systems. It must contain these five patterns without copying private wording:
   1. two attendees have `(Contractor)` in source labels and one does not;
   2. an unlabeled `10:06` time is explicitly established as the last nightly run, with a nearby later-night retry;
