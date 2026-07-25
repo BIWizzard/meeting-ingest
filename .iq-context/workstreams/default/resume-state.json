@@ -1,19 +1,12 @@
 {
   "version": 1,
-  "plan_path": null,
-  "completed_waves": [],
-  "next_wave": null,
-  "completed_tasks": [],
   "remaining_tasks": [
-    "Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
-    "Decide when to start the Semantic Integrity Guardrails plan (docs/plans/2026-07-20-semantic-integrity-guardrails.md) — the remaining gate inside Track 3.",
-    "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4).",
-    "Agent-orchestration session executes the Decision 33 pin edit in ~/.claude (meeting-extraction registry row + meeting-ingest-session-provider.md + meeting-transcript-analyzer.md to claude-opus-5) and runs the pin lint; meeting-ingest continues HTV spot-checks per the owner trust ruling.",
-    "Owner cuts the next approved release carrying the claude-opus-5 session-provider pin (build twice-reproducibly, publish to private-alpha, install + repin at HTV); then agent-orchestration re-runs the pin lint and fixes the registry swap-point column to name this repo's release flow; then retire the HTV memory that restores claude-opus-4-8. The six 2026-07-25 HTV meetings are Opus 4.8 spot-check candidates under the owner trust ruling.",
-    "Spot-check the first Opus 5 extraction at HTV per the owner trust ruling (next ingest); continue HTV artifact/signal spot-checks; Semantic Integrity Guardrails start decision remains open.",
-    "Fresh-tier spot-check of the first HTV ingest on the Opus 5 receipt (top of queue); Semantic Integrity Guardrails start decision remains open."
+    "Guardrails Task 2 in flight at wrap: codex-workhorse implementing the grounding index in worktree scratchpad/codex-grounding-index (output scratchpad/codex-impl-grounding.md, cut from 1172a64). On completion: T1 codex-review against the worktree, arbitrate, merge patch to main tree, commit; then orchestrate Task 3 (bind grounding+guidance into requests) and Task 4 (enforce before side effects) sequentially, then Task 5 (docs alignment + synthetic acceptance fixture, claude-implementer), Task 6, Task 7 per the plan.",
+    "Fresh-tier spot-check: first HTV ingest on the Opus 5 receipt gb37a12a0502e, per the owner trust ruling; the six 2026-07-25 meetings remain Opus 4.8 spot-check candidates.",
+    "End of guardrails slice: cut the next approved release (owner-gated) — the frozen contract docs are in the build digest, so acceptance runtime and HTV pick up the contract plus engine changes in one post-slice receipt.",
+    "OB-002-1 standing: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; the Just Works Continuity milestone claim needs the guardrails slice plus Track 4."
   ],
-  "paused_reason": "Session wrapped; resume from the stored continuation state.",
-  "resume_from": "Resume with: Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
-  "updated_at": "2026-07-25T14:07:19.767Z"
+  "paused_reason": "Resume from the stored continuation state.",
+  "resume_from": "Resume with: Guardrails Task 2 in flight at wrap: codex-workhorse implementing the grounding index in worktree scratchpad/codex-grounding-index (output scratchpad/codex-impl-grounding.md, cut from 1172a64). On completion: T1 codex-review against the worktree, arbitrate, merge patch to main tree, commit; then orchestrate Task 3 (bind grounding+guidance into requests) and Task 4 (enforce before side effects) sequentially, then Task 5 (docs alignment + synthetic acceptance fixture, claude-implementer), Task 6, Task 7 per the plan.",
+  "updated_at": "2026-07-25T18:48:24.186Z"
 }
