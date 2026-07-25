@@ -128,6 +128,10 @@ First inspect `details.effective_date` or the request's `date_confidence`. When 
 
 The request also contains `response_contract.json_schema`. This is the complete request-bound contract, including exact nested field names, allowed enums, and `const` values for identity and model alias. Use it as the authoritative response shape.
 
+The request also carries `transcript_grounding`, `semantic_guidance_version`, and `semantic_guidance_rules`. `transcript_grounding.speaker_labels` and `transcript_grounding.timestamps` are the only allowed values for attendee raw labels and signal evidence locators. Copy them verbatim, including capitalization and parenthetical qualifiers. `semantic_guidance_rules` carries the extraction rules bound into this request; obey that list rather than a remembered prompt revision. Echo `semantic_guidance_version` in the response envelope. The frozen matching rules and semantic responsibilities are in `docs/artifact-contract.md`.
+
+An older persisted request may predate these three fields. In that case, derive the allowed speaker labels and timestamps from the request's `normalized_transcript` directly, apply the same verbatim-copy discipline, and omit `semantic_guidance_version` from the response envelope rather than inventing a value. The engine recomputes the same grounding index and records the guidance version as `legacy`.
+
 Write one provider response JSON file at the returned `expected_response_path`. The response must use:
 
 ```json
@@ -136,6 +140,7 @@ Write one provider response JSON file at the returned `expected_response_path`. 
   "handoff_type": "provider_response",
   "provider_contract": "meeting-ingest-provider-response-v1",
   "runtime_provenance_sha256": "copy from request",
+  "semantic_guidance_version": "copy from request; omit this key when the request has no such field",
   "provider": {
     "name": "session",
     "host": "current host",
@@ -169,6 +174,8 @@ uv run meeting-ingest validate-response "$RESPONSE_PATH" --source "$SOURCE" --js
 ```
 
 If the request's runtime provenance is development-mode, include `--development-override` with the exact same reason used to mint the request. The generated `response_contract.preflight_command` includes the correctly escaped option.
+
+`validate-response` is the no-side-effect grounding gate. It checks payload shape and every attendee raw label and signal evidence locator against the persisted request's normalized transcript, without writing ledger, artifact, signal, archive, or reconcile state. Shape and grounding problems are reported together in one `errors[0].details.issues` list, so correct all of them in a single pass. Phase 2 repeats the identical validation under the project lock, so skipping the preflight moves the same failure later instead of avoiding it; a phase-2 grounding failure records the typed provider-validation failure, leaves the source actionable, and retains the handoff for correction.
 
 For provider-validation failures, correct every reported `errors[0].details.issues` entry before continuing. A `source_read` failure means the `--source` path must be corrected. Proceed only when the preflight reports `status: "success"`, `provider_response.status: "valid"`, and `runtime_readiness.verdict` is not `blocked`. A valid response under blocked runtime/project readiness returns `status: "blocked"` with exit `12`; resolve the reported `runtime_readiness.findings` before phase 2. The preflight does not write ledger/artifact state or consume handoff files.
 

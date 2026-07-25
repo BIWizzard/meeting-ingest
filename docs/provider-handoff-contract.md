@@ -78,6 +78,7 @@ Required fields:
   "effective_date": "2026-06-12",
   "quality": "balanced",
   "output_mode": "summary-plus-verbatim",
+  "semantic_guidance_version": "1.0",
   "runtime_provenance_schema": "1.0",
   "runtime_provenance_sha256": "sha256:...",
   "runtime_provenance": {
@@ -91,6 +92,14 @@ Required fields:
     "development_override_reason": null
   },
   "normalized_transcript": "Speaker: Transcript text...",
+  "transcript_grounding": {
+    "speaker_labels": ["Speaker"],
+    "timestamps": []
+  },
+  "semantic_guidance_rules": [
+    "Preserve nearby time context. Do not add AM/PM unless it is explicit or unambiguously established by phrases such as \"last run of the night.\"",
+    "Separate observations, hypotheses, and confirmed causes. Do not use \"caused by,\" \"traced to,\" or equivalent causal language when root cause remains open."
+  ],
   "response_contract": {
     "identity_copy_fields": ["meeting_id", "ingest_run_id", "source_sha256", "normalized_transcript_sha256", "runtime_provenance_sha256"],
     "json_schema": {"title": "Meeting Ingest session provider response"},
@@ -101,6 +110,10 @@ Required fields:
 
 For development-mode requests, `preflight_command` also includes `--development-override` with the exact shell-escaped reason bound into `runtime_provenance`. Approved-mode requests use the command shown above without that option.
 
+The `transcript_grounding` block above is the index of that example's one-line `normalized_transcript`: one speaker label and no timestamps. A real request's grounding block always matches its own transcript exactly.
+
+The abbreviated `semantic_guidance_rules` above is fully expanded in the generated request. It carries all six provider semantic responsibilities published for the bound `semantic_guidance_version`, verbatim, so the extraction agent obeys the version it was given rather than whichever prompt revision its host happens to remember.
+
 The abbreviated `json_schema` above is fully expanded in the generated request. It is a Draft 2020-12 schema containing the complete envelope and nested response payload, request-bound `const` identity values, required field names, and allowed enum values. Extraction agents should treat that embedded schema as the authoritative response-writing contract instead of discovering fields through validation failures.
 
 Rules:
@@ -108,6 +121,12 @@ Rules:
 - `normalized_transcript` is the engine-normalized transcript, not raw source bytes.
 - `normalized_transcript_sha256` binds the response to the exact transcript text the sub-agent received.
 - `meeting_id`, `ingest_run_id`, `source_sha256`, `normalized_transcript_sha256`, `runtime_provenance_sha256`, and `effective_date` are copy-through requirements for the sub-agent; the sub-agent must not remint or alter them.
+- New requests carry `transcript_grounding`, `semantic_guidance_version`, and `semantic_guidance_rules`. `transcript_grounding.speaker_labels` and `transcript_grounding.timestamps` are the exact normalized-transcript speaker labels and turn timestamps, in first-seen order and deduplicated. `semantic_guidance_version` names the bound rule set; `semantic_guidance_rules` carries that rule set's exact published text.
+- `semantic_guidance_rules` makes the request self-contained. A sub-agent running in a consumer project has no access to this repository, so a bare version number would be an unresolvable reference. The rules array and the bound version always describe the same rule set; a request whose rules do not match its declared version is malformed.
+- `transcript_grounding` is the only authority for attendee raw labels and signal evidence locators. The sub-agent copies those values verbatim and must not qualify, recase, repunctuate, or invent them. The frozen matching rules, deterministic checks, and semantic responsibilities are in `docs/artifact-contract.md`.
+- Persisted grounding metadata that does not equal a fresh index of the persisted `normalized_transcript` is a provider-validation failure. Request metadata never overrides transcript truth.
+- All three fields are additive within request schema `1.1`. A persisted request that predates them remains readable: the engine recomputes the grounding index deterministically from the persisted `normalized_transcript`, reports the effective `semantic_guidance_version` as `legacy`, and continues validation. The persisted request is never silently rewritten to add the fields.
+- That readability rule is independent of the runtime-binding rule below. Recomputed grounding makes a pre-field request readable; it does not make a schema `1.0` request completable.
 - Request schema `1.1` requires canonical runtime provenance and its fingerprint. Request schema `1.0` remains visible to `status` and `doctor` but cannot complete as an approved client run.
 - The request file may include future optional helper fields such as allowed enum values, source format, duration, or date confidence.
 - The request file should be treated as sensitive transcript-bearing runtime data.
@@ -125,7 +144,7 @@ Before phase 2, wrappers should run the side-effect-free preflight:
 meeting-ingest validate-response RESPONSE --source SOURCE --json
 ```
 
-The preflight verifies the persisted request, request/response identity, current source hash, payload shape, semantic provider rules, and current runtime/project readiness. Success reports `status: success`, `provider_response.status: valid`, and a non-blocked `runtime_readiness.verdict`. If the response is valid while current runtime/project readiness is blocked, the command reports `status: blocked`, exit `12`, `provider_response.status: valid`, and the actionable `runtime_readiness.findings`; callers must not continue to phase 2. Provider-validation failures use exit code `6` and return all independently detectable issues in `errors[0].details.issues`; an unreadable or missing `--source` uses the existing `source_read` taxonomy and exit code `4`. The command does not write ledger records or artifacts, archive/reconcile the source, or delete handoff files.
+The preflight verifies the persisted request, request/response identity, current source hash, payload shape, semantic provider rules, transcript grounding, and current runtime/project readiness. It is the no-side-effect grounding gate: attendee raw labels and signal evidence locators are checked against the persisted request's `normalized_transcript`, and phase 2 repeats the identical validation under the project lock. Success reports `status: success`, `provider_response.status: valid`, and a non-blocked `runtime_readiness.verdict`. If the response is valid while current runtime/project readiness is blocked, the command reports `status: blocked`, exit `12`, `provider_response.status: valid`, and the actionable `runtime_readiness.findings`; callers must not continue to phase 2. Provider-validation failures use exit code `6` and return all independently detectable shape and grounding issues together in `errors[0].details.issues`; an unreadable or missing `--source` uses the existing `source_read` taxonomy and exit code `4`. The command does not write ledger records or artifacts, archive/reconcile the source, or delete handoff files.
 
 Recommended path shape:
 
@@ -147,6 +166,7 @@ Required top-level envelope:
   "source_sha256": "2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a",
   "normalized_transcript_sha256": "3d3f0f6c0d8c8b9d4b91d9e6df0c0c1f1b4e7f2a63ed5e8a2f1c0f54e3d6a7b8",
   "runtime_provenance_sha256": "sha256:...",
+  "semantic_guidance_version": "1.0",
   "provider": {
     "name": "session",
     "host": "codex",
@@ -183,6 +203,10 @@ Rules:
 - `communication_signals` must contain provider-level signal candidates only. The sub-agent must not include engine-enriched fields such as `signal_id`, `recorded_at`, `meeting_id`, or `ingest_run_id` inside individual signals.
 - `meeting_id`, `ingest_run_id`, `source_sha256`, `normalized_transcript_sha256`, and `runtime_provenance_sha256` in the envelope must match the persisted request file. The runtime hash is an echo only; it is never trusted as runtime evidence.
 - The response envelope's identity fields are not authoritative. The engine uses them to locate and verify the persisted request file, then adopts identity only from the verified request.
+- `semantic_guidance_version` in the envelope echoes the value bound by the persisted request. An echoed value that does not equal that bound value is a provider-validation failure with exit `6`.
+- A response may omit `semantic_guidance_version` only when the persisted request predates the field, in which case the effective value is `legacy`. A session response never legally carries `none`: a session request always binds a real version, and a pre-field request is omitted rather than declared.
+- Like the runtime hash, the echo is provenance only. The effective durable value always comes from the verified request, never from the envelope.
+- `semantic_guidance_version` is deliberately not in `identity_copy_fields`. It is not identity; it binds through the generated response contract's request-bound `const` instead, alongside the other request-bound values in `response_contract.json_schema`.
 - Request/response envelope schema `1.1` adds runtime binding. `provider_contract` remains `meeting-ingest-provider-response-v1` because the nested provider payload shape is unchanged.
 - Envelope schema `1.1` remains within the frozen `claude-code-session-v1` workflow architecture. Exact installed skill and agent hashes bind instruction-byte changes, so this additive handoff binding does not silently bypass workflow equality and does not require redefining the frozen workflow contract identifier.
 
@@ -199,6 +223,7 @@ Rules:
 - `provider.model_id` should contain the actual session model when the harness exposes it. If it cannot be discovered, use `<host>-session`, such as `codex-session`.
 - `provider.generated_at` records when the sub-agent produced the extraction. It is audit metadata for the handoff and must not replace renderer `generated_at`.
 - Artifact front matter and ledger artifact state should preserve `provider: session`, `model_alias`, `model_id`, and optional `provider_host` when available.
+- The effective `semantic_guidance_version` is stamped beside that provider provenance in artifact front matter, run summaries, and ledger artifact state. It records the value bound at extraction time, never the version current at read time, and it must survive successful handoff cleanup.
 
 ## Provider Payload Shape
 
@@ -274,7 +299,7 @@ The response payload must use the current `ProviderResponse` shape:
       "evidence": {
         "kind": "paraphrase",
         "text": "Evidence text.",
-        "speaker": "Kushali G",
+        "speaker": "G, Kushali",
         "timestamp": "09:18"
       },
       "inference_level": "explicit",
@@ -299,6 +324,8 @@ The response payload must use the current `ProviderResponse` shape:
 ```
 
 Signal enums are defined in `src/meeting_ingest/schema.py` and mirrored in `docs/artifact-contract.md`.
+
+`evidence.speaker` above is a verbatim transcript speaker label, while `stakeholder_name` is the display value. The example shows both forms for the same person deliberately: normalizing the evidence speaker to the display form is a grounding failure.
 
 Provider-supplied `person_id` and `communication_signals[].stakeholder_id` are advisory. The sub-agent should set them to `null` unless the request includes a known ID. The engine should normalize stable person IDs from names and raw labels instead of trusting LLM-minted durable identity.
 
@@ -327,7 +354,8 @@ Phase 2:
 8. Engine adopts `meeting_id`, `ingest_run_id`, `effective_date`, `quality`, `output_mode`, and runtime provenance from the verified request, not from the response.
 9. Engine parses `response` into `ProviderResponse`.
 10. Engine runs `validate_provider_response`.
-11. Engine continues through the existing pipeline: signal enrichment, signal JSONL, markdown rendering, ledger snapshots, archive, reconcile, and run summary.
+11. Engine validates transcript grounding against the verified request's `normalized_transcript`, repeating the `validate-response` check under the project lock. Structural validation does not short-circuit grounding validation: both run, and their issues are reported together in one `ProviderValidationError` so the correction pass sees every problem at once.
+12. Engine continues through the existing pipeline: signal enrichment, signal JSONL, markdown rendering, ledger snapshots, archive, reconcile, and run summary.
 
 An externally supplied provider response must enter the pipeline before signal enrichment and rendering. It must not enter as rendered markdown or enriched signal records.
 
@@ -517,6 +545,7 @@ Failures before primary artifacts are ready should use the provider/provider-val
 - identity mismatch with request/source: provider validation failure
 - payload cannot parse into `ProviderResponse`: provider validation failure
 - `validate_provider_response` failure: provider validation failure
+- transcript-grounding failure, including mismatched persisted request grounding: provider validation failure
 
 Runtime readiness failure before phase 1 or a phase-2 runtime binding mismatch is not a provider failure. It uses exit `12` with the stable readiness/runtime code. A mismatch retains both handoff files for explicit recovery and must not append a success ledger record.
 

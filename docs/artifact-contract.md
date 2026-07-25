@@ -255,6 +255,112 @@ Write-time validation confirms every newly produced signal `1.2` record links to
 
 Development provenance uses `runtime_mode: "development"`, preserves the exact override reason, and must be visibly labeled in rendered human artifacts. It may not claim `approved_frozen`, `Ready`, or approved-client status.
 
+## Provider Semantic Integrity Contract
+
+This section is the source of truth for what provider extraction may assert about a transcript. Integrity controls are split by what the engine can prove.
+
+Exact source facts are enforced deterministically and fail closed before any durable write. Judgment about meaning is a versioned prompt contract evaluated by acceptance evidence, not by runtime heuristics. Deterministic validation never claims to prove causality, agreement, nickname identity, or AM/PM interpretation from arbitrary natural language, and the engine does not add a second model or judge call to the ingest path to police the first.
+
+### Transcript grounding index
+
+The engine indexes the normalized transcript into one grounding set of exact source facts:
+
+```json
+{
+  "transcript_grounding": {
+    "speaker_labels": ["Graham, Ken (Contractor)", "Opeyemi, Baba"],
+    "timestamps": ["00:39", "00:51"]
+  }
+}
+```
+
+Rules:
+
+- `speaker_labels` and `timestamps` preserve first-seen transcript order and are deduplicated.
+- The index is derived from the exact normalized transcript the provider received. It is engine-computed evidence, never provider-supplied truth.
+- Whitespace normalization may collapse repeated whitespace, but it must not remove, add, or rewrite parenthetical qualifiers.
+- Matching is case-sensitive after whitespace normalization because capitalization and qualifiers are source provenance.
+- `Opeyemi, Baba` and `Opeyemi, Baba (Contractor)` are therefore two distinct labels, and neither may stand in for the other.
+
+### Source labels are not classifications
+
+Attendee raw labels and signal evidence speakers are source labels. They are not affiliation, employment, tier, or relationship classifications.
+
+Rules:
+
+- `attendees[].raw_labels[]` and `communication_signals[].evidence.speaker` are verbatim copies of normalized transcript speaker labels.
+- A parenthetical qualifier inside a label is transcript text, not an engine-validated claim about the person. Its absence from another label is not evidence about that person.
+- Provider-generated `display_name` and `role_context` may summarize grounded evidence, but they must not alter a raw label or establish an alias, affiliation, or shared identity that the transcript does not state.
+- `evidence.speaker` is the transcript utterer of the evidence, not necessarily its audience or directed-to party.
+- Display-oriented `stakeholder_name` is never raw identity provenance. When no speaker can be grounded, the provider must omit the signal rather than substitute a display name.
+
+### Deterministic blocking checks
+
+These checks use exact source facts only. They fail through the existing `invalid_provider_output` / `ProviderValidationError` path, aggregate every independently detectable issue into one error, and run before signal writes, markdown writes, ledger success snapshots, archive, reconcile, and provider-cache cleanup.
+
+1. `attendees[].raw_labels[]` must be drawn from the transcript speaker-label set. When that set is empty, attendee raw-label arrays must be empty.
+2. `communication_signals[].evidence.speaker` must be drawn from the same set whenever it is present, and it is required for every person-directed meeting signal. Person-directed uses the identity distinction already defined under `Schema 1.1 Generalized Signals`: an observation attributed to a person rather than a group-directed observation carrying `audience_id` and `audience_name`. The speaker is the transcript utterer of the evidence, not necessarily its audience. When the speaker set is empty, no signal can be grounded, so `communication_signals` must be empty.
+3. `communication_signals[].evidence.timestamp`, when present, must be drawn from the transcript timestamp set. A `null` timestamp remains valid when the payload is otherwise structurally valid.
+4. Persisted request grounding metadata must equal a fresh index of the persisted `normalized_transcript`. Request metadata never overrides transcript truth.
+
+Validation issue text is frozen. `N` and `M` are the zero-based array indices of the offending element, matching existing provider-validation issue text:
+
+```text
+response.attendees[N].raw_labels[M] must copy one normalized transcript speaker label verbatim.
+response.communication_signals[N].evidence.speaker must copy one normalized transcript speaker label verbatim.
+response.communication_signals[N].evidence.speaker is required for a person-directed meeting signal.
+response.communication_signals[N].evidence.timestamp must copy one normalized transcript timestamp verbatim.
+provider request transcript_grounding does not match normalized_transcript.
+response.attendees[N].raw_labels must be empty because the normalized transcript has no parseable speaker labels.
+response.communication_signals[N] must be omitted because the normalized transcript has no parseable speaker labels.
+```
+
+The last two strings cover the empty-speaker-set case. Without them the first three would report a requirement the transcript cannot satisfy, and an extraction agent would retry forever trying to supply a speaker that does not exist.
+
+### Provider semantic responsibilities
+
+These rules govern extraction judgment. They travel in each provider request as `semantic_guidance_rules` under the bound `semantic_guidance_version` rather than depending on host-local memory, and they are verified through acceptance evaluation rather than brittle runtime heuristics. A violation is a quality finding against the acceptance case, not a deterministic runtime failure.
+
+1. Preserve nearby time context. Do not add AM/PM unless it is explicit or unambiguously established by phrases such as "last run of the night."
+2. Separate observations, hypotheses, and confirmed causes. Do not use "caused by," "traced to," or equivalent causal language when root cause remains open.
+3. Record a proposal as a decision only when the transcript shows acceptance. Record an action only when an owner accepts it or a direction is acknowledged.
+4. Never carry a rejected or infeasible proposal into open actions.
+5. Do not merge people from nickname similarity alone. Conflicting or incomplete alias evidence stays unresolved and receives low confidence.
+6. Keep the TL;DR consistent with the detailed topics, decisions, risks, actions, and open questions.
+
+### Semantic guidance version
+
+`semantic_guidance_version` names the exact rule set bound into one extraction. The initial version is `"1.0"`.
+
+Rules:
+
+- A provider request carries `semantic_guidance_version`, `semantic_guidance_rules`, and `transcript_grounding` alongside the normalized transcript. `semantic_guidance_rules` is the exact published rule text for the bound version, so an extraction agent in a consumer project never has to resolve a version number against host-local memory. The response envelope echoes the version only.
+- Accepted provenance values are the current version, `"legacy"` for a persisted handoff minted before the field existed, and `"none"` when no semantic guidance shaped the output. `"none"` covers both the non-semantic mock provider and paths that perform no provider extraction at all, such as deterministic `verbatim` mode and `provider: none`.
+- Artifact front matter and ledger artifact entries record the effective bound value next to `provider`, `model_alias`, and `model_id`.
+- Run summaries record it as `details.semantic_guidance_version`, next to `details.provider`.
+- Durable placement always records the value bound at extraction time, never whichever guidance version happens to be current at read time.
+- These durable records survive successful handoff cleanup. Deleting a completed request/response pair must not erase which rules shaped the output.
+- The field is additive to the existing artifact `1.1`, run-summary `1.1`, and ledger `2.0` shapes. Records written before it existed remain legacy-readable and are never rewritten merely to add it, but no current write may omit it. A path with no semantic guidance records `"none"` rather than leaving the field absent.
+
+Front-matter placement:
+
+```yaml
+provider: anthropic
+model_alias: balanced
+model_id: claude-sonnet-placeholder
+semantic_guidance_version: "1.0"
+```
+
+### Grounding validation gates
+
+`validate-response` is the no-side-effect grounding gate. It validates the provider payload's shape and its grounding against the persisted request's normalized transcript. It writes no ledger, artifact, signal, archive, or reconcile state and consumes no handoff files.
+
+Both validators run in both places, and neither short-circuits the other. Structural payload issues and source-grounding issues merge into one `ProviderValidationError` and surface together in `errors[0].details.issues`, so a single correction pass can repair shape and grounding at once instead of discovering them one gate at a time.
+
+Phase 2 repeats the same validation under the project lock, after request/response identity binding and before any durable write. Preflight success is not a substitute for it. A response that bypasses preflight and fails grounding records the existing typed provider-validation failure, leaves the source actionable, and retains the request/response pair for correction.
+
+Direct providers validate the same grounding index in process before durable writes. Session providers additionally verify the persisted request's grounding metadata and the echoed guidance version.
+
 ## Identity
 
 ### Meeting ID
@@ -419,6 +525,7 @@ transcript_policy: cleaned-verbatim
 provider: anthropic
 model_alias: balanced
 model_id: claude-sonnet-placeholder
+semantic_guidance_version: "1.0"
 generated_by: meeting-ingest 0.1.0
 generated_at: 2026-07-03T12:00:00Z
 runtime_provenance_schema: "1.0"
@@ -456,9 +563,10 @@ Rules:
 - `title` and `slug` may change on repair.
 - `model_alias` is the configured quality tier.
 - `model_id` is the resolved provider model identifier.
+- `semantic_guidance_version` is required on every meeting artifact and records the guidance version bound at extraction time.
 - `provider_host` is optional and should be present when `provider: session` and the active harness is known.
-- If no provider was used, set `provider: none` and `model_id: none`.
-- `schema_version` must be quoted as a string in YAML.
+- If no provider was used, set `provider: none`, `model_id: none`, and `semantic_guidance_version: "none"`.
+- `schema_version` and `semantic_guidance_version` must be quoted as strings in YAML.
 - Meeting artifact schema `1.1` requires the complete runtime-provenance block, fingerprint, and producer ledger-record ID. Schema `1.0` is legacy-readable and is never silently relabeled.
 - `meeting_type` is free-form in v1, but recommended values are `one-on-one`, `small-group`, `standup`, `status`, `discovery`, `design-review`, and `unknown`.
 - `output_mode` must match the artifact mode.
@@ -560,7 +668,7 @@ Rules:
 - `## Cross-References` may be `None identified.` unless deterministic source metadata links known project artifacts.
 - Front matter must set `output_mode: verbatim`.
 - Front matter must set `transcript_policy: cleaned-verbatim`.
-- If no provider was used, set `provider: none`, `model_alias: none`, and `model_id: none`.
+- If no provider was used, set `provider: none`, `model_alias: none`, `model_id: none`, and `semantic_guidance_version: "none"`.
 
 ## Section Contracts
 
