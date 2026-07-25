@@ -289,6 +289,8 @@ The maintainer-only release flow is explicit end to end:
    ```
 
    The installer verifies the template hash against the receipt, substitutes only the `{{MEETING_INGEST_APPROVED_EXECUTABLE}}` marker with the machine-local absolute path, copies the agent byte-identical, and writes atomically. It reports the rendered skill hash; the pin step below records that hash in the consumer pin.
+
+   Repeat this step for every consumer that carries project-level copies: `runtime pin` verifies the artifacts the consumer session actually resolves, and a project-level `.claude/agents/meeting-ingest-session-provider.md` (or `.claude/skills/meeting-ingest/SKILL.md`) shadows the user-level install. Run the installer again with `--skill-destination <consumer-root>/.claude/skills/meeting-ingest/SKILL.md` and `--agent-destination <consumer-root>/.claude/agents/meeting-ingest-session-provider.md` before pinning, or the pin fails with `workflow_hash_mismatch` (this bit the `gb37a12a0502e` release once before the project-level copies were re-targeted). Never hand-edit the copies to match — always go through the installer.
 6. Pin the consumer to the approved receipt:
 
    ```bash

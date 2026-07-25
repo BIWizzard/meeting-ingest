@@ -5,12 +5,11 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Decision 33 execution addendum recorded after HTV dogfood (2026-07-25): the registry-driven direct edit of the installed session-provider agent tripped the approved-runtime readiness gate fail-closed (exit 12, receipt hash mismatch); field remediation restored claude-opus-4-8 and six meetings ingested validly on the incumbent tier — fail-closed contract worked as designed. Corrected routing: agent-file half of the meeting-extraction swap flows through this repo (source docs/claude-agents/meeting-ingest-session-provider.md, now flipped to claude-opus-5) then a new approved release/receipt, owner publish + HTV install/repin. 431 tests pass. Ruling stands; not effective at HTV until the next approved release.",
+  "status_summary": "README release-flow runbook amended per the agent-orchestration handback: step 5 now instructs re-running the receipt-verified installer against each consumer's project-level .claude shadow copies before runtime pin, citing the gb37a12a0502e workflow_hash_mismatch as the precedent. Orchestration side independently verified the Decision 33 arc (registry, both pins, lint 5/8, reconciler OK) and retroactively recorded the OB-003-3 eighth firing as addendum 003/16 (64f88f4); Opus 5 adoption complete across the roster.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
-    "DECISIONS.md",
-    "docs/claude-agents/meeting-ingest-session-provider.md"
+    "README.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -26,16 +25,18 @@
     "Decide when to start the Semantic Integrity Guardrails plan (docs/plans/2026-07-20-semantic-integrity-guardrails.md) — the remaining gate inside Track 3.",
     "OB-002-1: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; next convening triggers are that proposal or the Just Works Continuity milestone claim (needs guardrails plus Track 4).",
     "Agent-orchestration session executes the Decision 33 pin edit in ~/.claude (meeting-extraction registry row + meeting-ingest-session-provider.md + meeting-transcript-analyzer.md to claude-opus-5) and runs the pin lint; meeting-ingest continues HTV spot-checks per the owner trust ruling.",
-    "Owner cuts the next approved release carrying the claude-opus-5 session-provider pin (build twice-reproducibly, publish to private-alpha, install + repin at HTV); then agent-orchestration re-runs the pin lint and fixes the registry swap-point column to name this repo's release flow; then retire the HTV memory that restores claude-opus-4-8. The six 2026-07-25 HTV meetings are Opus 4.8 spot-check candidates under the owner trust ruling."
+    "Owner cuts the next approved release carrying the claude-opus-5 session-provider pin (build twice-reproducibly, publish to private-alpha, install + repin at HTV); then agent-orchestration re-runs the pin lint and fixes the registry swap-point column to name this repo's release flow; then retire the HTV memory that restores claude-opus-4-8. The six 2026-07-25 HTV meetings are Opus 4.8 spot-check candidates under the owner trust ruling.",
+    "Spot-check the first Opus 5 extraction at HTV per the owner trust ruling (next ingest); continue HTV artifact/signal spot-checks; Semantic Integrity Guardrails start decision remains open.",
+    "Fresh-tier spot-check of the first HTV ingest on the Opus 5 receipt (top of queue); Semantic Integrity Guardrails start decision remains open."
   ],
   "assumptions": [],
   "continuation_hint": "Next: Spot-check artifacts and signals for the next few HTV meetings per the owner's trust ruling before relaxing to routine use.",
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-25T13:28:42.589Z",
+  "last_saved_at": "2026-07-25T14:07:19.767Z",
   "last_wrapped_at": "2026-07-24T07:24:03.378Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-25T13:28:42.589Z"
+  "updated_at": "2026-07-25T14:07:19.767Z"
 }
