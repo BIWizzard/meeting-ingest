@@ -12,7 +12,7 @@
 | Obligation | Kind | Trigger | Origin | Status | Governed paths | Lands in |
 |---|---|---|---|---|---|---|
 | OB-002-1: corpus adoption ratification | check-in | a deterministic fingerprinted adoption plan is proposed for approval | 002 | open | HTV/Spelman consumer corpus surfaces, docs/plans/ | future adoption record (convene) |
-| OB-002-2: close the ready-with-history-warnings later-decision | amendment owed | first production ingest proceeds under ready_with_history_warnings (fired 2026-07-24: Tasks 9–10, docs/sessions/2026-07-24-task10-fresh-host-proof.md) | 002 | met 2026-07-24 | docs/product-status.md, docs/artifact-contract.md readiness clauses | 002 addendum 10 |
+| OB-002-2: close the ready-with-history-warnings later-decision | amendment owed | first production ingest proceeds under ready_with_history_warnings (fired 2026-07-24: Tasks 9–10, docs/sessions/2026-07-24-task10-fresh-host-proof.md) | 002 | met | docs/product-status.md, docs/artifact-contract.md readiness clauses | 002 addendum 10 |
 
 Enforcement note: record 002's runtime rulings were compiled into shipped
 enforcement during Approved Runtime Track 1 (readiness gates, receipt/pin
