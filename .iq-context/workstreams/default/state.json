@@ -5,7 +5,7 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Guardrails Tasks 2-4 implemented, verified, and committed. Task 2 (4dd6698): canonical TranscriptGrounding index and index_normalized_transcript with one normalized-turn parser (Markdown timestamped/untimestamped, conservative plain text, Unicode-aware), mock provider consumes it and preserves qualifiers; T1 codex-review found 2 confirmed P2s, fixed in one re-brief. Task 3 (c2e297b): extraction_guidance.py single source with published-versions registry, immutable ProviderRequest grounding/version fields, request-bound response-contract enums with empty-index handling, tamper detection with frozen issue text, legacy compatibility, durable provenance in front matter/run summaries/ledger with legacy backfill on repair_date; size-escalated T2 review found 2 contract deviations (ledger read-path version gating orphaning prior records; repair_date omitting provenance) plus 2 should-fixes and 4 cleanups, all fixed in one re-brief. Task 4 (3f64f31): validate_provider_grounding enforcing the frozen deterministic blocking checks with verbatim issue text before all durable writes on all three gates (direct ingest, validate-response, session phase 2), structural+grounding issues merged into one error, session grounding always from a fresh index of the persisted transcript so field deletion cannot bypass it, stakeholder_name raw-identity fallback removed; T2 review confirmed full contract conformance but mutation-proofed three coverage gaps (direct gate, phase-2 gate, fallback) — the test-only re-brief was stopped at wrap before landing, so those tests are still owed. Orchestrator verified all suites directly: 456 passed on main at wrap. Three review findings deferred as current questions for Task 6: self-authenticating persisted normalized_transcript (host-side tamper route, reproduced), false legacy provenance when a session agent deletes semantic fields from a schema-1.1 request (consequence of ratified additive-no-bump; integrity unaffected), parser-level shape failures preceding grounding aggregation (ruled precondition, not validator short-circuit). Process lesson recorded to memory: never leave delegated work in a session-scratchpad worktree at wrap; this session stopped the in-flight run and committed the verified state instead.",
+  "status_summary": "Cleared OB-002-2 from the open-obligations surface. Found the amendment was already closed 2026-07-24 (002 addendum 10: owner-ratified that safe next-meeting ingest may proceed under ready_with_history_warnings, fail-closed bounds and Continuity exit gate unchanged); the board-log row was 'met 2026-07-24' and reconcile.sh counted it closed, but iq-context's obligations parser requires an exact closed-status match (met/closed/retired/done), so briefings kept listing it as open. Normalized the status cell to 'met' (date preserved in the trigger cell and addendum), verified reconcile.sh and iq-context go both now report only OB-002-1 open, committed as 6270818. Logged an open question to prefix-match dated statuses in the iq-context repo. OB-002-1 remains open by design: it is a standing check-in that fires only when a fingerprinted corpus adoption plan is proposed.",
   "active_plan": null,
   "active_task": null,
   "active_files": [
@@ -19,7 +19,9 @@
   "blockers": [
     "No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval."
   ],
-  "open_questions": [],
+  "open_questions": [
+    "iq-context obligations parser (packages/core/src/obligations.ts CLOSED_STATUSES) requires exact status match; consider prefix-matching 'met <date>' in the iq-context repo so dated closures don't surface as open."
+  ],
   "next_actions": [
     "Re-dispatch the Task 4 test-only coverage re-brief to codex-workhorse (fresh worktree from 3f64f31): mutation-killing tests for the direct-provider gate (_ingest_locked, pipeline.py ~816) and phase-2 gate (pipeline.py ~972, structurally-valid grounding-invalid response without preflight), a discriminating stakeholder_name!=evidence.speaker regression test asserting JSONL stakeholder_name_raw equals the speaker, and replacement of the unreachable group-directed exemption test (no src changes, no audience fields on the provider payload); verify each test kills its mutation, then commit as a test: commit.",
     "Task 5 via claude-implementer: align all maintained provider instruction sources (session-provider prompt, Claude agent doc, Claude/Codex skill docs) with semantic_guidance_version/rules and transcript_grounding, create the synthetic five-pattern acceptance VTT + machine-readable expected-review.json + docs/testing/semantic-integrity-acceptance.md; installed Claude copies are receipt-managed and update only through the release flow.",
@@ -33,9 +35,9 @@
   "branch": "main",
   "worktree": null,
   "environment_id": "local-default",
-  "last_saved_at": "2026-07-26T02:49:41.336Z",
-  "last_wrapped_at": "2026-07-26T02:51:42.548Z",
+  "last_saved_at": "2026-07-26T15:58:37.626Z",
+  "last_wrapped_at": "2026-07-26T16:04:01.866Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-26T02:51:42.548Z"
+  "updated_at": "2026-07-26T16:04:01.866Z"
 }
