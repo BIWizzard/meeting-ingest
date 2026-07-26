@@ -6,6 +6,9 @@ import pytest
 
 from meeting_ingest.errors import UnsupportedSourceFormatError
 from meeting_ingest.extract import extract_source, infer_effective_date, select_occurrence
+from meeting_ingest.provider import ProviderRequest
+from meeting_ingest.providers.mock import MockProvider
+from meeting_ingest.transcript import TranscriptGrounding
 
 
 def test_extract_txt_normalizes_text_and_infers_filename_date(tmp_path: Path) -> None:
@@ -19,6 +22,30 @@ def test_extract_txt_normalizes_text_and_infers_filename_date(tmp_path: Path) ->
     assert result.effective_date.value == "2026-07-03"
     assert result.effective_date.confidence == "high"
     assert result.effective_date.source == "filename"
+    assert result.transcript_grounding == TranscriptGrounding(
+        speaker_labels=("Ken", "Kushali"),
+        timestamps=(),
+    )
+
+
+def test_mock_attendees_use_grounding_labels_and_preserve_qualifiers() -> None:
+    response = MockProvider().extract(
+        ProviderRequest(
+            transcript=(
+                "**Graham, Ken (Contractor)** (00:39): Hello.\n"
+                "**Opeyemi, Baba** (00:51): Hi.\n"
+                "**Graham, Ken (Contractor)** (01:02): Again.\n"
+            ),
+            source_name="meeting.txt",
+            meeting_id="mtg-20260703-f953bbd2",
+            effective_date="2026-07-03",
+        )
+    )
+
+    assert [attendee.raw_labels for attendee in response.attendees] == [
+        ["Graham, Ken (Contractor)"],
+        ["Opeyemi, Baba"],
+    ]
 
 
 def test_extract_vtt_strips_headers_cues_and_timing(tmp_path: Path) -> None:
@@ -44,6 +71,10 @@ def test_extract_vtt_converts_voice_tags_to_speaker_lines(tmp_path: Path) -> Non
     result = extract_source(source)
 
     assert result.normalized_text == "**Ken Graham** (00:01): Hello there\n"
+    assert result.transcript_grounding == TranscriptGrounding(
+        speaker_labels=("Ken Graham",),
+        timestamps=("00:01",),
+    )
 
 
 def test_extract_vtt_strips_teams_cue_ids_and_joins_multiline_voice_tags(tmp_path: Path) -> None:
@@ -75,6 +106,32 @@ def test_extract_vtt_closes_unclosed_voice_tags_on_next_timing_and_eof(tmp_path:
     result = extract_source(source)
 
     assert result.normalized_text == "**Ken Graham** (00:01): Hello there\n**Kushali G** (00:03): Hi back\n"
+
+
+def test_extract_vtt_grounding_retains_merged_turn_timestamp_and_drops_later_timestamp(tmp_path: Path) -> None:
+    source = tmp_path / "meeting.vtt"
+    source.write_text(
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:02.000\n"
+        "<v Ken Graham>First.</v>\n\n"
+        "00:00:03.000 --> 00:00:04.000\n"
+        "<v Ken Graham>Second.</v>\n\n"
+        "00:00:05.000 --> 00:00:06.000\n"
+        "<v Kushali G>Third.</v>\n",
+        encoding="utf-8",
+    )
+
+    result = extract_source(source)
+
+    assert result.normalized_text == (
+        "**Ken Graham** (00:01): First. Second.\n"
+        "**Kushali G** (00:05): Third.\n"
+    )
+    assert result.transcript_grounding == TranscriptGrounding(
+        speaker_labels=("Ken Graham", "Kushali G"),
+        timestamps=("00:01", "00:05"),
+    )
+    assert "00:03" not in result.transcript_grounding.timestamps
 
 
 def test_extract_docx_reads_document_paragraphs(tmp_path: Path) -> None:
@@ -136,6 +193,10 @@ def test_extract_docx_normalizes_teams_comma_names_and_contractors(tmp_path: Pat
         "**Olaleye, Mark** (0:14): How are you doing?\n"
         "**Graham, Ken (Contractor)** (0:16): How's it going?\n"
     )
+    assert result.transcript_grounding == TranscriptGrounding(
+        speaker_labels=("Olaleye, Mark", "Graham, Ken (Contractor)"),
+        timestamps=("0:14", "0:16"),
+    )
 
 
 def test_extract_docx_does_not_treat_plain_text_time_reference_as_speaker(tmp_path: Path) -> None:
@@ -195,6 +256,10 @@ def test_extract_docx_preserves_hour_long_teams_speaker_timestamps(tmp_path: Pat
     result = extract_source(source)
 
     assert result.normalized_text == "**John Wilson** (1:02:15): That works.\n"
+    assert result.transcript_grounding == TranscriptGrounding(
+        speaker_labels=("John Wilson",),
+        timestamps=("1:02:15",),
+    )
 
 
 def test_extract_docx_uses_content_date_duration_and_removes_export_chrome(tmp_path: Path) -> None:

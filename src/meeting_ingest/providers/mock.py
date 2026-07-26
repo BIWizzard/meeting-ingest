@@ -7,8 +7,7 @@ import re
 from meeting_ingest.identity import normalize_person
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.schema import Attendee, ProviderResponse, ProviderSignal, SignalEvidence, Topic
-
-_SPEAKER_LINE = re.compile(r"^(?:\*\*)?(?P<speaker>[^:*]+?)(?:\*\*)?(?:\s+\([^)]*\))?:")
+from meeting_ingest.transcript import index_normalized_transcript
 
 
 class MockProvider:
@@ -44,15 +43,7 @@ def _title_from_source(source_name: str) -> str:
 
 def _infer_attendees(transcript: str) -> list[Attendee]:
     attendees: list[Attendee] = []
-    seen: set[str] = set()
-    for line in transcript.splitlines():
-        speaker_match = _SPEAKER_LINE.match(line)
-        if not speaker_match:
-            continue
-        raw_label = speaker_match.group("speaker").strip()
-        if not raw_label or raw_label in seen:
-            continue
-        seen.add(raw_label)
+    for raw_label in index_normalized_transcript(transcript).speaker_labels:
         person = normalize_person(raw_label)
         attendees.append(
             Attendee(

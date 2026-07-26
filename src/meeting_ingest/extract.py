@@ -10,7 +10,13 @@ from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
 from meeting_ingest.errors import SourceExtractionError, UnsupportedSourceFormatError
-from meeting_ingest.transcript import normalize_teams_docx_text, normalize_text, strip_vtt_markup
+from meeting_ingest.transcript import (
+    TranscriptGrounding,
+    index_normalized_transcript,
+    normalize_teams_docx_text,
+    normalize_text,
+    strip_vtt_markup,
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +46,7 @@ class SourceExtraction:
     source_format: str
     raw_text: str
     normalized_text: str
+    transcript_grounding: TranscriptGrounding
     effective_date: EffectiveDate
     duration: str | None = None
     date_selection: OccurrenceSelection | None = None
@@ -114,6 +121,7 @@ def extract_source(path: Path, *, meeting_date: str | None = None) -> SourceExtr
         source_format=source_format,
         raw_text=raw_text,
         normalized_text=normalized,
+        transcript_grounding=index_normalized_transcript(normalized),
         effective_date=selection.chosen,
         duration=_duration_from_content(raw_text),
         date_selection=selection,

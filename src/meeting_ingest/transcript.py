@@ -18,6 +18,30 @@ _DOCX_EXPORT_STAMP = re.compile(r".*-20\d{6}_\d{6}-Meeting Transcript$")
 _DOCX_DATE_LINE = re.compile(r"^[A-Z][a-z]+ \d{1,2}, 20\d{2}, \d{1,2}:\d{2}(?:AM|PM)$")
 _DOCX_DURATION = re.compile(r"^\d+h? ?\d*m ?\d*s$")
 _TRANSCRIPTION_EVENT = re.compile(r"^(?:started transcription|.+ stopped transcription)$", re.IGNORECASE)
+_NORMALIZED_MARKDOWN_TURN = re.compile(
+    r"^\*\*(?P<speaker>.+?)\*\*(?:\s+\((?P<timestamp>\d{1,2}:\d{2}(?::\d{2})?)\))?:\s*(?P<text>.*)$"
+)
+_NORMALIZED_PLAIN_TURN = re.compile(r"^(?P<speaker>[^:]+):\s*(?P<text>.*)$")
+_PLAIN_SPEAKER_LABEL = re.compile(
+    r"^[^\W\d_](?:[^\W\d_]|[’'.-])*(?:,\s*[^\W\d_](?:[^\W\d_]|[’'.-])*)?"
+    r"(?:\s+[^\W\d_](?:[^\W\d_]|[’'.-])*){0,4}(?:\s+\([^)]+\))?$"
+)
+_CLOCK_ONLY_PREFIX = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})?$")
+_URL_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*$")
+_GENERIC_PROSE_PREFIXES = {
+    "action",
+    "agenda",
+    "date",
+    "decision",
+    "location",
+    "meeting",
+    "note",
+    "status",
+    "summary",
+    "time",
+    "topic",
+    "transcript",
+}
 
 
 @dataclass(frozen=True)
@@ -25,6 +49,30 @@ class TranscriptTurn:
     speaker: str
     timestamp: str | None
     text: str
+
+
+@dataclass(frozen=True)
+class TranscriptGrounding:
+    speaker_labels: tuple[str, ...]
+    timestamps: tuple[str, ...]
+
+
+def index_normalized_transcript(text: str) -> TranscriptGrounding:
+    speakers: list[str] = []
+    timestamps: list[str] = []
+    seen_speakers: set[str] = set()
+    seen_timestamps: set[str] = set()
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").splitlines():
+        turn = _parse_normalized_turn(line)
+        if turn is None:
+            continue
+        if turn.speaker not in seen_speakers:
+            speakers.append(turn.speaker)
+            seen_speakers.add(turn.speaker)
+        if turn.timestamp is not None and turn.timestamp not in seen_timestamps:
+            timestamps.append(turn.timestamp)
+            seen_timestamps.add(turn.timestamp)
+    return TranscriptGrounding(speaker_labels=tuple(speakers), timestamps=tuple(timestamps))
 
 
 def normalize_text(text: str) -> str:
@@ -158,6 +206,54 @@ def _render_turn(turn: TranscriptTurn) -> str:
     if turn.timestamp:
         return f"**{turn.speaker}** ({turn.timestamp}): {turn.text}"
     return f"**{turn.speaker}**: {turn.text}"
+
+
+def _parse_normalized_turn(line: str) -> TranscriptTurn | None:
+    normalized_line = " ".join(line.strip().split())
+    if not normalized_line or normalized_line.startswith("#"):
+        return None
+
+    markdown_match = _NORMALIZED_MARKDOWN_TURN.match(normalized_line)
+    if markdown_match:
+        speaker = _normalize_speaker_label(markdown_match.group("speaker"))
+        text = markdown_match.group("text")
+        if not speaker or _is_excluded_speaker_prefix(speaker, text):
+            return None
+        return TranscriptTurn(
+            speaker=speaker,
+            timestamp=markdown_match.group("timestamp"),
+            text=text,
+        )
+
+    plain_match = _NORMALIZED_PLAIN_TURN.match(normalized_line)
+    if not plain_match:
+        return None
+    speaker = _normalize_speaker_label(plain_match.group("speaker"))
+    if (
+        not speaker
+        or _CLOCK_ONLY_PREFIX.fullmatch(speaker)
+        or not _PLAIN_SPEAKER_LABEL.fullmatch(speaker)
+        or not _plain_speaker_tokens_start_uppercase(speaker)
+        or _is_excluded_speaker_prefix(speaker, plain_match.group("text"))
+    ):
+        return None
+    return TranscriptTurn(speaker=speaker, timestamp=None, text=plain_match.group("text"))
+
+
+def _normalize_speaker_label(label: str) -> str:
+    return " ".join(label.strip().split())
+
+
+def _is_excluded_speaker_prefix(speaker: str, text: str) -> bool:
+    return speaker.casefold() in _GENERIC_PROSE_PREFIXES or (
+        _URL_SCHEME.fullmatch(speaker) is not None and text.startswith("//")
+    )
+
+
+def _plain_speaker_tokens_start_uppercase(speaker: str) -> bool:
+    unqualified = speaker.split(" (", 1)[0]
+    tokens = unqualified.replace(",", " ").split()
+    return all(token[0].isupper() or token[0].istitle() for token in tokens)
 
 
 def _merge_turns(turns: list[TranscriptTurn]) -> list[TranscriptTurn]:
