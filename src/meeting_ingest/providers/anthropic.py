@@ -8,6 +8,7 @@ from typing import Any
 from urllib import error, request
 
 from meeting_ingest.errors import ProviderError
+from meeting_ingest.extraction_guidance import SEMANTIC_GUIDANCE_RULES
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.provider_json import provider_response_from_payload
 from meeting_ingest.schema import ProviderResponse
@@ -24,6 +25,7 @@ MODEL_BY_QUALITY = {
 
 class AnthropicProvider:
     name = "anthropic"
+    uses_semantic_guidance = True
 
     def __init__(self, *, api_key_env: str = "ANTHROPIC_API_KEY", timeout_seconds: int = 90) -> None:
         self.api_key_env = api_key_env
@@ -78,9 +80,26 @@ def _system_prompt() -> str:
 
 
 def _user_prompt(request_data: ProviderRequest) -> str:
+    semantic_rules = "\n".join(
+        f"{index}. {rule}" for index, rule in enumerate(SEMANTIC_GUIDANCE_RULES, 1)
+    )
+    grounding = json.dumps(
+        {
+            "speaker_labels": list(request_data.transcript_grounding.speaker_labels),
+            "timestamps": list(request_data.transcript_grounding.timestamps),
+        },
+        indent=2,
+    )
     return f"""Extract this meeting transcript into the required JSON shape.
 
-Rules:
+Semantic guidance version: {request_data.semantic_guidance_version}
+Semantic guidance rules:
+{semantic_rules}
+
+Transcript grounding:
+{grounding}
+
+Response requirements:
 - Return one JSON object and nothing else.
 - Omit uncertain facts rather than inventing them.
 - Use short stable IDs such as T1, D1, A1, Q1.
@@ -120,4 +139,3 @@ def _parse_message_json(raw_response: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ProviderError("anthropic", "Response JSON root must be an object.")
     return parsed
-

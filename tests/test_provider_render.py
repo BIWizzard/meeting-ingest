@@ -189,6 +189,7 @@ def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcri
     assert "source_sha256: f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8" in markdown
     assert "provider: mock" in markdown
     assert "model_id: none" in markdown
+    assert 'semantic_guidance_version: "none"' in markdown
     assert 'runtime_provenance_schema: "1.0"' in markdown
     assert markdown.index("runtime_provenance_schema:") < markdown.index("runtime_provenance_sha256:")
     assert "| Runtime | approved (meeting-ingest-test-approved) |" in markdown

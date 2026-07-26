@@ -144,6 +144,41 @@ def test_repair_date_accepts_source_sha_selector(tmp_path: Path) -> None:
     assert summary.meeting_id == meeting_id
 
 
+def test_repair_date_backfills_legacy_semantic_guidance_provenance(
+    tmp_path: Path,
+) -> None:
+    meetings_root, meeting_id = _ingest_mtime_dated_standup(tmp_path)
+    ledger_path = meetings_root / "_ledger.jsonl"
+    records = [
+        json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines()
+    ]
+    for record in records:
+        for entry in record["artifacts"].values():
+            entry.pop("semantic_guidance_version", None)
+    ledger_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    artifact_path = next(meetings_root.glob("2026-07-16-*.md"))
+    artifact_path.write_text(
+        "\n".join(
+            line
+            for line in artifact_path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("semantic_guidance_version:")
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    pipeline.repair_date(meeting_id, date="2026-07-10", start=tmp_path)
+
+    repaired = read_records(ledger_path)[-1]
+    (entry,) = repaired["artifacts"].values()
+    assert entry["semantic_guidance_version"] == "legacy"
+    content = (meetings_root / entry["path"]).read_text(encoding="utf-8")
+    assert 'semantic_guidance_version: "legacy"' in content
+
+
 def test_repair_date_is_a_no_op_when_date_already_matches(tmp_path: Path) -> None:
     meetings_root, meeting_id = _ingest_mtime_dated_standup(tmp_path)
     pipeline.repair_date(meeting_id, date="2026-07-10", start=tmp_path)

@@ -16,6 +16,10 @@ from meeting_ingest.provider_contract import PROVIDER_CONTRACT
 from meeting_ingest.provider_json import provider_response_from_payload
 from meeting_ingest.schema import SUPPORTED_OUTPUT_MODES, SUPPORTED_QUALITIES, ProviderResponse, ProviderValidationError
 from meeting_ingest.runtime import RuntimeProvenance
+from meeting_ingest.extraction_guidance import (
+    PUBLISHED_SEMANTIC_GUIDANCE_RULES,
+)
+from meeting_ingest.transcript import TranscriptGrounding, index_normalized_transcript
 
 
 REQUEST_DIR = "provider-requests"
@@ -30,6 +34,7 @@ class SessionProviderMetadata:
     model_alias: str
     model_id: str
     provider_host: str | None = None
+    semantic_guidance_version: str = "legacy"
 
 
 @dataclass(frozen=True)
@@ -107,6 +112,9 @@ def read_session_provider_envelope(
     _validate_current_request_or_legacy(payload, request_payload)
     _verify_runtime_binding(payload, request_payload, current_runtime_provenance)
     _verify_identity(payload, request_payload, current_source_sha256)
+    semantic_guidance_version = _verify_semantic_guidance_binding(
+        payload, request_payload
+    )
 
     provider = payload.get("provider")
     _require(isinstance(provider, dict), "Provider response envelope provider must be an object.")
@@ -122,6 +130,7 @@ def read_session_provider_envelope(
             model_alias=str(provider.get("model_alias")),
             model_id=_model_id(provider),
             provider_host=_optional_string(provider.get("host")),
+            semantic_guidance_version=semantic_guidance_version,
         ),
         request=request_payload,
         request_path=request_path,
@@ -195,6 +204,35 @@ def _validate_request(payload: dict[str, Any]) -> None:
         _required_string(payload, field)
     _require(payload["output_mode"] in SUPPORTED_OUTPUT_MODES, "Persisted provider request output_mode is unsupported.")
     _require(payload["quality"] in SUPPORTED_QUALITIES, "Persisted provider request quality is unsupported.")
+    transcript = payload["normalized_transcript"]
+    has_version = "semantic_guidance_version" in payload
+    has_rules = "semantic_guidance_rules" in payload
+    has_grounding = "transcript_grounding" in payload
+    if not any((has_version, has_rules, has_grounding)):
+        return
+    _require(
+        all((has_version, has_rules, has_grounding)),
+        "Persisted provider request semantic guidance metadata is incomplete.",
+    )
+    version = payload["semantic_guidance_version"]
+    _require(
+        isinstance(version, str)
+        and version in PUBLISHED_SEMANTIC_GUIDANCE_RULES,
+        "Persisted provider request semantic_guidance_version is unsupported.",
+    )
+    _require(
+        payload["semantic_guidance_rules"]
+        == list(PUBLISHED_SEMANTIC_GUIDANCE_RULES[version]),
+        "Persisted provider request semantic_guidance_rules do not match semantic_guidance_version.",
+    )
+    fresh_grounding = index_normalized_transcript(transcript)
+    persisted_grounding = _transcript_grounding_from_payload(
+        payload["transcript_grounding"]
+    )
+    _require(
+        persisted_grounding == fresh_grounding,
+        "provider request transcript_grounding does not match normalized_transcript.",
+    )
 
 
 def verify_session_handoff_runtime(
@@ -299,6 +337,43 @@ def _verify_identity(response: dict[str, Any], request: dict[str, Any], current_
     transcript = str(request.get("normalized_transcript"))
     if request.get("normalized_transcript_sha256") != normalized_transcript_sha256(transcript):
         raise ProviderValidationError("Persisted provider request transcript hash is invalid.")
+
+
+def _verify_semantic_guidance_binding(
+    response: dict[str, Any], request: dict[str, Any]
+) -> str:
+    if "semantic_guidance_version" not in request:
+        response_version = response.get("semantic_guidance_version")
+        _require(
+            response_version in {None, "legacy"},
+            "Provider response semantic_guidance_version does not match persisted request.",
+        )
+        return "legacy"
+    request_version = request["semantic_guidance_version"]
+    _require(
+        response.get("semantic_guidance_version") == request_version,
+        "Provider response semantic_guidance_version does not match persisted request.",
+    )
+    return str(request_version)
+
+
+def _transcript_grounding_from_payload(value: object) -> TranscriptGrounding:
+    if not isinstance(value, dict) or set(value) != {"speaker_labels", "timestamps"}:
+        raise ProviderValidationError(
+            "provider request transcript_grounding does not match normalized_transcript."
+        )
+    speakers = value.get("speaker_labels")
+    timestamps = value.get("timestamps")
+    if (
+        not isinstance(speakers, list)
+        or not isinstance(timestamps, list)
+        or not all(isinstance(item, str) for item in speakers)
+        or not all(isinstance(item, str) for item in timestamps)
+    ):
+        raise ProviderValidationError(
+            "provider request transcript_grounding does not match normalized_transcript."
+        )
+    return TranscriptGrounding(tuple(speakers), tuple(timestamps))
 
 
 def _ingest_run_id_from_response_path(path: Path) -> str | None:

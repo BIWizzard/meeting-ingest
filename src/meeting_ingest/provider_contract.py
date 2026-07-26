@@ -28,6 +28,17 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
     """Return the complete response schema with request identity values bound."""
     string = {"type": "string"}
     non_empty_string = {"type": "string", "minLength": 1}
+    grounding = request.get("transcript_grounding")
+    speaker_labels = (
+        list(grounding.get("speaker_labels", ()))
+        if isinstance(grounding, dict)
+        else []
+    )
+    timestamps = (
+        list(grounding.get("timestamps", ()))
+        if isinstance(grounding, dict)
+        else []
+    )
 
     def object_schema(
         properties: dict[str, Any], required: tuple[str, ...], *, additional_properties: bool = True
@@ -42,15 +53,20 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
     def array_of(item: dict[str, Any]) -> dict[str, Any]:
         return {"type": "array", "items": item}
 
+    raw_labels = array_of(
+        {"type": "string", "enum": speaker_labels} if speaker_labels else string
+    )
+    if not speaker_labels:
+        raw_labels["maxItems"] = 0
     attendee = object_schema(
         {
             "person_id": {"type": ["string", "null"]},
             "display_name": {"type": ["string", "null"]},
-            "raw_labels": array_of(string),
+            "raw_labels": raw_labels,
             "role_context": string,
             "confidence": string,
         },
-        (),
+        ("raw_labels",) if not speaker_labels else (),
     )
     topic = object_schema(
         {name: non_empty_string for name in ("id", "topic", "summary", "evidence")},
@@ -75,14 +91,24 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
         },
         ("id", "type", "description", "owner_related_party", "impact"),
     )
+    speaker_schema: dict[str, Any]
+    if speaker_labels:
+        speaker_schema = {"type": "string", "enum": speaker_labels}
+    else:
+        speaker_schema = {"type": "null"}
+    timestamp_schema: dict[str, Any]
+    if timestamps:
+        timestamp_schema = {"type": ["string", "null"], "enum": [None, *timestamps]}
+    else:
+        timestamp_schema = {"type": "null"}
     evidence = object_schema(
         {
             "kind": {"type": "string", "enum": list(EVIDENCE_KINDS)},
             "text": non_empty_string,
-            "speaker": {"type": ["string", "null"]},
-            "timestamp": {"type": ["string", "null"]},
+            "speaker": speaker_schema,
+            "timestamp": timestamp_schema,
         },
-        ("kind", "text"),
+        ("kind", "text", "speaker") if speaker_labels else ("kind", "text"),
     )
     signal = object_schema(
         {
@@ -109,6 +135,9 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
         "schema_version",
     )
     signal["not"] = {"anyOf": [{"required": [field]} for field in enriched_signal_fields]}
+    communication_signals = array_of(signal)
+    if not speaker_labels:
+        communication_signals["maxItems"] = 0
     open_question = object_schema(
         {name: non_empty_string for name in ("id", "question", "owner_next_step", "evidence", "status")},
         ("id", "question", "owner_next_step", "evidence"),
@@ -124,7 +153,7 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
             "action_items": array_of(action_item),
             "stakeholder_asks": array_of(stakeholder_ask),
             "dependencies_risks": array_of(dependency_risk),
-            "communication_signals": array_of(signal),
+            "communication_signals": communication_signals,
             "open_questions": array_of(open_question),
             "cross_references": array_of(string),
         },
@@ -160,19 +189,22 @@ def response_contract_for_request(request: dict[str, Any]) -> dict[str, Any]:
         "provider": provider,
         "response": response,
     }
+    required_fields = [
+        "schema_version",
+        "handoff_type",
+        "provider_contract",
+        *IDENTITY_COPY_FIELDS,
+        "provider",
+        "response",
+    ]
+    if "semantic_guidance_version" in request:
+        properties["semantic_guidance_version"] = {
+            "const": request["semantic_guidance_version"]
+        }
+        required_fields.append("semantic_guidance_version")
     for field in IDENTITY_COPY_FIELDS:
         properties[field] = {"const": request[field]}
-    schema = object_schema(
-        properties,
-        (
-            "schema_version",
-            "handoff_type",
-            "provider_contract",
-            *IDENTITY_COPY_FIELDS,
-            "provider",
-            "response",
-        ),
-    )
+    schema = object_schema(properties, tuple(required_fields))
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["title"] = "Meeting Ingest session provider response"
     preflight_command = "meeting-ingest validate-response RESPONSE --source SOURCE"

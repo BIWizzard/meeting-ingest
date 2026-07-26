@@ -28,6 +28,7 @@ class RenderContext:
     provider: str = "mock"
     model_alias: str = "balanced"
     model_id: str = "none"
+    semantic_guidance_version: str = "none"
     provider_host: str | None = None
     runtime_provenance: dict[str, Any] | None = None
     runtime_provenance_ledger_record_id: str | None = None
@@ -86,6 +87,7 @@ def _front_matter(response: ProviderResponse, context: RenderContext, generated_
         f"provider: {context.provider}",
         f"model_alias: {context.model_alias}",
         f"model_id: {context.model_id}",
+        f"semantic_guidance_version: {_quote(context.semantic_guidance_version)}",
         *([f"provider_host: {context.provider_host}"] if context.provider_host else []),
         f"generated_by: meeting-ingest {context.tool_version}",
         f"generated_at: {generated_at}",

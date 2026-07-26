@@ -16,6 +16,7 @@ transcript_policy: cleaned-verbatim
 provider: mock
 model_alias: balanced
 model_id: none
+semantic_guidance_version: "none"
 generated_by: meeting-ingest 0.1.0
 generated_at: 2026-07-03T12:00:00Z
 runtime_provenance_schema: "1.0"

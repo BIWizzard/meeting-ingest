@@ -335,6 +335,15 @@ def _write_session_response(request_payload: dict[str, object], _request_path: P
         "source_sha256": request_payload["source_sha256"],
         "normalized_transcript_sha256": request_payload["normalized_transcript_sha256"],
         "runtime_provenance_sha256": request_payload["runtime_provenance_sha256"],
+        **(
+            {
+                "semantic_guidance_version": request_payload[
+                    "semantic_guidance_version"
+                ]
+            }
+            if "semantic_guidance_version" in request_payload
+            else {}
+        ),
         "provider": provider_payload,
         "response": response_payload,
     }

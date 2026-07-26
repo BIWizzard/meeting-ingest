@@ -8,6 +8,7 @@ import pytest
 
 from conftest import approved_runtime_inspection
 import meeting_ingest.archive as archive_module
+import meeting_ingest.extraction_guidance as extraction_guidance_module
 import meeting_ingest.pipeline as pipeline_module
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.cli import main
@@ -22,6 +23,11 @@ from meeting_ingest.errors import (
     ConfigError,
     MeetingIngestError,
     UnsupportedSourceFormatError,
+)
+from meeting_ingest.extraction_guidance import (
+    PUBLISHED_SEMANTIC_GUIDANCE_RULES,
+    SEMANTIC_GUIDANCE_RULES,
+    SEMANTIC_GUIDANCE_VERSION,
 )
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ledger import LedgerSnapshot, append_snapshot, read_records
@@ -80,6 +86,8 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     assert 'schema_version: "1.1"' in markdown
     assert '  runtime_mode: "approved"' in markdown
     assert '  build_id: "meeting-ingest-test-approved"' in markdown
+    assert 'semantic_guidance_version: "none"' in markdown
+    assert summary.details["semantic_guidance_version"] == "none"
     assert summary_payload["schema_version"] == "1.1"
     assert summary_payload["runtime_provenance_schema"] == "1.0"
     assert summary_payload["runtime_provenance_sha256"].startswith("sha256:")
@@ -97,6 +105,12 @@ def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["title"] == "Kushali Sync"
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["slug"] == "kushali-sync"
     assert ledger_records[-1]["artifacts"]["summary-plus-verbatim"]["model_id"] == "none"
+    assert (
+        ledger_records[-1]["artifacts"]["summary-plus-verbatim"][
+            "semantic_guidance_version"
+        ]
+        == "none"
+    )
     artifact_manifest = ledger_records[-1]["artifacts"]["summary-plus-verbatim"]
     assert (
         f"runtime_provenance_ledger_record_id: {artifact_manifest['producer_ledger_record_id']}"
@@ -850,6 +864,8 @@ def test_pipeline_ingest_duplicate_source_returns_no_op_and_reconciles_inbox(tmp
     assert second.exit_code == 0
     assert second.meeting_id == first.meeting_id
     assert second.ingest_run_id is None
+    assert "provider" not in second.details
+    assert second.details["semantic_guidance_version"] == "none"
     assert second.details["source"] == {
         "path": "_inbox/2026-07-03-kushali-sync.txt",
         "source_type": "txt",
@@ -1161,11 +1177,15 @@ def test_ingest_allows_anthropic_when_privacy_gate_enabled(tmp_path: Path, monke
     source = paths.inbox / "2026-07-03-synthetic.txt"
     source.write_text("Ken: Hello\nKushali: Please clarify the source.\n", encoding="utf-8")
 
+    captured: dict[str, object] = {}
+
     class SyntheticAnthropicProvider:
         name = "anthropic"
         model_id = "claude-sonnet-5"
+        uses_semantic_guidance = True
 
         def extract(self, request: object) -> ProviderResponse:
+            captured["request"] = request
             return ProviderResponse(title="Synthetic", tl_dr="Synthetic summary.")
 
     monkeypatch.setattr(pipeline_module, "get_provider", lambda provider: SyntheticAnthropicProvider())
@@ -1177,10 +1197,28 @@ def test_ingest_allows_anthropic_when_privacy_gate_enabled(tmp_path: Path, monke
         clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
     )
     artifact = paths.meetings_root / summary.artifacts[0]["path"]
+    markdown = artifact.read_text(encoding="utf-8")
+    ledger_records = read_records(paths.ledger)
+    bound_request = captured["request"]
 
     assert summary.status == "success"
-    assert "provider: anthropic" in artifact.read_text(encoding="utf-8")
-    assert "model_id: claude-sonnet-5" in artifact.read_text(encoding="utf-8")
+    assert bound_request.semantic_guidance_version == SEMANTIC_GUIDANCE_VERSION
+    assert bound_request.transcript_grounding.speaker_labels == ("Ken", "Kushali")
+    assert "provider: anthropic" in markdown
+    assert "model_id: claude-sonnet-5" in markdown
+    assert (
+        f'semantic_guidance_version: "{SEMANTIC_GUIDANCE_VERSION}"' in markdown
+    )
+    assert (
+        summary.details["semantic_guidance_version"]
+        == SEMANTIC_GUIDANCE_VERSION
+    )
+    assert (
+        ledger_records[-1]["artifacts"]["summary-plus-verbatim"][
+            "semantic_guidance_version"
+        ]
+        == SEMANTIC_GUIDANCE_VERSION
+    )
 
 
 def test_session_provider_request_requires_privacy_gate(tmp_path: Path) -> None:
@@ -1231,6 +1269,14 @@ def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> N
     assert request_payload["quality"] == "balanced"
     assert request_payload["output_mode"] == "summary-plus-verbatim"
     assert request_payload["normalized_transcript"] == "Ken: Hello\n"
+    assert request_payload["semantic_guidance_version"] == SEMANTIC_GUIDANCE_VERSION
+    assert request_payload["semantic_guidance_rules"] == list(
+        SEMANTIC_GUIDANCE_RULES
+    )
+    assert request_payload["transcript_grounding"] == {
+        "speaker_labels": ["Ken"],
+        "timestamps": [],
+    }
     response_schema = request_payload["response_contract"]["json_schema"]
     assert request_payload["response_contract"]["identity_copy_fields"] == [
         "meeting_id",
@@ -1244,9 +1290,26 @@ def test_session_provider_request_writes_persisted_envelope(tmp_path: Path) -> N
     assert request_payload["runtime_provenance_sha256"].startswith("sha256:")
     assert response_schema["properties"]["meeting_id"] == {"const": summary.meeting_id}
     assert response_schema["properties"]["provider"]["properties"]["model_alias"] == {"const": "balanced"}
+    assert response_schema["properties"]["semantic_guidance_version"] == {
+        "const": SEMANTIC_GUIDANCE_VERSION
+    }
+    attendee_schema = response_schema["properties"]["response"]["properties"][
+        "attendees"
+    ]["items"]
+    assert attendee_schema["properties"]["raw_labels"]["items"] == {
+        "type": "string",
+        "enum": ["Ken"],
+    }
     risk_schema = response_schema["properties"]["response"]["properties"]["dependencies_risks"]["items"]
     assert "owner_related_party" in risk_schema["required"]
     signal_schema = response_schema["properties"]["response"]["properties"]["communication_signals"]["items"]
+    evidence_schema = signal_schema["properties"]["evidence"]
+    assert "speaker" in evidence_schema["required"]
+    assert evidence_schema["properties"]["speaker"] == {
+        "type": "string",
+        "enum": ["Ken"],
+    }
+    assert evidence_schema["properties"]["timestamp"] == {"type": "null"}
     assert "stakeholder_name" in signal_schema["required"]
     assert signal_schema["not"] == {
         "anyOf": [
@@ -1317,6 +1380,58 @@ def test_development_response_contract_preserves_escaped_override_reason() -> No
     )
 
 
+def test_response_contract_binds_grounding_enums_and_empty_index_behavior() -> None:
+    request = {
+        "quality": "balanced",
+        "meeting_id": "meeting",
+        "ingest_run_id": "run",
+        "source_sha256": "source",
+        "normalized_transcript_sha256": "transcript",
+        "runtime_provenance_sha256": "sha256:" + "1" * 64,
+        "semantic_guidance_version": SEMANTIC_GUIDANCE_VERSION,
+        "transcript_grounding": {
+            "speaker_labels": ["Graham, Ken (Contractor)", "Opeyemi, Baba"],
+            "timestamps": ["00:39", "00:51"],
+        },
+    }
+
+    schema = response_contract_for_request(request)["json_schema"]
+    response_schema = schema["properties"]["response"]["properties"]
+    raw_labels = response_schema["attendees"]["items"]["properties"]["raw_labels"]
+    evidence = response_schema["communication_signals"]["items"]["properties"][
+        "evidence"
+    ]
+
+    assert raw_labels["items"]["enum"] == [
+        "Graham, Ken (Contractor)",
+        "Opeyemi, Baba",
+    ]
+    assert evidence["properties"]["speaker"]["enum"] == [
+        "Graham, Ken (Contractor)",
+        "Opeyemi, Baba",
+    ]
+    assert evidence["properties"]["timestamp"]["enum"] == [
+        None,
+        "00:39",
+        "00:51",
+    ]
+
+    request["transcript_grounding"] = {"speaker_labels": [], "timestamps": []}
+    empty_response_schema = response_contract_for_request(request)["json_schema"][
+        "properties"
+    ]["response"]["properties"]
+    empty_attendee = empty_response_schema["attendees"]["items"]
+
+    assert "raw_labels" in empty_attendee["required"]
+    assert empty_attendee["properties"]["raw_labels"]["maxItems"] == 0
+    assert empty_response_schema["communication_signals"]["maxItems"] == 0
+    empty_evidence = empty_response_schema["communication_signals"]["items"][
+        "properties"
+    ]["evidence"]["properties"]
+    assert empty_evidence["speaker"] == {"type": "null"}
+    assert empty_evidence["timestamp"] == {"type": "null"}
+
+
 def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     _allow_session_provider(paths.config_path)
@@ -1350,10 +1465,17 @@ def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_pa
     assert summary.meeting_id == request_summary.meeting_id
     assert summary.ingest_run_id == request_summary.ingest_run_id
     assert summary.details["provider"] == "session"
+    assert (
+        summary.details["semantic_guidance_version"]
+        == SEMANTIC_GUIDANCE_VERSION
+    )
     assert summary.details["provider_host"] == "codex"
     assert "provider: session" in markdown
     assert "provider_host: codex" in markdown
     assert "model_id: codex-session" in markdown
+    assert (
+        f'semantic_guidance_version: "{SEMANTIC_GUIDANCE_VERSION}"' in markdown
+    )
     assert (
         f'runtime_provenance_sha256: "{request_payload["runtime_provenance_sha256"]}"'
         in markdown
@@ -1364,11 +1486,177 @@ def test_session_provider_response_completes_full_ingest_and_cleans_cache(tmp_pa
         ]
     assert records[-1]["artifacts"]["summary-plus-verbatim"]["provider"] == "session"
     assert records[-1]["artifacts"]["summary-plus-verbatim"]["provider_host"] == "codex"
+    assert (
+        records[-1]["artifacts"]["summary-plus-verbatim"][
+            "semantic_guidance_version"
+        ]
+        == SEMANTIC_GUIDANCE_VERSION
+    )
     assert [record["event"] for record in records] == ["primary_artifacts_ready", "ingest_completed"]
     assert not request_path.exists()
     assert not response_path.exists()
     assert not source.exists()
     assert (paths.inbox_done / source.name).exists()
+
+
+def test_session_provider_request_at_an_older_published_version_remains_completable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details[
+        "expected_response_path"
+    ]
+    _write_session_response(request_path, response_path)
+    monkeypatch.setitem(
+        PUBLISHED_SEMANTIC_GUIDANCE_RULES,
+        "1.1",
+        SEMANTIC_GUIDANCE_RULES,
+    )
+    monkeypatch.setattr(
+        extraction_guidance_module, "SEMANTIC_GUIDANCE_VERSION", "1.1"
+    )
+    monkeypatch.setattr(pipeline_module, "SEMANTIC_GUIDANCE_VERSION", "1.1")
+
+    validation = pipeline_module.validate_response(
+        response_path,
+        source=source,
+        start=paths.inbox,
+    )
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        provider="session",
+        provider_response=response_path,
+    )
+    records = read_records(paths.ledger)
+
+    assert validation.status == "success"
+    assert validation.details["semantic_guidance_version"] == "1.0"
+    assert summary.status == "success"
+    assert summary.details["semantic_guidance_version"] == "1.0"
+    assert (
+        records[-1]["artifacts"]["summary-plus-verbatim"][
+            "semantic_guidance_version"
+        ]
+        == "1.0"
+    )
+
+
+def test_session_provider_rejects_tampered_request_grounding(tmp_path: Path) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details[
+        "expected_response_path"
+    ]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    request_payload["transcript_grounding"]["speaker_labels"] = ["Invented"]
+    request_path.write_text(
+        json.dumps(request_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _write_session_response(request_path, response_path)
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(
+            source,
+            start=paths.inbox,
+            provider="session",
+            provider_response=response_path,
+        )
+
+    issue = (
+        "provider request transcript_grounding does not match "
+        "normalized_transcript."
+    )
+    assert exc.value.details["issues"] == [issue]
+    assert request_path.exists()
+    assert response_path.exists()
+
+
+def test_session_provider_legacy_request_preserves_legacy_provenance(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details[
+        "expected_response_path"
+    ]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    for field in (
+        "semantic_guidance_version",
+        "semantic_guidance_rules",
+        "transcript_grounding",
+    ):
+        request_payload.pop(field)
+    request_path.write_text(
+        json.dumps(request_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _write_session_response(request_path, response_path)
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        provider="session",
+        provider_response=response_path,
+    )
+    markdown = (
+        paths.meetings_root / summary.artifacts[0]["path"]
+    ).read_text(encoding="utf-8")
+    records = read_records(paths.ledger)
+
+    assert summary.details["semantic_guidance_version"] == "legacy"
+    assert 'semantic_guidance_version: "legacy"' in markdown
+    assert (
+        records[-1]["artifacts"]["summary-plus-verbatim"][
+            "semantic_guidance_version"
+        ]
+        == "legacy"
+    )
+
+
+def test_session_provider_rejects_semantic_guidance_version_mismatch(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details[
+        "expected_response_path"
+    ]
+    _write_session_response(
+        request_path,
+        response_path,
+        envelope_overrides={"semantic_guidance_version": "legacy"},
+    )
+
+    with pytest.raises(MeetingIngestError) as exc:
+        ingest(
+            source,
+            start=paths.inbox,
+            provider="session",
+            provider_response=response_path,
+        )
+
+    assert exc.value.details["issues"] == [
+        "Provider response semantic_guidance_version does not match persisted request."
+    ]
 
 
 def test_session_provider_rejects_runtime_update_and_retries_under_original_build(
@@ -2438,6 +2726,15 @@ def _write_session_response(
         "source_sha256": source_sha256 or request_payload["source_sha256"],
         "normalized_transcript_sha256": request_payload["normalized_transcript_sha256"],
         "runtime_provenance_sha256": request_payload["runtime_provenance_sha256"],
+        **(
+            {
+                "semantic_guidance_version": request_payload[
+                    "semantic_guidance_version"
+                ]
+            }
+            if "semantic_guidance_version" in request_payload
+            else {}
+        ),
         "provider": provider_payload,
         "response": response_payload,
     }

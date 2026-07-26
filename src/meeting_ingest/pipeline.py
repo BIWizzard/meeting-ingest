@@ -27,6 +27,10 @@ from meeting_ingest.errors import (
     UnsupportedSourceFormatError,
 )
 from meeting_ingest.extract import extract_source
+from meeting_ingest.extraction_guidance import (
+    SEMANTIC_GUIDANCE_RULES,
+    SEMANTIC_GUIDANCE_VERSION,
+)
 from meeting_ingest.hashing import sha256_file
 from meeting_ingest.ids import mint_ingest_run_id, mint_meeting_id, mint_source_id
 from meeting_ingest.ledger import (
@@ -75,6 +79,7 @@ from meeting_ingest.signals import (
     read_signal_jsonl,
     write_signal_jsonl,
 )
+from meeting_ingest.transcript import TranscriptGrounding
 
 
 class _PreparedNoOp(Exception):
@@ -119,6 +124,15 @@ class _TitleMetadata:
     slug: str
     confidence: str
     rename_suggestion: str | None
+
+
+def _transcript_grounding_payload(
+    grounding: TranscriptGrounding,
+) -> dict[str, list[str]]:
+    return {
+        "speaker_labels": list(grounding.speaker_labels),
+        "timestamps": list(grounding.timestamps),
+    }
 
 
 def initialize(
@@ -256,6 +270,7 @@ def validate_response(
         details={
             "command": "validate-response",
             "provider": "session",
+            "semantic_guidance_version": envelope.metadata.semantic_guidance_version,
             "source": {"path": _relative_to_meetings(paths, resolved_source)},
             "provider_response": {
                 "status": "valid",
@@ -315,7 +330,16 @@ def _repair_date_locked(
         )
 
     meeting_id = str(target["meeting_id"])
-    artifacts = {mode: dict(entry) for mode, entry in target.get("artifacts", {}).items() if isinstance(entry, dict)}
+    artifacts = {
+        mode: {
+            **entry,
+            "semantic_guidance_version": entry.get(
+                "semantic_guidance_version", "legacy"
+            ),
+        }
+        for mode, entry in target.get("artifacts", {}).items()
+        if isinstance(entry, dict)
+    }
     for mode, entry in artifacts.items():
         artifact_path = paths.meetings_root / str(entry.get("path", ""))
         if not entry.get("path") or not artifact_path.exists():
@@ -376,6 +400,7 @@ def _repair_date_locked(
             content,
             runtime_provenance=runtime_provenance,
             ledger_record_id=producer_ledger_record_id,
+            semantic_guidance_version=str(entry["semantic_guidance_version"]),
         )
         _write_artifact(destination.path, content)
         if destination.path != old_path:
@@ -678,6 +703,7 @@ def _session_ingest_inbox_requests(
         details={
             "command": "ingest-inbox",
             "provider": "session",
+            "semantic_guidance_version": SEMANTIC_GUIDANCE_VERSION,
             "phase": "provider_request",
             "meetings_root": str(paths.meetings_root),
             "processed": len(results),
@@ -738,6 +764,12 @@ def _ingest_locked(
         return no_op.summary
 
     provider_impl = get_provider(selected_provider)
+    transcript_grounding = prepared.extraction.transcript_grounding
+    semantic_guidance_version = (
+        SEMANTIC_GUIDANCE_VERSION
+        if getattr(provider_impl, "uses_semantic_guidance", False)
+        else "none"
+    )
     try:
         provider_response = provider_impl.extract(
             ProviderRequest(
@@ -746,6 +778,8 @@ def _ingest_locked(
                 meeting_id=prepared.meeting_id,
                 effective_date=prepared.extraction.effective_date.value,
                 quality=selected_quality,
+                transcript_grounding=transcript_grounding,
+                semantic_guidance_version=semantic_guidance_version,
             )
         )
         validate_provider_response(provider_response)
@@ -792,6 +826,7 @@ def _ingest_locked(
         provider_response=provider_response,
         model_id=provider_impl.model_id,
         provider_host=None,
+        semantic_guidance_version=semantic_guidance_version,
         runtime_provenance=runtime_provenance,
         clock=clock,
     )
@@ -827,6 +862,11 @@ def _provider_request_locked(
         "runtime_provenance_sha256": runtime_provenance_sha256(runtime_provenance),
         "runtime_provenance": runtime_provenance,
         "normalized_transcript": prepared.extraction.normalized_text,
+        "semantic_guidance_version": SEMANTIC_GUIDANCE_VERSION,
+        "semantic_guidance_rules": list(SEMANTIC_GUIDANCE_RULES),
+        "transcript_grounding": _transcript_grounding_payload(
+            prepared.extraction.transcript_grounding
+        ),
         "source_format": prepared.extraction.source_format,
         "date_confidence": prepared.extraction.effective_date.confidence,
         "date_source": prepared.extraction.effective_date.source,
@@ -845,6 +885,7 @@ def _provider_request_locked(
         details={
             "command": "provider-request",
             "provider": "session",
+            "semantic_guidance_version": SEMANTIC_GUIDANCE_VERSION,
             "quality": selected_quality,
             "output_mode": selected_mode,
             "source": {
@@ -932,6 +973,7 @@ def _complete_session_ingest_locked(
         provider_response=envelope.response,
         model_id=envelope.metadata.model_id,
         provider_host=envelope.metadata.provider_host,
+        semantic_guidance_version=envelope.metadata.semantic_guidance_version,
         runtime_provenance=dict(envelope.request["runtime_provenance"]),
         clock=clock,
     )
@@ -950,6 +992,7 @@ def _finish_ingest(
     provider_response: ProviderResponse,
     model_id: str,
     provider_host: str | None,
+    semantic_guidance_version: str,
     runtime_provenance: dict[str, Any],
     clock: Clock | None,
 ) -> RunSummary:
@@ -1010,6 +1053,7 @@ def _finish_ingest(
             provider=selected_provider,
             model_alias=selected_quality,
             model_id=model_id,
+            semantic_guidance_version=semantic_guidance_version,
             provider_host=provider_host,
             runtime_provenance=runtime_provenance,
             runtime_provenance_ledger_record_id=producer_ledger_record_id,
@@ -1028,6 +1072,7 @@ def _finish_ingest(
             "provider": selected_provider,
             "model_alias": selected_quality,
             "model_id": model_id,
+            "semantic_guidance_version": semantic_guidance_version,
             "schema_version": "1.1",
             "title": provider_response.title,
             "slug": artifact_slug,
@@ -1123,6 +1168,7 @@ def _finish_ingest(
             "command": "ingest",
             "output_mode": selected_mode,
             "provider": selected_provider,
+            "semantic_guidance_version": semantic_guidance_version,
             "quality": selected_quality,
             **({"provider_host": provider_host} if provider_host else {}),
             "effective_date": {
@@ -1431,6 +1477,7 @@ def _rewrite_front_matter_provenance(
     *,
     runtime_provenance: dict[str, Any],
     ledger_record_id: str,
+    semantic_guidance_version: str,
 ) -> str:
     lines = content.splitlines()
     if not lines or lines[0] != "---":
@@ -1463,6 +1510,7 @@ def _rewrite_front_matter_provenance(
         "runtime_provenance_sha256",
         "runtime_provenance_ledger_record_id",
         "runtime_provenance",
+        "semantic_guidance_version",
     }
     front: list[str] = []
     skipping_nested = False
@@ -1476,6 +1524,7 @@ def _rewrite_front_matter_provenance(
             continue
         front.append(line)
     provenance_lines = [
+        f"semantic_guidance_version: {json.dumps(semantic_guidance_version)}",
         'runtime_provenance_schema: "1.0"',
         f"runtime_provenance_sha256: {json.dumps(runtime_provenance_sha256(runtime_provenance))}",
         f"runtime_provenance_ledger_record_id: {ledger_record_id}",
@@ -1618,6 +1667,7 @@ def _no_op_summary(
         warnings=[f"source already ingested; reconcile {reconcile['status']}"],
         details={
             "reason": "source_already_ingested",
+            "semantic_guidance_version": "none",
             "source": {
                 "path": _relative_to_meetings(paths, source),
                 "source_type": source.suffix.lower().lstrip(".") or "unknown",
@@ -1681,7 +1731,13 @@ def _carried_signal_state(record: dict[str, object]) -> dict[str, object]:
 
 def _carried_artifact_state(record: dict[str, object]) -> dict[str, dict[str, object]]:
     return {
-        str(mode): {**entry, "produced_in_this_record": False}
+        str(mode): {
+            **entry,
+            "semantic_guidance_version": entry.get(
+                "semantic_guidance_version", "legacy"
+            ),
+            "produced_in_this_record": False,
+        }
         for mode, entry in _dict_value(record.get("artifacts")).items()
         if isinstance(entry, dict)
     }

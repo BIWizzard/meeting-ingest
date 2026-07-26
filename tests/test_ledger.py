@@ -4,12 +4,16 @@ from pathlib import Path
 
 import pytest
 
+import meeting_ingest.extraction_guidance as extraction_guidance_module
+import meeting_ingest.ledger as ledger_module
 from meeting_ingest.errors import MeetingIngestError
+from meeting_ingest.extraction_guidance import SEMANTIC_GUIDANCE_VERSION
 from meeting_ingest.ledger import (
     LedgerSnapshot,
     append_snapshot,
     has_legacy_record_for_source,
     mint_ledger_identity,
+    latest_record_for_source,
     read_records,
     read_records_with_issues,
 )
@@ -191,6 +195,100 @@ def test_append_snapshot_wraps_write_failures(tmp_path: Path) -> None:
     assert exc.value.phase == "ledger"
     assert exc.value.code == "ledger_write_failed"
     assert exc.value.exit_code == 8
+
+
+def test_ledger_artifact_semantic_guidance_accepts_bound_values_and_rejects_unknown(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "_ledger.jsonl"
+    artifact = {
+        "summary-plus-verbatim": {
+            "provider": "session",
+            "model_alias": "balanced",
+            "model_id": "codex-session",
+            "semantic_guidance_version": SEMANTIC_GUIDANCE_VERSION,
+        }
+    }
+    append_snapshot(
+        ledger,
+        LedgerSnapshot(
+            event="ingest_completed",
+            source_sha256="a" * 64,
+            meeting_id="mtg-20260703-aaaaaaaa",
+            ingest_run_id="ingest-1",
+            source={},
+            artifacts=artifact,
+            signals={},
+            reconcile={},
+        ),
+    )
+
+    assert (
+        read_records(ledger)[0]["artifacts"]["summary-plus-verbatim"][
+            "semantic_guidance_version"
+        ]
+        == SEMANTIC_GUIDANCE_VERSION
+    )
+
+    with pytest.raises(MeetingIngestError) as exc:
+        append_snapshot(
+            tmp_path / "invalid-ledger.jsonl",
+            LedgerSnapshot(
+                event="ingest_completed",
+                source_sha256="b" * 64,
+                meeting_id="mtg-20260703-bbbbbbbb",
+                ingest_run_id="ingest-2",
+                source={},
+                artifacts={
+                    "summary-plus-verbatim": {
+                        **artifact["summary-plus-verbatim"],
+                        "semantic_guidance_version": "future",
+                    }
+                },
+                signals={},
+                reconcile={},
+            ),
+        )
+
+    assert exc.value.code == "ledger_semantic_guidance_invalid"
+
+
+def test_ledger_reads_records_bound_to_an_older_semantic_guidance_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ledger = tmp_path / "_ledger.jsonl"
+    source_sha256 = "a" * 64
+    append_snapshot(
+        ledger,
+        LedgerSnapshot(
+            event="ingest_completed",
+            source_sha256=source_sha256,
+            meeting_id="mtg-20260703-aaaaaaaa",
+            ingest_run_id="ingest-1",
+            source={},
+            artifacts={
+                "summary-plus-verbatim": {
+                    "semantic_guidance_version": "1.0",
+                }
+            },
+            signals={},
+            reconcile={},
+            schema_version="1.0",
+        ),
+    )
+
+    monkeypatch.setattr(
+        extraction_guidance_module, "SEMANTIC_GUIDANCE_VERSION", "1.1"
+    )
+    monkeypatch.setattr(
+        ledger_module,
+        "_SEMANTIC_GUIDANCE_PROVENANCE_VALUES",
+        frozenset({"1.1", "legacy", "none"}),
+    )
+
+    records = read_records(ledger)
+    assert len(records) == 1
+    assert latest_record_for_source(ledger, source_sha256) == records[0]
 
 
 def test_ledger_identity_is_deterministic_unique_and_source_sequence_is_monotonic(

@@ -11,6 +11,7 @@ import re
 
 from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
 from meeting_ingest.errors import EXIT_LEDGER_WRITE, MeetingIngestError
+from meeting_ingest.extraction_guidance import PUBLISHED_SEMANTIC_GUIDANCE_RULES
 from meeting_ingest.provider_handoff import (
     RUNTIME_PROVENANCE_SCHEMA,
     runtime_provenance_sha256,
@@ -23,6 +24,9 @@ from meeting_ingest.ids import canonical_json
 _LEGACY_RECORD_KEYS = frozenset({"source_sha256", "meeting_id", "ingest_run_id"})
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _LEGACY_RUN_ID_RE = re.compile(r"(?:\d{8}T\d{6}Z|ingest-\d{8}-[a-z0-9-]+)")
+_SEMANTIC_GUIDANCE_PROVENANCE_VALUES = frozenset(
+    {*PUBLISHED_SEMANTIC_GUIDANCE_RULES, "legacy", "none"}
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,7 @@ class LedgerSnapshot:
                 exit_code=EXIT_LEDGER_WRITE,
                 recoverable=False,
             )
+        _validate_artifact_semantic_guidance(self.artifacts)
         return {
             "schema_version": self.schema_version,
             **(
@@ -287,7 +292,48 @@ def _is_valid_record(record: object) -> bool:
         expected = "lr-" + hashlib.sha256(canonical_json(identity).encode("utf-8")).hexdigest()[:32]
         if ledger_record_id != expected:
             return False
+    if _artifact_semantic_guidance_has_invalid_type(record.get("artifacts")):
+        return False
     return True
+
+
+def _validate_artifact_semantic_guidance(
+    artifacts: dict[str, dict[str, Any]],
+) -> None:
+    if _artifact_semantic_guidance_is_invalid(artifacts):
+        raise MeetingIngestError(
+            phase="ledger",
+            code="ledger_semantic_guidance_invalid",
+            message="Ledger artifact semantic guidance provenance is invalid.",
+            exit_code=EXIT_LEDGER_WRITE,
+            recoverable=False,
+        )
+
+
+def _artifact_semantic_guidance_is_invalid(artifacts: object) -> bool:
+    if not isinstance(artifacts, dict):
+        return False
+    for entry in artifacts.values():
+        if not isinstance(entry, dict) or "semantic_guidance_version" not in entry:
+            continue
+        value = entry["semantic_guidance_version"]
+        if (
+            not isinstance(value, str)
+            or value not in _SEMANTIC_GUIDANCE_PROVENANCE_VALUES
+        ):
+            return True
+    return False
+
+
+def _artifact_semantic_guidance_has_invalid_type(artifacts: object) -> bool:
+    if not isinstance(artifacts, dict):
+        return False
+    return any(
+        isinstance(entry, dict)
+        and "semantic_guidance_version" in entry
+        and not isinstance(entry["semantic_guidance_version"], str)
+        for entry in artifacts.values()
+    )
 
 
 def _has_invalid_runtime_provenance(record: object) -> bool:

@@ -3,10 +3,15 @@ import json
 import pytest
 
 from meeting_ingest.errors import ProviderError
+from meeting_ingest.extraction_guidance import (
+    SEMANTIC_GUIDANCE_RULES,
+    SEMANTIC_GUIDANCE_VERSION,
+)
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.providers import anthropic
 from meeting_ingest.providers.anthropic import AnthropicProvider
 from meeting_ingest.schema import validate_provider_response
+from meeting_ingest.transcript import index_normalized_transcript
 
 
 class FakeHTTPResponse:
@@ -112,6 +117,13 @@ def test_anthropic_provider_posts_messages_request_and_parses_response(monkeypat
     assert isinstance(body, dict)
     assert body["model"] == "claude-haiku-4-5"
     assert body["temperature"] == 0
+    prompt = body["messages"][0]["content"]
+    assert f"Semantic guidance version: {SEMANTIC_GUIDANCE_VERSION}" in prompt
+    assert all(rule in prompt for rule in SEMANTIC_GUIDANCE_RULES)
+    assert '"speaker_labels": [' in prompt
+    assert '"Ken"' in prompt
+    assert '"Kushali G"' in prompt
+    assert '"timestamps": []' in prompt
     headers = captured["headers"]
     assert isinstance(headers, dict)
     assert headers["X-api-key"] == "test-key"
@@ -119,10 +131,13 @@ def test_anthropic_provider_posts_messages_request_and_parses_response(monkeypat
 
 
 def _request(*, quality: str = "balanced") -> ProviderRequest:
+    transcript = "Ken: Hello\nKushali G: Please clarify the source.\n"
     return ProviderRequest(
-        transcript="Ken: Hello\nKushali G: Please clarify the source.\n",
+        transcript=transcript,
         source_name="synthetic.txt",
         meeting_id="mtg-20260703-abcdef12",
         effective_date="2026-07-03",
         quality=quality,
+        transcript_grounding=index_normalized_transcript(transcript),
+        semantic_guidance_version=SEMANTIC_GUIDANCE_VERSION,
     )
