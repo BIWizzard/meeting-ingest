@@ -105,6 +105,7 @@ The provider envelope must use:
   "source_sha256": "copy from request",
   "normalized_transcript_sha256": "copy from request",
   "runtime_provenance_sha256": "copy from request",
+  "semantic_guidance_version": "copy from request",
   "provider": {
     "name": "session",
     "host": "codex",
@@ -137,11 +138,13 @@ Exact array item fields:
 - `action_items`: `id`, `owner`, `action`, `due_timing`, `evidence`, optional `status`
 - `stakeholder_asks`: `id`, `stakeholder`, `ask`, `directed_to`, `evidence`, optional `status`
 - `dependencies_risks`: `id`, `type`, `description`, `owner_related_party`, `impact`, optional `status`
-- `communication_signals`: `signal_type`, optional `stakeholder_id`, `stakeholder_name`, `summary`, `evidence`, `inference_level`, `confidence`, optional `topics`, `project_refs`, `recurrence`, `status`; `evidence` uses `kind`, `text`, optional `speaker`, `timestamp`
+- `communication_signals`: `signal_type`, optional `stakeholder_id`, `stakeholder_name`, `summary`, `evidence`, `inference_level`, `confidence`, optional `topics`, `project_refs`, `recurrence`, `status`; `evidence` uses `kind`, `text`, `speaker`, and optional `timestamp`. `speaker` is required whenever the transcript has speaker labels — the generated response contract lists it in `evidence.required` and enum-binds it to the grounding set. `timestamp` may be omitted or null
 - `open_questions`: `id`, `question`, `owner_next_step`, `evidence`, optional `status`
 - `cross_references`: strings
 
 Use `provider.host: "codex"` when running inside Codex. Use the actual model ID if available; otherwise use `codex-session`.
+
+Raw labels, evidence speakers, and evidence timestamps must satisfy the request's `transcript_grounding` exactly, and the extraction must obey the request's `semantic_guidance_rules`. See `Grounding And Semantic Guidance` below before writing the response.
 
 Validate the completed response before phase 2:
 
@@ -167,6 +170,27 @@ Confirm the run summary reports:
 - reconcile status `completed`
 
 Continue until no direct inbox files remain.
+
+## Grounding And Semantic Guidance
+
+Every request carries `transcript_grounding`, the engine's index of `normalized_transcript`, holding `speaker_labels` and `timestamps` in first-seen order and deduplicated. It is the only authority for attendee raw labels and signal evidence locators, and the engine re-checks every one of them before any durable write.
+
+- Every `attendees[].raw_labels[]` entry is an exact copy of one `transcript_grounding.speaker_labels` entry. Raw labels are source labels, not normalized display names and not inferred affiliations.
+- Never add, remove, or edit a parenthetical qualifier, and never recase or repunctuate. `Opeyemi, Baba` and `Opeyemi, Baba (Contractor)` are two different labels; neither may stand in for the other, and a qualifier on one label says nothing about a person whose label lacks it.
+- Copy verbatim. The engine's check is set membership after collapsing repeated whitespace, so whitespace runs are the only tolerated difference; capitalization, punctuation, comma order, and qualifiers are all compared as-is and any other departure fails.
+- Every `communication_signals[].evidence.speaker` is an exact copy of one `transcript_grounding.speaker_labels` entry. It is the transcript utterer of the evidence, not its audience or directed-to party, and it is required for every person-directed signal. If no speaker can be grounded, omit the signal instead of substituting the display-oriented `stakeholder_name`.
+- `communication_signals[].evidence.timestamp` is `null` or an exact copy of one `transcript_grounding.timestamps` entry. Do not reconstruct a timestamp from the transcript body.
+- `display_name` and `role_context` may summarize grounded evidence, but they must not alter a raw label or assert an alias, affiliation, or shared identity the transcript does not state.
+- When `speaker_labels` is empty, `attendees[].raw_labels` and `communication_signals` must both be empty. When `timestamps` is empty, every evidence timestamp must be `null`.
+
+Every request also carries `semantic_guidance_version` and `semantic_guidance_rules`. The rules array is the exact published text for the bound version. Obey it rather than a remembered prompt revision, and echo `semantic_guidance_version` into the response envelope unchanged. A persisted request that predates the field is the one exception: omit `semantic_guidance_version` from the response, or send `"legacy"`. Never invent a version the request did not bind. For version `"1.0"` the rules are:
+
+1. Preserve nearby time context. Do not add AM/PM unless it is explicit or unambiguously established by phrases such as "last run of the night."
+2. Separate observations, hypotheses, and confirmed causes. Do not use "caused by," "traced to," or equivalent causal language when root cause remains open.
+3. Record a proposal as a decision only when the transcript shows acceptance. Record an action only when an owner accepts it or a direction is acknowledged.
+4. Never carry a rejected or infeasible proposal into open actions.
+5. Do not merge people from nickname similarity alone. Conflicting or incomplete alias evidence stays unresolved and receives low confidence.
+6. Keep the TL;DR consistent with the detailed topics, decisions, risks, actions, and open questions.
 
 ## Extraction Quality
 

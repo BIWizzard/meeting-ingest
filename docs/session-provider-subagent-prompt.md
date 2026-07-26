@@ -35,6 +35,9 @@ The request JSON contains:
 - quality
 - output_mode
 - normalized_transcript
+- transcript_grounding
+- semantic_guidance_version
+- semantic_guidance_rules
 
 Copy these identity fields exactly from the request into the response envelope:
 
@@ -49,6 +52,7 @@ Set the response envelope fields as follows:
 - schema_version: "1.1"
 - handoff_type: "provider_response"
 - provider_contract: "meeting-ingest-provider-response-v1"
+- semantic_guidance_version: the request semantic_guidance_version, echoed exactly
 - provider.name: "session"
 - provider.host: "HOST_NAME"
 - provider.model_alias: the request quality value
@@ -83,6 +87,30 @@ Rules:
 - For communication_signals[].stakeholder_id, use null unless the request explicitly provides a known durable ID.
 - Evidence may be a direct quote, paraphrase, or timestamp-only reference, but it must be traceable to normalized_transcript.
 
+Transcript grounding:
+
+The request field transcript_grounding is the engine's index of normalized_transcript. It has speaker_labels and timestamps, both in first-seen order and deduplicated. It is the only authority for attendee raw labels and signal evidence locators, and the engine rejects the response before any durable write if you depart from it.
+
+- Every attendees[].raw_labels[] entry must be an exact copy of one transcript_grounding.speaker_labels entry. Raw labels are source labels. They are not normalized display names and not inferred affiliations.
+- Do not add, remove, or edit a parenthetical qualifier, and do not recase or repunctuate. "Opeyemi, Baba" and "Opeyemi, Baba (Contractor)" are two different labels, and neither may stand in for the other. A qualifier on one label says nothing about a person whose label lacks it.
+- Copy verbatim. The engine's check is set membership after collapsing repeated whitespace, so whitespace runs are the only tolerated difference; capitalization, punctuation, comma order, and qualifiers are all compared as-is and any other departure fails.
+- Every communication_signals[].evidence.speaker must be an exact copy of one transcript_grounding.speaker_labels entry. It is the transcript utterer of the evidence, not its audience or directed-to party, and it is required for every person-directed signal.
+- If you cannot ground a speaker, omit the signal. Never substitute the display-oriented stakeholder_name for a missing speaker.
+- communication_signals[].evidence.timestamp is either null or an exact copy of one transcript_grounding.timestamps entry. Do not reconstruct a timestamp from the transcript body.
+- attendees[].display_name and attendees[].role_context may summarize grounded evidence, but they must not alter a raw label or assert an alias, affiliation, or shared identity the transcript does not state.
+- When transcript_grounding.speaker_labels is empty, attendees[].raw_labels must be empty and communication_signals must be empty. When transcript_grounding.timestamps is empty, every evidence timestamp must be null.
+
+Semantic responsibilities:
+
+The request field semantic_guidance_version names the rule set bound to this handoff, and semantic_guidance_rules carries that rule set's exact text. Obey the rules in the request, not a remembered prompt revision, and echo semantic_guidance_version in the response envelope exactly as given. A persisted request that predates the field is the one exception: omit semantic_guidance_version from the response, or send "legacy". Never invent a version the request did not bind. For semantic_guidance_version "1.0" the rules are:
+
+1. Preserve nearby time context. Do not add AM/PM unless it is explicit or unambiguously established by phrases such as "last run of the night."
+2. Separate observations, hypotheses, and confirmed causes. Do not use "caused by," "traced to," or equivalent causal language when root cause remains open.
+3. Record a proposal as a decision only when the transcript shows acceptance. Record an action only when an owner accepts it or a direction is acknowledged.
+4. Never carry a rejected or infeasible proposal into open actions.
+5. Do not merge people from nickname similarity alone. Conflicting or incomplete alias evidence stays unresolved and receives low confidence.
+6. Keep the TL;DR consistent with the detailed topics, decisions, risks, actions, and open questions.
+
 Expected JSON shape:
 
 {
@@ -94,6 +122,7 @@ Expected JSON shape:
   "source_sha256": "<copy from request>",
   "normalized_transcript_sha256": "<copy from request>",
   "runtime_provenance_sha256": "<copy from request>",
+  "semantic_guidance_version": "<copy from request>",
   "provider": {
     "name": "session",
     "host": "HOST_NAME",

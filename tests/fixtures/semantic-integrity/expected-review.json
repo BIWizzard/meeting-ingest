@@ -1,0 +1,411 @@
+{
+  "schema_version": "1.0",
+  "fixture": "tests/fixtures/semantic-integrity/session-provider-eval.vtt",
+  "fixture_origin": "synthetic",
+  "fixture_note": "Invented people and invented systems. This fixture reproduces observed defect patterns only; it contains no private corpus source text.",
+  "semantic_guidance_version": "1.0",
+  "evaluation": {
+    "root": "The provider response envelope's `response` key: the ProviderResponse payload. Snapshot the response file before phase-2 ingest, because successful phase 2 deletes the request/response pair.",
+    "selector_syntax": "JSONPath subset: `$` is the payload root, `.field` selects an object member, `[*]` selects every array element, `$..*` selects every descendant leaf.",
+    "array_selectors": "When `selector` is an array of selector strings, the selected value set is the union of every listed selector's values. The assertion's operator is applied once to that union.",
+    "value_type": "When present, restricts selected leaves to that JSON type. Leaves of other types are skipped, not failed.",
+    "null_handling": "A JSON `null` leaf is never a string. `none_match` and `any_matches` skip nulls. `each_matches` and `each_in` fail on a null unless the assertion sets `allow_null: true`. This distinction is load-bearing: catching a null `evidence.speaker` is exactly what DG3 and DG5 exist to do.",
+    "accepted_forms": "Documentation only. It illustrates renderings that satisfy the assertion and carries no evaluation semantics; only `operator` and its arguments are executed.",
+    "regex_flags": "`i` is case-insensitive. Patterns are Python `re` syntax and are matched with `re.search`.",
+    "severity": {
+      "blocking": "A failure is a milestone-proof failure. The acceptance run does not pass.",
+      "advisory": "A failure is a recorded quality finding that the human reviewer dispositions."
+    },
+    "operators": {
+      "set_equals": "The set of selected values equals `expected`.",
+      "each_in": "Every selected value is a member of `allowed`.",
+      "each_matches": "Every selected value matches at least one pattern in `patterns`.",
+      "none_match": "No selected value matches any pattern in `patterns`.",
+      "any_matches": "At least one selected value matches at least one pattern in `patterns`.",
+      "each_matching_also_matches": "Every selected value that matches a pattern in `when_patterns` must also match a pattern in `require_patterns`.",
+      "record_conditional": "Selector yields records. `when` gives `field` or `fields` plus `patterns`; a record activates when any named field matches any pattern. Every activated record must satisfy every clause in `require`, where a clause gives a `field` and either `one_of` or `patterns`. Dotted field names traverse nested objects.",
+      "cross_implies": "When the `when` clause holds, the `then` clause must also hold. Each clause is a selector plus one of the value operators above.",
+      "cli_exit_code": "The named command exits with `expected_exit_code`."
+    }
+  },
+  "transcript_grounding": {
+    "speaker_labels": [
+      "Villanueva, Rosa",
+      "Marchetti, Dara (Contractor)",
+      "Okonjo, Femi (Contractor)"
+    ],
+    "timestamps": [
+      "00:03",
+      "00:09",
+      "00:16",
+      "00:22",
+      "00:31",
+      "00:38",
+      "00:44",
+      "00:49",
+      "00:56",
+      "01:06",
+      "01:14",
+      "01:20",
+      "01:27",
+      "01:31",
+      "01:40",
+      "01:46",
+      "01:55",
+      "02:01",
+      "02:09",
+      "02:16",
+      "02:21",
+      "02:27",
+      "02:31",
+      "02:37",
+      "02:43",
+      "02:51",
+      "02:57",
+      "03:03",
+      "03:10",
+      "03:17",
+      "03:23",
+      "03:31",
+      "03:37",
+      "03:42",
+      "03:49",
+      "03:54"
+    ]
+  },
+  "assertions": [
+    {
+      "id": "DG1",
+      "class": "deterministic",
+      "severity": "blocking",
+      "pattern": "contractor-qualifier fabrication",
+      "description": "Attendee raw labels are verbatim copies of the three transcript speaker labels, no more and no fewer.",
+      "enforcement": "Partly fixture-only. The engine rejects any raw label outside the grounding set, but it does not require every transcript speaker to appear as an attendee. The set equality below is therefore a completeness expectation this fixture adds, not something preflight guarantees.",
+      "selector": "$.attendees[*].raw_labels[*]",
+      "operator": "set_equals",
+      "expected": [
+        "Villanueva, Rosa",
+        "Marchetti, Dara (Contractor)",
+        "Okonjo, Femi (Contractor)"
+      ]
+    },
+    {
+      "id": "DG2",
+      "class": "deterministic",
+      "severity": "blocking",
+      "pattern": "contractor-qualifier fabrication",
+      "description": "The unqualified attendee stays unqualified. No raw label adds a parenthetical affiliation to `Villanueva, Rosa`.",
+      "enforcement": "Engine-enforced. A qualified variant is not in the grounding set, so `validate_provider_grounding` rejects it.",
+      "selector": "$.attendees[*].raw_labels[*]",
+      "operator": "none_match",
+      "patterns": ["^Villanueva, Rosa\\s*\\("]
+    },
+    {
+      "id": "DG3",
+      "class": "deterministic",
+      "severity": "blocking",
+      "pattern": "evidence locator grounding",
+      "description": "Every signal evidence speaker is present and copies one transcript speaker label verbatim.",
+      "enforcement": "Engine-enforced.",
+      "selector": "$.communication_signals[*].evidence.speaker",
+      "operator": "each_in",
+      "allow_null": false,
+      "allowed": [
+        "Villanueva, Rosa",
+        "Marchetti, Dara (Contractor)",
+        "Okonjo, Femi (Contractor)"
+      ]
+    },
+    {
+      "id": "DG4",
+      "class": "deterministic",
+      "severity": "blocking",
+      "pattern": "evidence locator grounding",
+      "description": "Every non-null signal evidence timestamp copies one normalized transcript turn timestamp verbatim. A null timestamp is valid.",
+      "enforcement": "Engine-enforced.",
+      "selector": "$.communication_signals[*].evidence.timestamp",
+      "operator": "each_in",
+      "allow_null": true,
+      "allowed": [
+        "00:03", "00:09", "00:16", "00:22", "00:31", "00:38", "00:44", "00:49",
+        "00:56", "01:06", "01:14", "01:20", "01:27", "01:31", "01:40", "01:46",
+        "01:55", "02:01", "02:09", "02:16", "02:21", "02:27", "02:31", "02:37",
+        "02:43", "02:51", "02:57", "03:03", "03:10", "03:17", "03:23", "03:31",
+        "03:37", "03:42", "03:49", "03:54"
+      ]
+    },
+    {
+      "id": "DG5",
+      "class": "deterministic",
+      "severity": "blocking",
+      "pattern": "evidence locator grounding",
+      "description": "No signal carries a null evidence speaker. Display-oriented `stakeholder_name` is never substituted for a missing speaker.",
+      "enforcement": "Engine-enforced. `ProviderSignal` has no `audience_id` or `audience_name` fields — those exist only on the engine-enriched `SignalRecord` — so on the provider response shape every signal is person-directed and the evidence speaker is unconditionally required. The contract's person-directed qualifier is preserved deliberately, but it is unreachable here.",
+      "selector": "$.communication_signals[*].evidence.speaker",
+      "operator": "each_matches",
+      "allow_null": false,
+      "patterns": ["\\S"]
+    },
+    {
+      "id": "DG6",
+      "class": "deterministic",
+      "severity": "blocking",
+      "pattern": "engine enforcement",
+      "description": "The side-effect-free preflight accepts the response, proving every supplied raw label and signal locator passes deterministic grounding validation.",
+      "operator": "cli_exit_code",
+      "command": "meeting-ingest validate-response RESPONSE --source SOURCE --json",
+      "expected_exit_code": 0,
+      "expected_fields": {
+        "status": "success",
+        "provider_response.status": "valid"
+      }
+    },
+    {
+      "id": "S1",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 1,
+      "pattern": "night-context time",
+      "description": "The 10:06 run is the last run of the night. It is rendered bare, or as PM/night, never as AM or morning.",
+      "selector": "$..*",
+      "value_type": "string",
+      "operator": "none_match",
+      "patterns": [
+        "10:06\\s*(?:a\\.?\\s*m\\.?)\\b",
+        "10:06[^.]{0,60}\\bmorning\\b",
+        "\\bmorning\\b[^.]{0,60}10:06"
+      ],
+      "regex_flags": "i",
+      "accepted_forms": ["10:06", "10:06 PM", "10:06 at night", "the last nightly run"]
+    },
+    {
+      "id": "S2",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 1,
+      "pattern": "night-context time",
+      "description": "Positive control for S1. The nightly run is actually represented, so dropping the time context entirely is not a pass.",
+      "selector": "$..*",
+      "value_type": "string",
+      "operator": "any_matches",
+      "patterns": [
+        "10:06",
+        "\\blast (?:run|pass) of the night\\b",
+        "\\blast nightly (?:run|pass)\\b",
+        "\\bfinal nightly (?:run|pass)\\b"
+      ],
+      "regex_flags": "i",
+      "companion_assertion": "S1"
+    },
+    {
+      "id": "S3",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 2,
+      "pattern": "unconfirmed root cause",
+      "description": "No section states a confirmed cause for the merge abort. The archival-sweep overlap is a stated guess in the transcript and may only appear as a hypothesis.",
+      "selector": "$..*",
+      "value_type": "string",
+      "operator": "none_match",
+      "patterns": [
+        "\\bcaused by\\b",
+        "\\btraced to\\b",
+        "\\broot[- ]caused\\b",
+        "\\broot cause (?:is|was) (?:the|an?) \\b",
+        "\\b(?:the )?archival sweep (?:caused|triggered|led to|was responsible)\\b",
+        "\\bdue to the archival sweep\\b"
+      ],
+      "regex_flags": "i"
+    },
+    {
+      "id": "S4",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 2,
+      "pattern": "unconfirmed root cause",
+      "description": "The TL;DR states that root cause is unconfirmed rather than omitting the uncertainty.",
+      "selector": "$.tl_dr",
+      "operator": "any_matches",
+      "patterns": [
+        "\\bunconfirmed\\b",
+        "\\bnot (?:yet )?confirmed\\b",
+        "\\bunknown\\b",
+        "\\bstill open\\b",
+        "\\bremains open\\b",
+        "\\bhypothes(?:is|ised|ized)\\b",
+        "\\bunder investigation\\b"
+      ],
+      "regex_flags": "i"
+    },
+    {
+      "id": "S5",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 4,
+      "pattern": "rejected redesign",
+      "description": "The rejected loader split never becomes an open action.",
+      "selector": "$.action_items[*].action",
+      "operator": "none_match",
+      "patterns": [
+        "\\bsplit(?:ting)? the loader\\b",
+        "\\bsplit the (?:extract|merge)\\b",
+        "\\btwo (?:staged|separate) jobs\\b",
+        "\\b(?:merge|extract) (?:in)?to its own job\\b",
+        "\\bre-?architect(?:ure)? the loader\\b",
+        "\\brewrite the loader\\b"
+      ],
+      "regex_flags": "i"
+    },
+    {
+      "id": "S6",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 3,
+      "pattern": "rejected redesign",
+      "description": "Where the loader split does appear, it appears as rejected or parked context, never as an adopted decision or a live commitment.",
+      "selector": [
+        "$.decisions[*].decision",
+        "$.topics[*].summary",
+        "$.dependencies_risks[*].description",
+        "$.open_questions[*].question",
+        "$.stakeholder_asks[*].ask"
+      ],
+      "operator": "each_matching_also_matches",
+      "when_patterns": [
+        "\\bsplit(?:ting)? the loader\\b",
+        "\\bsplit the (?:extract|merge)\\b",
+        "\\btwo (?:staged|separate) jobs\\b",
+        "\\bre-?architect(?:ure)? the loader\\b",
+        "\\brewrite the loader\\b"
+      ],
+      "require_patterns": [
+        "\\breject(?:ed|s)?\\b",
+        "\\bdeclin(?:ed|es)\\b",
+        "\\bnot feasible\\b",
+        "\\binfeasible\\b",
+        "\\bpark(?:ed|ing)\\b",
+        "\\bdeferred?\\b",
+        "\\bwill not\\b",
+        "\\bno capacity\\b",
+        "\\bfrozen\\b"
+      ],
+      "regex_flags": "i"
+    },
+    {
+      "id": "S7",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 3,
+      "pattern": "rejected redesign",
+      "description": "Positive control for rule 3. Femi's accepted investigation — pulling lock waits from the Beacon logs — is recorded as an action, so passing S5 by omitting all actions is not a pass. Deliberately not satisfiable by alerting or timeout wording; S8 covers the other accepted action independently.",
+      "selector": "$.action_items[*].action",
+      "operator": "any_matches",
+      "patterns": [
+        "\\block wait",
+        "\\bBeacon log",
+        "\\bpull[^.]{0,40}\\blogs?\\b",
+        "\\blog pull\\b"
+      ],
+      "regex_flags": "i"
+    },
+    {
+      "id": "S8",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 3,
+      "pattern": "rejected redesign",
+      "description": "Positive control for rule 3. Rosa's accepted alerting change is recorded as an action. Rosa accepted the alerting change only and excluded loader logic, so a bare timeout-increase action does not satisfy this assertion.",
+      "selector": "$.action_items[*].action",
+      "operator": "any_matches",
+      "patterns": ["\\balert"],
+      "regex_flags": "i"
+    },
+    {
+      "id": "S9",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 5,
+      "pattern": "ambiguous nickname",
+      "description": "The nickname `Ro` is never merged into an attendee's identity. No attendee display name claims that alias. Role context is deliberately unrestricted so that a reviewer-facing disclaimer of the ambiguity remains allowed.",
+      "selector": "$.attendees[*].display_name",
+      "operator": "none_match",
+      "patterns": ["\\bRo\\b"]
+    },
+    {
+      "id": "S10",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 5,
+      "pattern": "ambiguous nickname",
+      "description": "Any signal carrying `Ro` in an identity-bearing field keeps the identity unresolved by scoring it low confidence. Inference level is unconstrained: Femi's report about Ro is explicit transcript speech, so an explicit inference level is correct.",
+      "selector": "$.communication_signals[*]",
+      "operator": "record_conditional",
+      "when": {
+        "fields": ["stakeholder_name", "summary", "evidence.text"],
+        "patterns": ["\\bRo\\b"]
+      },
+      "require": [{"field": "confidence", "one_of": ["low"]}]
+    },
+    {
+      "id": "S11",
+      "class": "semantic",
+      "severity": "advisory",
+      "guidance_rule": 5,
+      "pattern": "ambiguous nickname",
+      "description": "Preferred handling: the unresolved attribution survives as an open question rather than being dropped silently.",
+      "selector": "$.open_questions[*].question",
+      "operator": "any_matches",
+      "patterns": ["\\bRo\\b", "\\bwho (?:filed|posted|reported)\\b", "\\battribution\\b"],
+      "regex_flags": "i"
+    },
+    {
+      "id": "S12",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 6,
+      "pattern": "TL;DR consistency",
+      "description": "If the detail sections keep root cause open, the TL;DR must not narrate a settled cause. Only causal-closure language is forbidden: a truthful statement that the partial staging rows were resolved by the manual retry is correct and must pass.",
+      "operator": "cross_implies",
+      "when": {
+        "selector": ["$.open_questions[*].question", "$.dependencies_risks[*].description"],
+        "operator": "any_matches",
+        "patterns": ["\\broot cause\\b", "\\block\\b"],
+        "regex_flags": "i"
+      },
+      "then": {
+        "selector": "$.tl_dr",
+        "operator": "none_match",
+        "patterns": [
+          "\\bcaused by\\b",
+          "\\btraced to\\b",
+          "\\broot[- ]caused\\b",
+          "\\broot cause (?:is|was) (?:the|an?) \\b",
+          "\\broot cause[^.]{0,30}\\b(?:identified|confirmed|resolved|closed)\\b",
+          "\\b(?:the )?archival sweep (?:caused|triggered|led to|was responsible)\\b"
+        ],
+        "regex_flags": "i"
+      }
+    },
+    {
+      "id": "S13",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 6,
+      "pattern": "TL;DR consistency",
+      "description": "If the TL;DR mentions the loader split at all, it must mark it rejected or parked, matching the detail sections.",
+      "operator": "cross_implies",
+      "when": {
+        "selector": "$.tl_dr",
+        "operator": "any_matches",
+        "patterns": ["\\bsplit\\b", "\\bre-?architect", "\\brewrite\\b"],
+        "regex_flags": "i"
+      },
+      "then": {
+        "selector": "$.tl_dr",
+        "operator": "any_matches",
+        "patterns": ["\\breject", "\\bpark", "\\bnot feasible\\b", "\\binfeasible\\b", "\\bdeferred?\\b", "\\bdeclin"],
+        "regex_flags": "i"
+      }
+    }
+  ]
+}

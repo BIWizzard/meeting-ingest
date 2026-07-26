@@ -1,0 +1,145 @@
+WEBVTT
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/1-0
+00:00:03.400 --> 00:00:08.960
+<v Villanueva, Rosa>Let's start with last night. The Lantern nightly load did not finish clean.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/2-0
+00:00:09.500 --> 00:00:16.240
+<v Marchetti, Dara (Contractor)>Right. The orchid_ledger_daily job aborted at the merge step and left the staging table half written.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/3-0
+00:00:16.800 --> 00:00:22.100
+<v Villanueva, Rosa>Which run was that? We have three scheduled passes and I want the exact one.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/4-0
+00:00:22.640 --> 00:00:30.880
+<v Marchetti, Dara (Contractor)>The 10:06 pass. That is the last run of the night on the Beacon schedule, so nothing after it picks up the gap.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/5-0
+00:00:31.400 --> 00:00:38.020
+<v Okonjo, Femi (Contractor)>I kicked a manual retry a bit before midnight and it cleared, but that was me, not the scheduler.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/6-0
+00:00:38.560 --> 00:00:43.900
+<v Villanueva, Rosa>So the automated window ended at the 10:06 pass and everything after it was hand-run.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/7-0
+00:00:44.400 --> 00:00:48.720
+<v Marchetti, Dara (Contractor)>Correct. There is no second automated attempt after that one.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/8-0
+00:00:49.300 --> 00:00:55.640
+<v Villanueva, Rosa>Do we know why it aborted? I do not want to write this up as understood if it is not.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/9-0
+00:00:56.200 --> 00:01:05.480
+<v Okonjo, Femi (Contractor)>We do not. What we can see is that the merge step timed out waiting on a lock. Why the lock was held that long is still open.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/10-0
+00:01:06.000 --> 00:01:13.760
+<v Marchetti, Dara (Contractor)>My guess is the archival sweep overlapping the load window. That is a guess. I have not confirmed it and the timings do not line up cleanly.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/11-0
+00:01:14.300 --> 00:01:20.180
+<v Villanueva, Rosa>Then it stays a hypothesis in the notes. Root cause is unconfirmed until someone proves it.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/12-0
+00:01:20.700 --> 00:01:26.440
+<v Okonjo, Femi (Contractor)>Agreed. I will pull the lock waits from the Beacon logs for the last two weeks and bring numbers.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/13-0
+00:01:27.000 --> 00:01:30.520
+<v Villanueva, Rosa>Good. That one is yours, Femi. Bring it to Thursday's sync.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/14-0
+00:01:31.100 --> 00:01:39.880
+<v Okonjo, Femi (Contractor)>While we are here, I think the real fix is to split the loader. Stage the extract into its own job, then run the merge as a second job with its own retry policy.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/15-0
+00:01:40.400 --> 00:01:45.960
+<v Marchetti, Dara (Contractor)>That is a rewrite of the whole loader. We cannot do that inside the close window.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/16-0
+00:01:46.500 --> 00:01:55.240
+<v Villanueva, Rosa>No. That is not feasible. The loader is frozen until the quarter close ships and my team has no capacity to re-certify it before then.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/17-0
+00:01:55.800 --> 00:02:01.360
+<v Okonjo, Femi (Contractor)>Understood. I am not going to push it. Parking the split.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/18-0
+00:02:01.900 --> 00:02:08.640
+<v Villanueva, Rosa>Park it. If we still have lock timeouts after close we can revisit, but nobody is starting that work now.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/19-0
+00:02:09.200 --> 00:02:15.480
+<v Marchetti, Dara (Contractor)>The narrower thing we can do is raise the merge timeout and add an alert when the wait crosses a threshold.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/20-0
+00:02:16.000 --> 00:02:20.720
+<v Villanueva, Rosa>That I will take. Alerting change only, no loader logic. I will have it by Friday.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/21-0
+00:02:21.300 --> 00:02:26.840
+<v Okonjo, Femi (Contractor)>Fine. One more thing, Ro flagged something like this last week in the channel.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/22-0
+00:02:27.400 --> 00:02:30.960
+<v Marchetti, Dara (Contractor)>Ro? I did not see that thread.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/23-0
+00:02:31.500 --> 00:02:37.240
+<v Okonjo, Femi (Contractor)>He posted a screenshot of a stuck merge. Same shape, different table.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/24-0
+00:02:37.800 --> 00:02:42.480
+<v Villanueva, Rosa>He? I thought you meant me for a second. I have not posted anything about merges.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/25-0
+00:02:43.000 --> 00:02:50.760
+<v Okonjo, Femi (Contractor)>Sorry, no. Ro is on the platform rota. He is out until Thursday, so I could not ask him before this call.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/26-0
+00:02:51.300 --> 00:02:56.880
+<v Marchetti, Dara (Contractor)>I have seen Ro used for two different people in that channel. I would not assume.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/27-0
+00:02:57.400 --> 00:03:03.120
+<v Okonjo, Femi (Contractor)>Fair. I will check who actually filed it before we attach a name to anything.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/28-0
+00:03:03.700 --> 00:03:09.440
+<v Villanueva, Rosa>Leave the name out of the write-up until that is confirmed. Just say a related report exists.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/29-0
+00:03:10.000 --> 00:03:16.680
+<v Marchetti, Dara (Contractor)>On the data itself, the half-written staging rows were cleaned by the retry, so downstream is consistent this morning.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/30-0
+00:03:17.200 --> 00:03:22.960
+<v Villanueva, Rosa>Did anything consume the partial state before the retry finished?</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/31-0
+00:03:23.500 --> 00:03:31.240
+<v Okonjo, Femi (Contractor)>The reporting extract runs after the nightly window, so probably not, but I have not verified it against yesterday's extract log.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/32-0
+00:03:31.800 --> 00:03:36.520
+<v Villanueva, Rosa>Then that is open too. Do not tell me it was unaffected until you have looked.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/33-0
+00:03:37.100 --> 00:03:41.880
+<v Okonjo, Femi (Contractor)>I will fold it into the log pull. Same Thursday deadline.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/34-0
+00:03:42.400 --> 00:03:49.160
+<v Villanueva, Rosa>So: alerting change is mine by Friday, lock and extract investigation is Femi's by Thursday, loader split is parked.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/35-0
+00:03:49.700 --> 00:03:53.440
+<v Marchetti, Dara (Contractor)>That matches what I have. Nothing else from me.</v>
+
+3c1f6a92-7d40-4b19-9e2a-51c8ab77e410/36-0
+00:03:54.000 --> 00:03:57.320
+<v Villanueva, Rosa>Then we are done. Thanks both.</v>
