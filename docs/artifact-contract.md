@@ -341,6 +341,7 @@ Rules:
 - Durable placement always records the value bound at extraction time, never whichever guidance version happens to be current at read time.
 - These durable records survive successful handoff cleanup. Deleting a completed request/response pair must not erase which rules shaped the output.
 - The field is additive to the existing artifact `1.1`, run-summary `1.1`, and ledger `2.0` shapes. Records written before it existed remain legacy-readable and are never rewritten merely to add it, but no current write may omit it. A path with no semantic guidance records `"none"` rather than leaving the field absent.
+- A persisted request carries all three of `semantic_guidance_version`, `semantic_guidance_rules`, and `transcript_grounding` or none of them; a partial set is rejected. A request missing all three binds `"legacy"`, so a request whose fields were removed is indistinguishable in the durable record from a handoff minted before the fields existed. Whether that distinction should be recoverable is an open question in `CURRENT-QUESTIONS.md`. Grounding integrity is unaffected either way: both full gates re-index the persisted transcript and never rely on request-supplied grounding metadata.
 
 Front-matter placement:
 
@@ -360,6 +361,36 @@ Both validators run in both places, and neither short-circuits the other. Struct
 Phase 2 repeats the same validation under the project lock, after request/response identity binding and before any durable write. Preflight success is not a substitute for it. A response that bypasses preflight and fails grounding records the existing typed provider-validation failure, leaves the source actionable, and retains the request/response pair for correction.
 
 Direct providers validate the same grounding index in process before durable writes. Session providers additionally verify the persisted request's grounding metadata and the echoed guidance version.
+
+### Pre-ingest correction loop
+
+A deterministic validation failure is a correction loop over the retained handoff, not a recovery problem. It occurs entirely before durable primary output exists.
+
+Rules:
+
+- A failing preflight or phase 2 retains both the persisted request and the provider response. Neither file is consumed or cleaned up on failure. The source stays where it is and remains actionable, and handoff cleanup happens only after a successful run completes.
+- Failed grounding never writes or partially replaces durable primary output. Both full gates run before signal writes, markdown writes, ledger success snapshots, archive, reconcile, and provider-cache cleanup, so a rejected response can never leave a half-written artifact set for correction to repair. The only durable record a failure writes is the failure snapshot below.
+- A phase-2 provider or validation failure appends an `ingest_failed` snapshot. That snapshot records the attempt; it is not a partial artifact, and it does not reserve, occupy, or supersede an artifact path. A `runtime_handoff_mismatch` is the single exception: it writes no failure snapshot, so the original handoff stays recoverable under its bound runtime.
+- One validation pass over parsed provider output reports every independently detectable shape and grounding issue together in `errors[0].details.issues`. A grounding failure additionally reports `details.allowed_transcript_grounding`, the exact speaker labels and timestamps the normalized transcript supports, so the correction does not have to be guessed.
+- Only the provider response may be rewritten. The persisted request is engine-written evidence: `validate-response` and phase 2 each recheck its runtime provenance fingerprint, transcript hash, grounding metadata, guidance binding, and identity fields against the response. Editing it therefore either fails those rechecks or silently moves the grounding truth the response is judged against, and neither outcome is a correction. A genuinely stale request requires a fresh phase 1, never an edit.
+- The retry is the same two steps against the same persisted request: re-run `validate-response`, then re-run phase 2.
+- Payload decoding is a precondition of the merged correction set rather than a member of it. A response whose fields are absent or wrongly typed cannot be parsed into a response object. Pre-screened decoding issues aggregate into one list and shapes that are not pre-screened raise a single parse error; either reports before shape and grounding validation run.
+- These checks bound provider output against the persisted transcript. They do not establish authority over the host filesystem.
+
+Two open questions bear on this loop without changing the rules above and are recorded in `CURRENT-QUESTIONS.md`: whether the persisted `normalized_transcript` should be self-authenticating against a host that can rewrite it, and whether payload-decoding failures should join the single merged correction set.
+
+### Post-ingest semantic correction
+
+A semantic defect found in an already-ingested artifact is not correctable in place.
+
+Rules:
+
+- Generated markdown, the signal JSONL set, and the ledger's current state are bound to each other by fingerprints, producer links, and recorded provenance. A change to one surface that the ledger does not record leaves the others describing output that no longer exists, and downstream derivations then rebuild against a record that no longer matches the artifacts.
+- The contracted path is `Regeneration Contract` in this document, with signal identity and supersession governed by `Signal Regeneration And Supersession`. That contract is frozen and unimplemented. It replaces the selected mode's artifact atomically, refreshes the signal file when the regeneration path produces new signals, records the current and prior signal-set fingerprints, and resolves downstream effects through supersession, playbook rebuild reporting, and `doctor` checks rather than through simultaneous rewrites. Semantic correction of ingested output is a regeneration of the affected mode from `_processed/`; no second semantic-correction design exists, and none may be introduced.
+- Manual edits to generated markdown or signal JSONL are not a correction mechanism and are not an interim workaround. A hand-edited artifact still carries the ledger provenance, fingerprints, producer links, and bound `semantic_guidance_version` of the output it replaced, which converts a reviewed semantic defect into an untraceable one.
+- Until the mutability policy is approved and regeneration is implemented, a reviewed semantic defect in existing output stays recorded as evidence and the output stays as generated.
+- The existing HTV and Spelman artifacts are read-only. Their reviewed defects are dogfood evidence. This document authorizes no correction, regeneration, adoption, or mutation of them; that requires a deterministic, fingerprinted adoption plan and separate owner approval under North Star board record 002, OB-002-1.
+- Whether generated Markdown may be mutated at all, and under what semantic-regeneration policy, is an open owner decision held by record 002 under "Other Later Decisions" and tracked in `CURRENT-QUESTIONS.md`. This document specifies the mechanism; it does not authorize its use.
 
 ## Identity
 

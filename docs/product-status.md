@@ -108,6 +108,28 @@ Available behavior:
 - `ingest-inbox --provider session` creates batch phase-1 handoffs
 - `session-inbox` scans existing handoffs, completes ready responses, avoids reminting duplicate requests after interruption, and reports pending/stale/invalid states
 
+### Pre-Ingest Correction After A Failed Validation
+
+Use when deterministic validation rejects a provider response, before any durable primary output exists.
+
+Available behavior:
+
+- `validate-response` reports every shape and grounding issue in the parsed provider output as one list, and writes nothing
+- a failing preflight or phase 2 retains the persisted request and the provider response
+- grounding failures report the exact speaker labels and timestamps the transcript supports
+- the correction is a rewrite of the provider response only; the persisted request is reused unchanged
+- the retry is the same two steps: re-run `validate-response`, then re-run phase 2
+- a phase-2 provider or validation failure appends an `ingest_failed` snapshot and produces no markdown, signals, archive, or reconcile state
+
+Boundaries:
+
+- failed grounding never writes or partially replaces durable primary output, so there is no partial-write repair to perform; the failure snapshot is the only durable record it writes
+- a `runtime_handoff_mismatch` deliberately writes no failure snapshot, so the handoff stays recoverable under its bound runtime
+- payload-decoding failures report before shape and grounding validation, so a badly typed response surfaces grounding issues only on the next attempt
+- editing the persisted request is not a correction path; a genuinely stale request requires a fresh phase 1
+- a semantic defect discovered after a successful ingest has no available correction path today; see Layer 2 in Roadmap Accounting
+- open questions recorded against this loop are 17 (self-authenticating persisted transcript) and 19 (payload-decoding aggregation) in `CURRENT-QUESTIONS.md`
+
 ### Project Hygiene And Recovery
 
 Use when the user wants to know if the meetings root is healthy.
@@ -296,6 +318,27 @@ Remaining:
 - implement artifact regeneration from `_processed/`
 - support multiple mode artifacts for one source hash
 - add renderer golden tests for all modes
+
+Correction of already-ingested output: not available.
+
+Semantic correction of ingested output requires the contracted regeneration path, because generated markdown, the signal JSONL set, and the ledger's current state are bound to each other by fingerprints, producer links, and recorded provenance. The mechanism is frozen in the `Regeneration Contract` and `Signal Regeneration And Supersession` sections of `docs/artifact-contract.md` and is not implemented; no second semantic-correction design exists.
+
+Manual edits to generated markdown or signal JSONL are not a correction mechanism and are not an interim workaround. A hand-edited artifact still carries the ledger provenance, fingerprints, producer links, and bound `semantic_guidance_version` of the output it replaced.
+
+Existing HTV and Spelman artifacts remain read-only. Their reviewed defects remain dogfood evidence until a deterministic, fingerprinted adoption or correction plan receives separate owner approval under North Star board record 002, OB-002-1. Whether generated Markdown may be mutated at all is an open owner decision held by record 002 under "Other Later Decisions" and tracked as question 16 in `CURRENT-QUESTIONS.md`.
+
+Approval-gated follow-on slice — implement `regenerate --provider session`:
+
+This is the only contracted path to semantic correction of already-ingested output. It is a separate follow-on slice, not part of the current guardrails work, and it does not start until the owner approves both the generated-Markdown mutability policy and client-corpus correction. Approval of the slice is not approval to run it against any existing corpus; that remains separately gated under OB-002-1.
+
+Its acceptance must cover the already-contracted behavior:
+
+- atomic replacement of the selected mode's artifact and any refreshed signal file, with no timestamped public replacement and no stub or redirect
+- a fresh phase-1 request bound to the new `ingest_run_id`, never a reused request/response pair, with phase 2 verifying it exactly as normal session ingest does
+- the source-ledger signal block recording the current signal-set fingerprint and the `artifact_regenerated` event recording the prior one
+- an append-only `artifact_regenerated` snapshot written after the regenerated markdown and any refreshed signal file are ready, preserving current ledger entries for all other modes
+- downstream supersession behavior: signal identity retention, explicit supersession when identity cannot be retained, playbook rebuild reporting of review events referencing absent observations, and `doctor` reporting of suppressed content re-emerging under a new signal ID
+- failure before the replacement artifact is ready leaves the current artifact as current state
 
 ### Layer 3: First-Class Session Inbox Automation
 

@@ -142,6 +142,9 @@ Why it matters:
 - agentic harnesses may run overlapping commands
 - append-only ledgers and filesystem artifacts need explicit recovery semantics
 
+Scope note:
+- this question owns the mechanics; whether generated output may be mutated at all is the policy half, tracked in question 16
+
 ### 8. What is the migration path from the existing Claude-first implementation?
 
 Need to decide:
@@ -337,6 +340,87 @@ Current stance:
 - public/social sources require a separate privacy, attribution, retention, and acceptable-use policy
 - all source kinds reuse generalized provenance while remaining distinguishable in artifacts, evidence, and privacy gates
 
+### 16. What is the approved policy for generated-Markdown mutability and semantic regeneration?
+
+Status: open owner decision. North Star board record 002 holds "Generated Markdown mutability policy" under "Other Later Decisions", and OB-002-1 defers any corpus adoption or correction to a deterministic, fingerprinted plan requiring separate owner approval.
+
+Need to decide:
+- whether generated markdown may be mutated at all after a successful ingest
+- what semantic defect severity, if any, justifies regenerating an existing artifact
+- whether regeneration of already-ingested output is allowed only for fresh output, only for reviewed client corpora under an approved plan, or both
+- what review or approval a regeneration run requires before it replaces current state
+- how a regenerated artifact must disclose that it supersedes reviewed prior output
+
+Why it matters:
+- pre-ingest correction is a bounded loop over a retained handoff, but a semantic defect discovered after ingest has no authorized repair path today
+- generated markdown, the signal JSONL set, and the ledger's current state are bound to each other by fingerprints, producer links, and recorded provenance, so mutability is a contract-level policy, not a convenience
+- the `regenerate` mechanism is already contracted and unimplemented; the missing input is permission, not design
+
+Relationship to 7a:
+- 7a owns the mechanical half — partial writes, regeneration, locking, and per-artifact status transitions
+- this question owns the policy half — whether generated output may be mutated at all, and on whose approval
+
+Current stance:
+- the mechanism is frozen in the `Regeneration Contract` section of `docs/artifact-contract.md`; no second semantic-correction design may be introduced
+- manual markdown or signal edits are not a correction mechanism and are not an interim workaround
+- existing HTV and Spelman artifacts remain read-only and their reviewed defects remain dogfood evidence
+- until the policy is approved, a reviewed semantic defect in existing output stays recorded as evidence and the output stays as generated
+
+### 17. Should the persisted `normalized_transcript` be self-authenticating?
+
+Status: open; raised by independent review of the grounding enforcement work.
+
+Observed behavior:
+- session grounding validates a provider response against a fresh index of the *persisted* request's `normalized_transcript`, deliberately never trusting request-supplied grounding metadata
+- the persisted request also carries the transcript hash and the grounding metadata, and the response echoes the transcript hash, but all of those live in host-writable files
+- a host that rewrites the persisted transcript together with its hash, its grounding metadata, and the response's echoed hash therefore grounds a response against a transcript of its own making; the route was reproduced during review
+
+Need to decide:
+- whether the persisted transcript should be bound by hash to something the host cannot rewrite
+- whether phase 2 should re-derive the normalized transcript from the archived source instead of trusting the persisted request
+- whether this belongs in the deterministic grounding contract at all, given that the checks bound provider output rather than host filesystem authority
+
+Why it matters:
+- the deterministic gates are the product's integrity claim, and their scope should be stated accurately
+- the reference host is also the operator in the maintainer-only alpha, so the practical exposure today is low and the contractual clarity matters more than the mitigation
+
+### 18. Should field-deleted requests be distinguishable from handoffs minted before the semantic fields existed?
+
+Status: open; consequence of a ratified decision, not a defect.
+
+Observed behavior:
+- `semantic_guidance_version`, `semantic_guidance_rules`, and `transcript_grounding` are additive fields on the schema-1.1 request with no schema bump, so a handoff minted before they existed is still schema 1.1
+- deleting all three from a persisted request is accepted as a legacy handoff, and the run binds `"legacy"` into durable artifact, run-summary, and ledger provenance
+- deleting only some of the three is rejected as incomplete semantic guidance metadata
+- with the request fields absent, the response must omit `semantic_guidance_version` or echo `"legacy"`; a response echoing a real version such as `"1.0"` is rejected as not matching the persisted request
+- grounding integrity is unaffected: both full gates re-index the persisted transcript, so field deletion cannot bypass the deterministic checks
+
+Need to decide:
+- whether the durable record should distinguish a handoff minted before the fields existed from one whose fields were removed
+- whether that distinction is worth a provenance value, a warning, or nothing at all
+
+Why it matters:
+- `semantic_guidance_version` exists so a deleted handoff never erases which rules shaped the output; a false `"legacy"` value weakens that record without weakening integrity
+- the additive-no-bump treatment is owner-ratified, so any answer must preserve legacy readability rather than reopen the schema decision
+
+### 19. Should payload decoding failures aggregate into the single correction set?
+
+Status: open; the current split was ruled a precondition, not a validator short-circuit.
+
+Observed behavior:
+- shape and grounding validation deliberately do not short-circuit each other; their issues merge into one `ProviderValidationError` so one correction pass can repair both
+- payload decoding runs earlier, when the response JSON is parsed into a response object, and reports before shape and grounding validation can run
+- pre-screened decoding issues accumulate into one list, but shapes the pre-screen does not cover raise a single parse error from the constructor, so a decoding failure is not always a complete correction set either
+- a response with absent or wrongly typed fields therefore reports decoding issues first and grounding issues only on the next attempt
+
+Need to decide:
+- whether decoding issues should join the merged correction set, or remain a stated precondition
+- if merged, how grounding validation should behave against a response object that could not be constructed
+
+Why it matters:
+- the correction loop's value is that one pass sees every issue, and a two-stage failure costs an extra round trip for a badly typed response
+- decoding is genuinely prior to validation, so merging must not require validating a half-parsed payload
+
 ## Already Decided
 
 - this repo stays focused on the ingestion engine
@@ -372,8 +456,11 @@ Current stance:
 - meeting artifact `1.1`, ledger `2.0`, signal `1.2`, run-summary/handoff `1.1`, and playbook `2.0` are the structural runtime-provenance cutover
 - session phase 1 and phase 2 must use exactly matching runtime and workflow provenance
 - no corpus adoption, repair, or generated-output mutation is authorized by the runtime cutover
+- deterministic validation failure retains the request/response pair, reports every shape and grounding issue in the parsed provider output at once, and is corrected by rewriting the provider response only
+- failed grounding never writes or partially replaces durable primary output; the `ingest_failed` snapshot is the only durable record a failure writes
+- semantic correction of already-ingested output requires the contracted regeneration path; manual markdown or signal edits are not a repair mechanism
 
-Runtime identity, approval, readiness verdicts, development override scope, handoff binding, and update behavior are closed Track 1 policy, now implemented and demonstrated complete as of 2026-07-24: the reference host runs an approved frozen wheel under a runtime pin and processed one fresh non-synthetic transcript end to end through one normal Claude Code request. The frozen shapes remain authoritative in `DECISIONS.md` and `docs/artifact-contract.md`; the demonstration is recorded in `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Demonstration does not claim semantic guardrails or qualified history. Remaining relevant questions are corpus class disposition under 8a and the bounded recovery/generated-output mutation questions under 7a; neither was resolved by mutating HTV or Spelman history during Track 1.
+Runtime identity, approval, readiness verdicts, development override scope, handoff binding, and update behavior are closed Track 1 policy, now implemented and demonstrated complete as of 2026-07-24: the reference host runs an approved frozen wheel under a runtime pin and processed one fresh non-synthetic transcript end to end through one normal Claude Code request. The frozen shapes remain authoritative in `DECISIONS.md` and `docs/artifact-contract.md`; the demonstration is recorded in `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Demonstration does not claim semantic guardrails or qualified history. Remaining relevant questions are corpus class disposition under 8a, the bounded recovery mechanics under 7a, and the generated-output mutability policy under 16; none was resolved by mutating HTV or Spelman history during Track 1.
 
 ## Not In Scope Right Now
 
