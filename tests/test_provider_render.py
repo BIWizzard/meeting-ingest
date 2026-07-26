@@ -245,37 +245,45 @@ def test_validate_provider_grounding_uses_empty_speaker_set_issues() -> None:
     ]
 
 
-def test_validate_provider_grounding_allows_null_speaker_for_group_directed_signal() -> None:
-    group_signal = SignalRecord(
-        signal_id="pending",
-        meeting_id="mtg-test",
-        ingest_run_id="ingest-test",
-        effective_at="2026-07-03",
-        recorded_at="2026-07-03T12:00:00Z",
-        signal_type="communication_behavior",
-        stakeholder_id=None,
-        stakeholder_name="Revenue Team",
-        summary="The group aligned.",
-        evidence=SignalEvidence(
-            kind="paraphrase",
-            text="The group aligned.",
-            speaker=None,
-        ),
-        inference_level="explicit",
-        confidence="high",
-        audience_id="group-revenue",
-        audience_name="Revenue Team",
-        schema_version="1.1",
+def test_provider_payload_cannot_claim_group_directed_null_speaker_exemption() -> None:
+    response = provider_response_from_payload(
+        {
+            "title": "Group signal",
+            "tl_dr": "Summary",
+            "meeting_type": "team-sync",
+            "attendees": [],
+            "topics": [],
+            "decisions": [],
+            "action_items": [],
+            "stakeholder_asks": [],
+            "dependencies_risks": [],
+            "communication_signals": [
+                {
+                    "signal_type": "communication_behavior",
+                    "stakeholder_id": None,
+                    "stakeholder_name": "Revenue Team",
+                    "summary": "The group aligned.",
+                    "evidence": {
+                        "kind": "paraphrase",
+                        "text": "The group aligned.",
+                        "speaker": None,
+                        "timestamp": None,
+                    },
+                    "inference_level": "explicit",
+                    "confidence": "high",
+                }
+            ],
+            "open_questions": [],
+            "cross_references": [],
+        }
     )
 
-    validate_provider_grounding(
-        ProviderResponse(
-            title="Group signal",
-            tl_dr="Summary",
-            communication_signals=[group_signal],
-        ),
-        TranscriptGrounding(("Ken",), ()),
-    )
+    with pytest.raises(ProviderValidationError) as caught:
+        validate_provider_grounding(response, TranscriptGrounding(("Ken",), ()))
+
+    assert caught.value.details["issues"] == [
+        "response.communication_signals[0].evidence.speaker is required for a person-directed meeting signal."
+    ]
 
 
 @pytest.mark.parametrize(

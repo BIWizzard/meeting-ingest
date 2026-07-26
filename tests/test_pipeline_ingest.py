@@ -36,7 +36,12 @@ from meeting_ingest.pipeline import ingest, ingest_inbox, provider_request, reco
 from meeting_ingest.provider_contract import response_contract_for_request
 from meeting_ingest.readiness import DevelopmentOverride
 from meeting_ingest.runtime import ReadinessFinding
-from meeting_ingest.schema import ProviderResponse
+from meeting_ingest.schema import (
+    ProviderResponse,
+    ProviderSignal,
+    ProviderValidationError,
+    SignalEvidence,
+)
 
 
 def test_pipeline_ingest_writes_mock_markdown_artifact(tmp_path: Path) -> None:
@@ -179,6 +184,60 @@ def test_pipeline_ingest_enriches_provider_signals_and_mirrors_markdown(tmp_path
         **producing_records[0]["signals"],
         "produced_in_this_record": False,
     }
+
+
+def test_pipeline_ingest_uses_evidence_speaker_for_stakeholder_name_raw(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-ken-signal.txt"
+    source.write_text("Ken: Please clarify the source.\n", encoding="utf-8")
+
+    class DifferingStakeholderProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            return ProviderResponse(
+                title="Ken Signal",
+                tl_dr="Ken asked for source clarity.",
+                communication_signals=[
+                    ProviderSignal(
+                        signal_type="explicit_ask",
+                        stakeholder_id="person-ken",
+                        stakeholder_name="Kenneth Graham",
+                        summary="Asked for source clarity.",
+                        evidence=SignalEvidence(
+                            kind="paraphrase",
+                            text="Asked for source clarity.",
+                            speaker="Ken",
+                        ),
+                        inference_level="explicit",
+                        confidence="high",
+                    )
+                ],
+            )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "get_provider",
+        lambda provider: DifferingStakeholderProvider(),
+    )
+
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+    signal = json.loads(
+        (paths.meetings_root / summary.artifacts[1]["path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert signal["stakeholder_name"] == "Kenneth Graham"
+    assert signal["evidence"]["speaker"] == "Ken"
+    assert signal["stakeholder_name_raw"] == "Ken"
 
 
 def test_development_override_ingest_persists_notice_and_escaped_reason(
@@ -618,6 +677,64 @@ def test_provider_validation_failure_records_ingest_failed_and_leaves_source_in_
     assert list(paths.meetings_root.glob("*.md")) == []
     assert [record["event"] for record in records] == ["ingest_failed"]
     assert records[-1]["meeting_id"] == "mtg-20260703-bf3b2898"
+    assert records[-1]["error"]["code"] == "invalid_provider_output"
+
+
+def test_provider_grounding_failure_records_ingest_failed_and_leaves_source_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = init_project(tmp_path)
+    source = paths.inbox / "2026-07-03-kushali-sync.txt"
+    source.write_text("Ken: Hello\nKushali: Hi\n", encoding="utf-8")
+
+    class GroundingInvalidProvider:
+        name = "mock"
+        model_id = "none"
+
+        def extract(self, request: object) -> ProviderResponse:
+            return ProviderResponse(
+                title="Kushali Sync",
+                tl_dr="The team checked in.",
+                communication_signals=[
+                    ProviderSignal(
+                        signal_type="explicit_ask",
+                        stakeholder_id=None,
+                        stakeholder_name="Kushali",
+                        summary="Asked a question.",
+                        evidence=SignalEvidence(
+                            kind="paraphrase",
+                            text="Asked a question.",
+                            speaker="Kushali (Contractor)",
+                        ),
+                        inference_level="explicit",
+                        confidence="high",
+                    )
+                ],
+            )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "get_provider",
+        lambda provider: GroundingInvalidProvider(),
+    )
+
+    with pytest.raises(ProviderValidationError) as exc:
+        ingest(
+            source,
+            start=paths.inbox,
+            clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+        )
+    records = read_records(paths.ledger)
+
+    assert exc.value.details["issues"] == [
+        "response.communication_signals[0].evidence.speaker must copy one normalized transcript speaker label verbatim."
+    ]
+    assert source.exists()
+    assert not (paths.inbox_done / source.name).exists()
+    assert list(paths.processed.iterdir()) == []
+    assert list(paths.meetings_root.glob("*.md")) == []
+    assert list(paths.signals.glob("*.jsonl")) == []
+    assert [record["event"] for record in records] == ["ingest_failed"]
     assert records[-1]["error"]["code"] == "invalid_provider_output"
 
 
@@ -2341,6 +2458,66 @@ def test_cli_validate_response_preflight_succeeds_without_side_effects(
     assert response_path.exists()
     assert source.exists()
     assert read_records(paths.ledger) == []
+
+
+def test_session_completion_rejects_grounding_invalid_response_without_preflight(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details[
+        "expected_response_path"
+    ]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    _write_session_response(
+        request_path,
+        response_path,
+        response_overrides={
+            "communication_signals": [
+                {
+                    "signal_type": "explicit_ask",
+                    "stakeholder_id": None,
+                    "stakeholder_name": "Ken",
+                    "summary": "Asked a question.",
+                    "evidence": {
+                        "kind": "paraphrase",
+                        "text": "Asked a question.",
+                        "speaker": "Ken (Contractor)",
+                        "timestamp": None,
+                    },
+                    "inference_level": "explicit",
+                    "confidence": "high",
+                }
+            ]
+        },
+    )
+
+    with pytest.raises(ProviderValidationError) as exc:
+        pipeline_module._complete_session_ingest_locked(
+            source,
+            provider_response=response_path,
+            paths=paths,
+            selected_mode="summary-plus-verbatim",
+            selected_quality="balanced",
+            current_runtime_provenance=request_payload["runtime_provenance"],
+            clock=FrozenClock(datetime(2026, 7, 3, 12, 5, tzinfo=UTC)),
+        )
+    records = read_records(paths.ledger)
+
+    assert exc.value.details["issues"] == [
+        "response.communication_signals[0].evidence.speaker must copy one normalized transcript speaker label verbatim."
+    ]
+    assert [record["event"] for record in records] == ["ingest_failed"]
+    assert records[-1]["error"]["code"] == "invalid_provider_output"
+    assert request_path.exists()
+    assert response_path.exists()
+    assert source.exists()
+    assert list(paths.meetings_root.glob("*.md")) == []
+    assert list(paths.signals.glob("*.jsonl")) == []
 
 
 def test_session_grounding_failure_retains_handoff_and_retry_reuses_request(
