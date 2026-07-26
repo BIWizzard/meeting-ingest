@@ -6,7 +6,14 @@ import pytest
 
 from meeting_ingest.errors import MeetingIngestError
 from meeting_ingest.ids import observation_identity_hash
-from meeting_ingest.schema import ProviderValidationError, SignalEvidence, SignalRecord
+from meeting_ingest.schema import (
+    ProviderResponse,
+    ProviderSignal,
+    ProviderValidationError,
+    SignalEvidence,
+    SignalRecord,
+    validate_provider_grounding,
+)
 from meeting_ingest.signals import (
     assign_deterministic_signal_ids,
     is_deprecated_signal_event_jsonl,
@@ -14,9 +21,50 @@ from meeting_ingest.signals import (
     signal_record_to_dict,
     write_signal_jsonl,
 )
+from meeting_ingest.transcript import TranscriptGrounding
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "signals"
+
+
+def test_meeting_provider_signal_requires_grounded_speaker_before_identity_enrichment() -> None:
+    signal = ProviderSignal(
+        signal_type="explicit_ask",
+        stakeholder_id="person-ken",
+        stakeholder_name="Ken (Contractor)",
+        summary="Asked a question.",
+        evidence=SignalEvidence(
+            kind="paraphrase",
+            text="Asked a question.",
+            speaker=None,
+        ),
+        inference_level="explicit",
+        confidence="high",
+    )
+
+    with pytest.raises(ProviderValidationError) as caught:
+        validate_provider_grounding(
+            ProviderResponse(
+                title="Signal",
+                tl_dr="Summary",
+                communication_signals=[signal],
+            ),
+            TranscriptGrounding(("Ken",), ()),
+        )
+
+    assert caught.value.details["issues"] == [
+        "response.communication_signals[0].evidence.speaker is required for a person-directed meeting signal."
+    ]
+
+    grounded = replace(signal, evidence=replace(signal.evidence, speaker="Ken"))
+    validate_provider_grounding(
+        ProviderResponse(
+            title="Signal",
+            tl_dr="Summary",
+            communication_signals=[grounded],
+        ),
+        TranscriptGrounding(("Ken",), ()),
+    )
 
 
 def test_write_signal_jsonl_uses_contract_record_shape(tmp_path: Path) -> None:

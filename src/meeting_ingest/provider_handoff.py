@@ -204,7 +204,6 @@ def _validate_request(payload: dict[str, Any]) -> None:
         _required_string(payload, field)
     _require(payload["output_mode"] in SUPPORTED_OUTPUT_MODES, "Persisted provider request output_mode is unsupported.")
     _require(payload["quality"] in SUPPORTED_QUALITIES, "Persisted provider request quality is unsupported.")
-    transcript = payload["normalized_transcript"]
     has_version = "semantic_guidance_version" in payload
     has_rules = "semantic_guidance_rules" in payload
     has_grounding = "transcript_grounding" in payload
@@ -225,14 +224,15 @@ def _validate_request(payload: dict[str, Any]) -> None:
         == list(PUBLISHED_SEMANTIC_GUIDANCE_RULES[version]),
         "Persisted provider request semantic_guidance_rules do not match semantic_guidance_version.",
     )
-    fresh_grounding = index_normalized_transcript(transcript)
-    persisted_grounding = _transcript_grounding_from_payload(
-        payload["transcript_grounding"]
-    )
-    _require(
-        persisted_grounding == fresh_grounding,
-        "provider request transcript_grounding does not match normalized_transcript.",
-    )
+    fresh_grounding = fresh_request_grounding(payload)
+    try:
+        persisted_grounding = _transcript_grounding_from_payload(
+            payload["transcript_grounding"]
+        )
+    except ProviderValidationError:
+        raise _request_grounding_mismatch(fresh_grounding) from None
+    if persisted_grounding != fresh_grounding:
+        raise _request_grounding_mismatch(fresh_grounding)
 
 
 def verify_session_handoff_runtime(
@@ -374,6 +374,29 @@ def _transcript_grounding_from_payload(value: object) -> TranscriptGrounding:
             "provider request transcript_grounding does not match normalized_transcript."
         )
     return TranscriptGrounding(tuple(speakers), tuple(timestamps))
+
+
+def fresh_request_grounding(request: dict[str, Any]) -> TranscriptGrounding:
+    """Index the persisted transcript; request metadata never supplies transcript truth."""
+    transcript = request.get("normalized_transcript")
+    if not isinstance(transcript, str):
+        raise ProviderValidationError(
+            "Persisted provider request normalized_transcript is missing or malformed."
+        )
+    return index_normalized_transcript(transcript)
+
+
+def _request_grounding_mismatch(
+    grounding: TranscriptGrounding,
+) -> ProviderValidationError:
+    error = ProviderValidationError(
+        "provider request transcript_grounding does not match normalized_transcript."
+    )
+    error.details["allowed_transcript_grounding"] = {
+        "speaker_labels": list(grounding.speaker_labels),
+        "timestamps": list(grounding.timestamps),
+    }
+    return error
 
 
 def _ingest_run_id_from_response_path(path: Path) -> str | None:

@@ -59,6 +59,10 @@ def _infer_attendees(transcript: str) -> list[Attendee]:
 def _mock_signals(transcript: str) -> list[ProviderSignal]:
     if "[mock-signal]" not in transcript:
         return []
+    grounding = index_normalized_transcript(transcript)
+    if not grounding.speaker_labels:
+        return []
+    evidence_speaker = grounding.speaker_labels[0]
     return [
         ProviderSignal(
             signal_type="explicit_ask",
@@ -68,7 +72,7 @@ def _mock_signals(transcript: str) -> list[ProviderSignal]:
             evidence=SignalEvidence(
                 kind="paraphrase",
                 text="The transcript fixture requested a mock signal.",
-                speaker="Kushali",
+                speaker=evidence_speaker,
             ),
             inference_level="explicit",
             confidence="high",

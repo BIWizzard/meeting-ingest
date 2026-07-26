@@ -9,14 +9,17 @@ from meeting_ingest.provider_json import provider_response_from_payload
 from meeting_ingest.providers.mock import MockProvider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.schema import (
+    Attendee,
     ProviderResponse,
     ProviderSignal,
     ProviderValidationError,
     SignalEvidence,
     SignalRecord,
     Topic,
+    validate_provider_grounding,
     validate_provider_response,
 )
+from meeting_ingest.transcript import TranscriptGrounding, index_normalized_transcript
 
 
 APPROVED_PROVENANCE = {
@@ -144,6 +147,181 @@ def test_validate_provider_response_accepts_lightweight_provider_signals() -> No
     )
 
     validate_provider_response(response)
+
+
+def test_validate_provider_grounding_aggregates_qualified_label_and_timestamp_issues() -> None:
+    grounding = TranscriptGrounding(
+        (
+            "Graham, Ken (Contractor)",
+            "Smith, Alex (Contractor)",
+            "Opeyemi, Baba",
+        ),
+        ("00:39", "1:02:03"),
+    )
+    response = ProviderResponse(
+        title="Grounding",
+        tl_dr="Summary",
+        attendees=[
+            Attendee(
+                person_id=None,
+                display_name="Baba",
+                raw_labels=["Opeyemi, Baba (Contractor)"],
+            )
+        ],
+        communication_signals=[
+            ProviderSignal(
+                signal_type="explicit_ask",
+                stakeholder_id=None,
+                stakeholder_name="Baba",
+                summary="Asked a question.",
+                evidence=SignalEvidence(
+                    kind="paraphrase",
+                    text="Asked a question.",
+                    speaker="Opeyemi, Baba (Contractor)",
+                    timestamp="00:40",
+                ),
+                inference_level="explicit",
+                confidence="high",
+            ),
+            ProviderSignal(
+                signal_type="risk_or_concern",
+                stakeholder_id=None,
+                stakeholder_name="Alex",
+                summary="Raised a concern.",
+                evidence=SignalEvidence(
+                    kind="paraphrase",
+                    text="Raised a concern.",
+                    speaker=None,
+                    timestamp="1:02:04",
+                ),
+                inference_level="explicit",
+                confidence="high",
+            ),
+        ],
+    )
+
+    with pytest.raises(ProviderValidationError) as caught:
+        validate_provider_grounding(response, grounding)
+
+    assert caught.value.details["issues"] == [
+        "response.attendees[0].raw_labels[0] must copy one normalized transcript speaker label verbatim.",
+        "response.communication_signals[0].evidence.speaker must copy one normalized transcript speaker label verbatim.",
+        "response.communication_signals[0].evidence.timestamp must copy one normalized transcript timestamp verbatim.",
+        "response.communication_signals[1].evidence.speaker is required for a person-directed meeting signal.",
+        "response.communication_signals[1].evidence.timestamp must copy one normalized transcript timestamp verbatim.",
+    ]
+    assert caught.value.details["allowed_transcript_grounding"] == {
+        "speaker_labels": list(grounding.speaker_labels),
+        "timestamps": list(grounding.timestamps),
+    }
+
+
+def test_validate_provider_grounding_uses_empty_speaker_set_issues() -> None:
+    response = ProviderResponse(
+        title="No speakers",
+        tl_dr="Summary",
+        attendees=[
+            Attendee(person_id=None, display_name="Unknown", raw_labels=["Invented"])
+        ],
+        communication_signals=[
+            ProviderSignal(
+                signal_type="explicit_ask",
+                stakeholder_id=None,
+                stakeholder_name="Unknown",
+                summary="Asked a question.",
+                evidence=SignalEvidence(kind="paraphrase", text="Asked a question."),
+                inference_level="explicit",
+                confidence="low",
+            )
+        ],
+    )
+
+    with pytest.raises(ProviderValidationError) as caught:
+        validate_provider_grounding(response, TranscriptGrounding((), ()))
+
+    assert caught.value.details["issues"] == [
+        "response.attendees[0].raw_labels must be empty because the normalized transcript has no parseable speaker labels.",
+        "response.communication_signals[0] must be omitted because the normalized transcript has no parseable speaker labels.",
+    ]
+
+
+def test_validate_provider_grounding_allows_null_speaker_for_group_directed_signal() -> None:
+    group_signal = SignalRecord(
+        signal_id="pending",
+        meeting_id="mtg-test",
+        ingest_run_id="ingest-test",
+        effective_at="2026-07-03",
+        recorded_at="2026-07-03T12:00:00Z",
+        signal_type="communication_behavior",
+        stakeholder_id=None,
+        stakeholder_name="Revenue Team",
+        summary="The group aligned.",
+        evidence=SignalEvidence(
+            kind="paraphrase",
+            text="The group aligned.",
+            speaker=None,
+        ),
+        inference_level="explicit",
+        confidence="high",
+        audience_id="group-revenue",
+        audience_name="Revenue Team",
+        schema_version="1.1",
+    )
+
+    validate_provider_grounding(
+        ProviderResponse(
+            title="Group signal",
+            tl_dr="Summary",
+            communication_signals=[group_signal],
+        ),
+        TranscriptGrounding(("Ken",), ()),
+    )
+
+
+@pytest.mark.parametrize(
+    ("transcript", "accepted_timestamp", "rejected_timestamp"),
+    [
+        ("**Ken** (00:39): First\n", "00:39", "00:40"),
+        ("**Ken** (1:02:03): First\n", "1:02:03", "02:03"),
+        (
+            "**Ken** (00:39): First, merged turn\n**Alex** (00:51): Reply\n",
+            "00:39",
+            "00:40",
+        ),
+    ],
+)
+def test_validate_provider_grounding_accepts_only_retained_normalized_timestamps(
+    transcript: str,
+    accepted_timestamp: str,
+    rejected_timestamp: str,
+) -> None:
+    grounding = index_normalized_transcript(transcript)
+
+    def response(timestamp: str) -> ProviderResponse:
+        return ProviderResponse(
+            title="Timestamp",
+            tl_dr="Summary",
+            communication_signals=[
+                ProviderSignal(
+                    signal_type="explicit_ask",
+                    stakeholder_id=None,
+                    stakeholder_name="Ken",
+                    summary="Asked.",
+                    evidence=SignalEvidence(
+                        kind="paraphrase",
+                        text="Asked.",
+                        speaker="Ken",
+                        timestamp=timestamp,
+                    ),
+                    inference_level="explicit",
+                    confidence="high",
+                )
+            ],
+        )
+
+    validate_provider_grounding(response(accepted_timestamp), grounding)
+    with pytest.raises(ProviderValidationError, match="timestamp"):
+        validate_provider_grounding(response(rejected_timestamp), grounding)
 
 
 def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcript() -> None:

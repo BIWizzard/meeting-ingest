@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import re
 
 from meeting_ingest.errors import MeetingIngestError
+from meeting_ingest.transcript import TranscriptGrounding
 
 
 SCHEMA_VERSION = "1.2"
@@ -270,6 +271,80 @@ def validate_provider_response(response: ProviderResponse) -> None:
         issues.extend(_provider_signal_issues(signal, prefix=f"communication_signals[{index}]."))
     if issues:
         raise ProviderValidationError.from_issues(issues)
+
+
+def validate_provider_grounding(
+    response: ProviderResponse,
+    grounding: TranscriptGrounding,
+) -> None:
+    """Validate provider source claims against exact normalized-transcript facts."""
+    issues: list[str] = []
+    allowed_speakers = set(grounding.speaker_labels)
+    allowed_timestamps = set(grounding.timestamps)
+
+    if not allowed_speakers:
+        for attendee_index, attendee in enumerate(response.attendees):
+            if attendee.raw_labels:
+                issues.append(
+                    f"response.attendees[{attendee_index}].raw_labels must be empty because "
+                    "the normalized transcript has no parseable speaker labels."
+                )
+        for signal_index, _signal in enumerate(response.communication_signals):
+            issues.append(
+                f"response.communication_signals[{signal_index}] must be omitted because "
+                "the normalized transcript has no parseable speaker labels."
+            )
+    else:
+        for attendee_index, attendee in enumerate(response.attendees):
+            for label_index, raw_label in enumerate(attendee.raw_labels):
+                if _normalized_grounding_value(raw_label) not in allowed_speakers:
+                    issues.append(
+                        f"response.attendees[{attendee_index}].raw_labels[{label_index}] "
+                        "must copy one normalized transcript speaker label verbatim."
+                    )
+        for signal_index, signal in enumerate(response.communication_signals):
+            evidence = signal.evidence
+            speaker = evidence.speaker
+            if speaker is not None:
+                if _normalized_grounding_value(speaker) not in allowed_speakers:
+                    issues.append(
+                        f"response.communication_signals[{signal_index}].evidence.speaker "
+                        "must copy one normalized transcript speaker label verbatim."
+                    )
+            elif _person_directed_provider_signal(signal):
+                issues.append(
+                    f"response.communication_signals[{signal_index}].evidence.speaker "
+                    "is required for a person-directed meeting signal."
+                )
+            if evidence.timestamp is not None and evidence.timestamp not in allowed_timestamps:
+                issues.append(
+                    f"response.communication_signals[{signal_index}].evidence.timestamp "
+                    "must copy one normalized transcript timestamp verbatim."
+                )
+
+    if issues:
+        error = ProviderValidationError.from_issues(issues)
+        error.details["allowed_transcript_grounding"] = {
+            "speaker_labels": list(grounding.speaker_labels),
+            "timestamps": list(grounding.timestamps),
+        }
+        raise error
+
+
+def _normalized_grounding_value(value: str) -> str:
+    return " ".join(value.split())
+
+
+def _person_directed_provider_signal(signal: ProviderSignal | SignalRecord) -> bool:
+    """Schema 1.1 group-directed signals carry both audience identity fields."""
+    audience_id = getattr(signal, "audience_id", None)
+    audience_name = getattr(signal, "audience_name", None)
+    return not (
+        isinstance(audience_id, str)
+        and audience_id.strip()
+        and isinstance(audience_name, str)
+        and audience_name.strip()
+    )
 
 
 def validate_render_response(response: ProviderResponse) -> None:

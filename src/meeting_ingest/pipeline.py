@@ -48,6 +48,7 @@ from meeting_ingest.provider_contract import PROVIDER_CONTRACT, response_contrac
 from meeting_ingest.provider_handoff import (
     SessionProviderEnvelope,
     cleanup_session_provider_files,
+    fresh_request_grounding,
     normalized_transcript_sha256,
     read_session_provider_envelope,
     request_for_missing_response,
@@ -71,6 +72,7 @@ from meeting_ingest.schema import (
     SignalSource,
     SignalTime,
     SignalTiming,
+    validate_provider_grounding,
     validate_provider_response,
 )
 from meeting_ingest.signals import (
@@ -100,6 +102,7 @@ class _PreparedExtraction:
     normalized_text: str
     source_format: str
     effective_date: _PreparedEffectiveDate
+    transcript_grounding: TranscriptGrounding
     duration: str | None = None
 
 
@@ -133,6 +136,31 @@ def _transcript_grounding_payload(
         "speaker_labels": list(grounding.speaker_labels),
         "timestamps": list(grounding.timestamps),
     }
+
+
+def _validate_provider_output(
+    response: ProviderResponse,
+    grounding: TranscriptGrounding,
+) -> None:
+    """Run shape and source validation independently, then report one correction set."""
+    issues: list[str] = []
+    allowed_grounding: dict[str, list[str]] | None = None
+    for validator in (
+        lambda: validate_provider_response(response),
+        lambda: validate_provider_grounding(response, grounding),
+    ):
+        try:
+            validator()
+        except ProviderValidationError as exc:
+            issues.extend(exc.details["issues"])
+            candidate = exc.details.get("allowed_transcript_grounding")
+            if isinstance(candidate, dict):
+                allowed_grounding = candidate
+    if issues:
+        error = ProviderValidationError.from_issues(issues)
+        if allowed_grounding is not None:
+            error.details["allowed_transcript_grounding"] = allowed_grounding
+        raise error
 
 
 def initialize(
@@ -259,7 +287,10 @@ def validate_response(
     except RuntimeHandoffMismatchError as exc:
         exc.details.setdefault("runtime_provenance", asdict(readiness.runtime_provenance))
         raise
-    validate_provider_response(envelope.response)
+    _validate_provider_output(
+        envelope.response,
+        fresh_request_grounding(envelope.request),
+    )
     runtime_blocked = readiness.verdict == "blocked"
     return with_runtime_provenance(RunSummary(
         status="blocked" if runtime_blocked else "success",
@@ -782,7 +813,7 @@ def _ingest_locked(
                 semantic_guidance_version=semantic_guidance_version,
             )
         )
-        validate_provider_response(provider_response)
+        _validate_provider_output(provider_response, transcript_grounding)
     except ProviderValidationError as exc:
         _record_source_failure(
             paths,
@@ -938,7 +969,10 @@ def _complete_session_ingest_locked(
             current_source_sha256=source_sha256,
             current_runtime_provenance=current_runtime_provenance,
         )
-        validate_provider_response(envelope.response)
+        _validate_provider_output(
+            envelope.response,
+            fresh_request_grounding(envelope.request),
+        )
     # Runtime mismatches must bypass the generic exception wrapper and failure-ledger
     # write below so the original handoff remains recoverable under its bound runtime.
     except RuntimeHandoffMismatchError:
@@ -1235,6 +1269,7 @@ def _prepared_ingest_from_session_request(
             confidence=str(request.get("date_confidence") or "unknown"),
             source=str(request.get("date_source") or "provider_request"),
         ),
+        transcript_grounding=fresh_request_grounding(request),
         duration=request.get("duration") if isinstance(request.get("duration"), str) else None,
     )
     return _PreparedIngest(
@@ -1907,7 +1942,7 @@ def _signal_records_from_provider(
                     signal_type=signal.signal_type,
                     stakeholder_id=signal.stakeholder_id,
                     stakeholder_name=signal.stakeholder_name,
-                    stakeholder_name_raw=signal.evidence.speaker or signal.stakeholder_name,
+                    stakeholder_name_raw=signal.evidence.speaker,
                     summary=signal.summary,
                     evidence=evidence,
                     inference_level=signal.inference_level,

@@ -2343,6 +2343,175 @@ def test_cli_validate_response_preflight_succeeds_without_side_effects(
     assert read_records(paths.ledger) == []
 
 
+def test_session_grounding_failure_retains_handoff_and_retry_reuses_request(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details[
+        "expected_response_path"
+    ]
+    invalid_signal = {
+        "signal_type": "explicit_ask",
+        "stakeholder_id": None,
+        "stakeholder_name": "Ken",
+        "summary": "Asked a question.",
+        "evidence": {
+            "kind": "paraphrase",
+            "text": "Asked a question.",
+            "speaker": "Ken (Contractor)",
+            "timestamp": "00:39",
+        },
+        "inference_level": "explicit",
+        "confidence": "high",
+    }
+    _write_session_response(
+        request_path,
+        response_path,
+        title="",
+        response_overrides={
+            "attendees": [
+                {
+                    "person_id": None,
+                    "display_name": "Ken",
+                    "raw_labels": ["Ken (Contractor)"],
+                }
+            ],
+            "communication_signals": [invalid_signal],
+        },
+    )
+
+    with pytest.raises(MeetingIngestError) as preflight:
+        pipeline_module.validate_response(
+            response_path,
+            source=source,
+            start=paths.inbox,
+        )
+
+    assert preflight.value.details["issues"] == [
+        "response.title is required.",
+        "response.attendees[0].raw_labels[0] must copy one normalized transcript speaker label verbatim.",
+        "response.communication_signals[0].evidence.speaker must copy one normalized transcript speaker label verbatim.",
+        "response.communication_signals[0].evidence.timestamp must copy one normalized transcript timestamp verbatim.",
+    ]
+    assert preflight.value.details["allowed_transcript_grounding"] == {
+        "speaker_labels": ["Ken"],
+        "timestamps": [],
+    }
+    assert read_records(paths.ledger) == []
+    assert request_path.exists() and response_path.exists() and source.exists()
+
+    with pytest.raises(MeetingIngestError):
+        ingest(
+            source,
+            start=paths.inbox,
+            provider="session",
+            provider_response=response_path,
+        )
+
+    assert [record["event"] for record in read_records(paths.ledger)] == [
+        "ingest_failed"
+    ]
+    assert request_path.exists() and response_path.exists() and source.exists()
+    assert list(paths.meetings_root.glob("*.md")) == []
+    assert list(paths.signals.glob("*.jsonl")) == []
+
+    _write_session_response(
+        request_path,
+        response_path,
+        response_overrides={
+            "attendees": [
+                {"person_id": None, "display_name": "Ken", "raw_labels": ["Ken"]}
+            ],
+            "communication_signals": [
+                {
+                    **invalid_signal,
+                    "evidence": {
+                        **invalid_signal["evidence"],
+                        "speaker": "Ken",
+                        "timestamp": None,
+                    },
+                }
+            ],
+        },
+    )
+    pipeline_module.validate_response(
+        response_path,
+        source=source,
+        start=paths.inbox,
+    )
+    summary = ingest(
+        source,
+        start=paths.inbox,
+        provider="session",
+        provider_response=response_path,
+    )
+
+    signal = json.loads(
+        (paths.meetings_root / summary.artifacts[1]["path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert summary.status == "success"
+    assert signal["stakeholder_name_raw"] == "Ken"
+    assert not request_path.exists()
+    assert not response_path.exists()
+
+
+def test_legacy_field_deletion_cannot_bypass_fresh_transcript_grounding(
+    tmp_path: Path,
+) -> None:
+    paths = init_project(tmp_path)
+    _allow_session_provider(paths.config_path)
+    source = paths.inbox / "2026-07-03-team-sync.txt"
+    source.write_text("Ken: Hello\n", encoding="utf-8")
+    request_summary = provider_request(source, start=paths.inbox)
+    request_path = paths.meetings_root / request_summary.details["request_path"]
+    response_path = paths.meetings_root / request_summary.details[
+        "expected_response_path"
+    ]
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    for field in (
+        "semantic_guidance_version",
+        "semantic_guidance_rules",
+        "transcript_grounding",
+    ):
+        request_payload.pop(field)
+    request_path.write_text(
+        json.dumps(request_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _write_session_response(
+        request_path,
+        response_path,
+        response_overrides={
+            "attendees": [
+                {
+                    "person_id": None,
+                    "display_name": "Ken",
+                    "raw_labels": ["Ken (Contractor)"],
+                }
+            ]
+        },
+    )
+
+    with pytest.raises(MeetingIngestError) as caught:
+        pipeline_module.validate_response(
+            response_path,
+            source=source,
+            start=paths.inbox,
+        )
+
+    assert caught.value.details["issues"] == [
+        "response.attendees[0].raw_labels[0] must copy one normalized transcript speaker label verbatim."
+    ]
+    assert request_path.exists() and response_path.exists()
+
+
 def test_cli_validate_response_rejects_runtime_mismatch_with_current_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
