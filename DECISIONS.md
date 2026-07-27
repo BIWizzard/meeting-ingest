@@ -372,6 +372,20 @@ No automatic second-model review is added to the ingest path. A judge call would
 
 Privacy boundary: dogfood findings may generate wholly synthetic fixtures with invented people and systems, and those fixtures may reproduce the observed defect patterns. Private corpus source text may not be copied, redacted in place, or committed as a fixture. Adding it would be corpus adoption, which requires a deterministic fingerprinted adoption plan and separate owner approval under OB-002-1. The existing HTV and Spelman artifacts remain read-only; their reviewed defects stay dogfood evidence, and this decision authorizes no correction, regeneration, or mutation of them.
 
+### 35. The manual release apparatus carries a sunset clause (2026-07-26)
+
+Owner dogfood feedback: the receipt/pin/explicit-update ceremony is not the product experience the owner wants for any consumer, including themself — "as the tool evolves, all consumers are updated; they just want it to work." The onus of proving build identity belongs to the system, never to a human; mature ecosystems run heavy verification (code signing, TLS, npm provenance) that users never see because it only surfaces on failure.
+
+The apparatus is therefore scaffolding for the trust-building phase, not the end state. It sunsets when all three exit criteria hold:
+
+1. **Maturity** — the Just Works Continuity milestone is met, including a release-evidence semantic acceptance PASS on an approved build.
+2. **Trust established** — three consecutive owner-approved releases ship through the flow with zero drift incidents.
+3. **Broadening** — the owner decides to take the tool beyond the maintainer-only private alpha.
+
+When the criteria are met, or the owner declares early intent to broaden, a distribution-transition plan convenes the board to amend record 002. The target end state is auto-updating package-manager delivery: consumers stay current as the tool evolves, attestation verification (the receipt's data, published and signed) runs invisibly inside the updater, and the system fails closed only on an actual verification failure. Whether client-work consumers retain any explicit-update posture is decided by that board convening, not presumed.
+
+Until the sunset fires, record 002's clauses stay binding, and the interim relief is mechanical, not contractual: the release flow collapses into a single maintainer command and consumer updates into a single verified command, keeping the explicit-action clause while removing the ceremony. The 2026-07-25 drift catch stays the benchmark for what the invisible check must preserve: refuse loudly when something is actually wrong, and otherwise stay silent.
+
 ## Working Assumptions
 
 - The deterministic parts of the current engine are worth preserving.

@@ -465,6 +465,17 @@ Remaining:
 - implement semantic clustering, contextual scope, contradiction confirmation, positive-response patterns, communication cues, and caveats
 - implement explicit review state for inferred guidance
 
+### Layer 5D: Distribution Transition (Sunset Of The Manual Release Apparatus)
+
+Status: not started; governed by Decision 35 in `DECISIONS.md`.
+
+The receipt/pin/explicit-update ceremony is trust-building scaffolding with a recorded sunset: when the Just Works Continuity milestone is met, three consecutive releases ship without a drift incident, and the owner decides to broaden beyond the maintainer-only alpha, a distribution-transition plan convenes the board to amend record 002. Target end state: auto-updating package-manager delivery with attestation verification running invisibly inside the updater, failing closed only on actual verification failure.
+
+Interim (no contract change required):
+
+- collapse the maintainer release flow into a single command wrapping build, receipt, publish, install, and repin
+- collapse consumer updates into a single verified update command wrapping fetch, verification, install, and repin
+
 ### Layer 6: Migration And Existing Corpus Adoption
 
 Status: not started.
