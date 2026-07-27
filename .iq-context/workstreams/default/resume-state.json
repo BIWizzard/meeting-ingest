@@ -3,10 +3,11 @@
   "remaining_tasks": [
     "Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal's text appears, fold in the dev run's B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.",
     "Release the guidance 1.1 slice through the owner-gated flow (approve exact commit, build, receipt, publish, install, repin) and run a fresh release-evidence acceptance on the frozen build with both required reviews.",
+    "Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class (HTV keeps fail-closed pins; general consumers get auto-updating distribution with invisible attestation verification) — the charter convening trigger is met and this amends record 002.",
     "Optionally implement the Layer 5D interim relief under the existing contract: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin.",
-    "Run the first HTV ingest on the new build g51ff17173bea per the owner trust ruling; the six 2026-07-25 meetings remain spot-check candidates.",
-    "Triage two engine observations from this session: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude, and runtime_provenance source_commit/source_tree_sha256 are null on a clean editable checkout."
+    "Spot-check extraction quality on the six 2026-07-25 HTV meetings and the 2026-07-24 retention-policy artifact from cap_20260727T134457Z once guidance 1.1 lands, using them to confirm the framing-restraint revisions.",
+    "Triage two engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude, and runtime_provenance source_commit/source_tree_sha256 are null on a clean editable checkout."
   ],
   "resume_from": "Resume with: Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal's text appears, fold in the dev run's B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.",
-  "updated_at": "2026-07-27T03:15:47.389Z"
+  "updated_at": "2026-07-27T22:59:58.140Z"
 }
