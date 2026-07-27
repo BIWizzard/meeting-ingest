@@ -240,9 +240,12 @@ Omit uncertain claims instead of inventing them.
 - Do not manually write ledger records.
 - Do not manually move files to `_processed/` or `_inbox/_done/`.
 - Do not reuse an old provider request for a new ingest attempt.
+- Do not hand-edit a generated artifact or signal file to correct a defect found after a successful ingest.
 - Do not run the deprecated `ingest_meeting` package.
 
 The `meeting-ingest` CLI owns final side effects.
+
+A grounding or shape failure before ingest is correctable: rewrite only the provider response using the reported issues, re-run `validate-response`, then re-run phase 2 against the same persisted request. No durable primary output exists yet at that point — the preflight has no side effects, and the only durable record a failed phase 2 writes is an `ingest_failed` snapshot. A semantic defect found after a successful ingest has no correction path today, because the contracted `regenerate` path is not implemented. Report it and leave the artifact, signals, and ledger untouched.
 
 ## Post-Ingest Capture
 

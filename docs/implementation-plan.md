@@ -68,7 +68,7 @@ Implementation must sequence the milestone as:
 
 1. Approved Runtime and Pre-Meeting Readiness — demonstrated complete 2026-07-24.
 2. Read-Only Power-User Corpus Reckoning — read-only reckoning complete; adoption approval-gated.
-3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is not started.
+3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is implemented, with acceptance so far recorded only as development evidence.
 4. Approval-Gated Historical Qualification and Continuity Proof — not started; approval-gated.
 
 The read-only corpus reckoning is complete. It does not authorize adoption or repair. No consumer-corpus mutation may occur until a deterministic, fingerprinted adoption plan is reviewed and separately approved.
@@ -118,6 +118,18 @@ Implementation order is mandatory:
 The shared write guard runs inside every public mutating pipeline/playbook entry point before locks or writes. Read-only runtime inspection, readiness, update check, `status`, `doctor`, and `validate-response` remain usable while blocked. Production cannot recognize a test environment through an environment variable; tests inject typed runtime evidence through fixtures.
 
 The current HTV corpus is not a Track 1 migration target. Runtime cutover may record read-only inventory and remove only the explicit editable `meeting-ingest` distribution after rollback evidence exists. It may not rewrite, adopt, regenerate, clean, or backfill meeting history.
+
+### Track 3 Semantic Integrity Guardrails
+
+The approved execution plan is `docs/plans/2026-07-20-semantic-integrity-guardrails.md`. The frozen shapes live in the `Provider Semantic Integrity Contract` section of `docs/artifact-contract.md` and in `docs/provider-handoff-contract.md`.
+
+**Status:** implemented, with the acceptance run so far recorded only as development evidence. The engine indexes normalized transcript speaker labels and timestamps, binds that index into every provider request, recomputes the index from the persisted transcript rather than trusting request metadata, and rejects ungrounded attendee raw labels, evidence speakers, and evidence timestamps before signals, markdown, ledger success snapshots, archive, reconcile, or cache cleanup. `semantic_guidance_version` `1.0` binds only for providers that make semantic judgments — the Anthropic adapter and the session path; the non-semantic mock provider binds `none`, as the frozen contract requires. The four maintained extraction instruction surfaces carry the same versioned rules.
+
+Verification is deliberately split. `uv run pytest` proves the deterministic gates and lifecycle behavior — 459 tests passed on 2026-07-26, including mutation-killing coverage of the direct-provider and phase-2 grounding gates. Semantic judgment is measured by the synthetic five-pattern acceptance case (`tests/fixtures/semantic-integrity/session-provider-eval.vtt`, `tests/fixtures/semantic-integrity/expected-review.json`) under `docs/testing/semantic-integrity-acceptance.md`. No second model or judge call is added to normal ingest.
+
+The 2026-07-26 acceptance run passed all 18 blocking assertions with concordant human and blind review, and its one advisory failure was dispositioned as a fixture pattern gap rather than an extraction defect. It used an editable checkout under `--development-override` and is development/non-release evidence (`docs/sessions/2026-07-26-task7-semantic-acceptance-dev-run.md`). Release evidence requires the same procedure on the approved frozen build in a freshly pinned consumer project after the slice receipt is cut, published, installed, and repinned.
+
+The claim is limited to guarded fresh-ingest output. Post-ingest semantic correction still requires the frozen but unimplemented `regenerate` path, and no HTV or Spelman artifact is adopted, corrected, or mutated by this track.
 
 ## V1 Scope
 

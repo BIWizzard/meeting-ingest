@@ -26,6 +26,10 @@ The current release posture is a maintainer-only private alpha. Claude Code is t
 
 The Approved Runtime and Pre-Meeting Readiness track is demonstrated complete as of 2026-07-24: the reference host runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. This does not claim semantic guardrails or qualified history. See `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`.
 
+Transcript grounding is enforced by the engine on every provider path in committed `main`; it is not yet carried by an approved installed build, so a pinned consumer keeps its currently approved behavior until a new receipt is published and repinned. Attendee raw labels and communication-signal evidence speakers and timestamps must copy the normalized transcript verbatim, and an ungrounded or tampered response is rejected before any durable primary output exists: validation runs ahead of signal writes, markdown writes, ledger success snapshots, archive, reconcile, and cache cleanup, and the only durable record a failure writes is the `ingest_failed` snapshot. Semantic judgment is governed by a versioned guidance contract, `semantic_guidance_version` `1.0`, carried with the grounding index in each provider request that makes semantic judgments and recorded in durable provenance.
+
+This guards newly ingested output. It is not a claim of general semantic correctness, and it does not adopt, correct, or mutate existing artifacts. The acceptance run recorded on 2026-07-26 passed all 18 blocking assertions with concordant human and independent blind review, but it ran on an editable checkout under `--development-override` and is development/non-release evidence; release evidence requires the same procedure on the approved frozen build. See `docs/testing/semantic-integrity-acceptance.md` and `docs/sessions/2026-07-26-task7-semantic-acceptance-dev-run.md`.
+
 The long-term architecture remains host-neutral. The following are design targets, not current support claims:
 
 - Codex
@@ -97,6 +101,8 @@ Python CLI/library implementation with:
 - doctor/status/reconcile and `repair-date` commands
 - approved-runtime readiness gating, consumer runtime pins, and update checks
 - persisted runtime provenance across artifacts, ledgers, and signals
+- deterministic transcript grounding enforced before any durable write
+- versioned semantic extraction guidance bound into provider requests and persisted provenance
 
 ## Development
 
@@ -186,7 +192,7 @@ python3 -m meeting_ingest.cli provider-request _local/project-context/meetings/_
 
 Add `--meeting-date YYYY-MM-DD` to `provider-request` when the occurrence date is known. The persisted request carries that override into session phase 2; phase 2 does not accept a new date override.
 
-The command returns `request_path` and `expected_response_path`. The request embeds the complete request-bound JSON Schema at `response_contract.json_schema`, including exact nested fields, enum values, and identity `const` values. A dedicated extraction agent should follow that schema and write the expected response envelope. The response envelope must use `provider.name: "session"` and place the structured meeting extraction under `response`:
+The command returns `request_path` and `expected_response_path`. The request embeds the complete request-bound JSON Schema at `response_contract.json_schema`, including exact nested fields, enum values, and identity `const` values. It also carries `transcript_grounding` — the exact normalized-transcript speaker labels and turn timestamps a response may use — plus `semantic_guidance_version` and the verbatim `semantic_guidance_rules` for that version; the response echoes the version unchanged. A dedicated extraction agent should follow that schema and write the expected response envelope. The response envelope must use `provider.name: "session"` and place the structured meeting extraction under `response`:
 
 ```json
 {
@@ -198,6 +204,7 @@ The command returns `request_path` and `expected_response_path`. The request emb
   "source_sha256": "...",
   "normalized_transcript_sha256": "...",
   "runtime_provenance_sha256": "sha256:...",
+  "semantic_guidance_version": "1.0",
   "provider": {
     "name": "session",
     "host": "codex",

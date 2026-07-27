@@ -22,6 +22,8 @@ It can turn `.txt`, `.vtt`, and `.docx` meeting artifacts into durable project k
 - doctor/status visibility into incomplete or pending state
 - approved-runtime readiness gating before writes
 - persisted runtime provenance across artifacts, ledgers, and signals
+- deterministic transcript grounding enforced before any durable write
+- versioned semantic extraction guidance bound into requests and persisted provenance
 
 The current reference user is the maintainer, the reference host is Claude Code, and the release posture is maintainer-only private alpha. The engine remains host-neutral by design, but other host experiences are not current release claims. It is not yet a general self-serve product.
 
@@ -35,10 +37,21 @@ The ordered milestone tracks and their status are:
 
 1. Approved Runtime and Pre-Meeting Readiness — demonstrated complete 2026-07-24.
 2. Read-Only Power-User Corpus Reckoning — read-only reckoning complete; adoption approval-gated.
-3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is not started.
+3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is implemented, with acceptance so far recorded only as development evidence.
 4. Approval-Gated Historical Qualification and Continuity Proof — not started; approval-gated.
 
 The read-only HTV/Spelman reckoning is complete. Corpus adoption remains separately approval-gated.
+
+The Semantic Integrity Guardrails slice is implemented, and its claim is limited to guarded fresh-ingest output:
+
+- every provider path binds the transcript grounding index into the request and re-checks it before any durable write: attendee raw labels must copy a normalized transcript speaker label verbatim, and signal evidence speakers and non-null timestamps must copy grounding-index entries verbatim;
+- tampered persisted request grounding is rejected, and the observed fabricated-affiliation pattern — adding a parenthetical qualifier to a speaker label — cannot pass the gate in an attendee raw label or a signal evidence locator; provider-generated `display_name` and `role_context` remain semantic responsibilities rather than deterministically gated fields;
+- semantic judgment is a versioned prompt contract, `semantic_guidance_version` `1.0`, carried in the request alongside the grounding index, with the four maintained provider instruction surfaces aligned to it;
+- deterministic behavior is proven by the repository suite, including mutation-killing tests for the direct-provider and phase-2 grounding gates; semantic behavior is measured by the synthetic five-pattern acceptance case in `tests/fixtures/semantic-integrity/` under the procedure in `docs/testing/semantic-integrity-acceptance.md`.
+
+The acceptance run recorded on 2026-07-26 passed all 18 blocking assertions with concordant human semantic review and independent blind review, and its one advisory failure was dispositioned as a fixture pattern gap rather than an extraction defect. It ran on an editable checkout under `--development-override`, so it is development/non-release evidence, not milestone proof; see `docs/sessions/2026-07-26-task7-semantic-acceptance-dev-run.md`. The release-evidence run repeats the same procedure on the approved frozen build, and no approved receipt covers these changes yet.
+
+The guardrails govern newly ingested output only. They are not a claim of general semantic correctness, and no existing artifact is adopted, corrected, or mutated by this work. The Just Works Continuity milestone also requires Track 4 and is not met.
 
 The Approved Runtime policy is implemented and demonstrated as of 2026-07-24:
 
@@ -54,7 +67,7 @@ See `docs/north-star-board/002-just-works-continuity/`, `docs/sessions/2026-07-2
 
 ## Current Development State
 
-Committed implementation is stable through the session-inbox and handoff-health work. The Stakeholder Playbook effort is currently a design-and-contract workstream, not a shipped feature.
+Committed implementation is stable through the session-inbox, handoff-health, and semantic-integrity guardrails work. The Stakeholder Playbook effort is currently a design-and-contract workstream, not a shipped feature.
 
 Current accounting:
 
@@ -238,6 +251,9 @@ Complete:
 - provider failure path
 - provider metadata in artifacts and ledger
 - provider host provenance for session-backed runs
+- transcript grounding index bound into direct and session provider requests
+- grounding enforcement before signals, markdown, ledger success snapshots, archive, reconcile, and cache cleanup
+- versioned semantic guidance (`1.0`) carried in requests and persisted through response binding, run summaries, artifacts, and ledger provenance
 
 Not complete:
 
@@ -375,6 +391,9 @@ Done:
 - shared provider response parsing
 - provider provenance in artifacts/ledger
 - session handoff validation and identity verification
+- deterministic transcript grounding enforcement shared by direct and session provider paths
+- one versioned semantic guidance source consumed by every provider request and the four maintained extraction instruction surfaces
+- synthetic five-pattern semantic acceptance case with machine-readable assertions and a documented run procedure
 
 Remaining:
 
@@ -520,6 +539,13 @@ Reason: the live July 10/13 Teams VTT failure showed that meeting-date trust mus
 
 Recent implementation commits include:
 
+- `af2a130 test: record dev-evidence semantic acceptance run and widen S11 pattern`
+- `7e44a5d docs: define correction and recovery boundaries`
+- `8a486e7 test: add semantic integrity acceptance case and align extraction surfaces`
+- `9a4d015 test: kill grounding-gate mutations and cover stakeholder speaker mapping`
+- `3f64f31 feat: enforce transcript grounding before side effects`
+- `c2e297b feat: bind provider responses to transcript grounding`
+- `4dd6698 feat: index transcript speakers and evidence timestamps`
 - `049d3a0 feat: expose session handoff status`
 - `3f07f59 feat: add session inbox wrapper`
 - `a713b3d feat: plan session inbox handoffs`
@@ -529,8 +555,8 @@ Recent implementation commits include:
 - `85319c5 Add Anthropic provider adapter`
 - `c5e11ca Add sequential inbox batch ingest`
 
-Current verification on 2026-07-18:
+Current verification on 2026-07-26:
 
-- `uv run pytest` passed with 133 tests
+- `uv run pytest` passed with 459 tests
 - `git diff --check` passed
-- committed `main` matched `origin/main` before this documentation checkpoint
+- the semantic acceptance run recorded in `docs/sessions/2026-07-26-task7-semantic-acceptance-dev-run.md` passed 18/18 blocking assertions as development/non-release evidence
