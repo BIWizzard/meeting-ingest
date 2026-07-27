@@ -3,8 +3,9 @@
   "remaining_tasks": [
     "Run Task 7 with the owner: full-suite plus acceptance verification, dogfood proof, and product-truth update, then the end-of-slice owner-gated release (new approved receipt covering contract and engine changes, receipt-verified install to user-level and consumer project-level destinations, repin) so acceptance runtime and HTV pick up the slice in one receipt. The acceptance run per docs/testing/semantic-integrity-acceptance.md plus the human semantic review and independent blind review are owner-involved; decide first whether to stage the acceptance run as development (non-release) evidence before the new receipt or hold it for the post-release receipt.",
     "Fresh-tier spot-check: run the first HTV ingest on the Opus 5 receipt gb37a12a0502e per the owner trust ruling; the six 2026-07-25 meetings remain Opus 4.8 spot-check candidates.",
-    "OB-002-1 standing: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; the Just Works Continuity milestone claim needs the guardrails slice plus Track 4."
+    "OB-002-1 standing: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; the Just Works Continuity milestone claim needs the guardrails slice plus Track 4.",
+    "Stage and execute the dev-evidence acceptance run per docs/testing/semantic-integrity-acceptance.md, then owner semantic review + independent blind review, then dogfood proof, product-truth update, and the owner-gated release (new receipt, receipt-verified installs, repin)."
   ],
   "resume_from": "Resume with: Run Task 7 with the owner: full-suite plus acceptance verification, dogfood proof, and product-truth update, then the end-of-slice owner-gated release (new approved receipt covering contract and engine changes, receipt-verified install to user-level and consumer project-level destinations, repin) so acceptance runtime and HTV pick up the slice in one receipt. The acceptance run per docs/testing/semantic-integrity-acceptance.md plus the human semantic review and independent blind review are owner-involved; decide first whether to stage the acceptance run as development (non-release) evidence before the new receipt or hold it for the post-release receipt.",
-  "updated_at": "2026-07-26T17:59:17.009Z"
+  "updated_at": "2026-07-27T01:04:49.518Z"
 }
