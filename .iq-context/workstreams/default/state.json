@@ -5,11 +5,11 @@
   "objective": "Start the default workstream for Meeting Ingest.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Task 7 started, owner ruled acceptance-first as development evidence. Full suite green (459 passed). Closed the dated-status open question per RELAY-BACK cap_20260726T180703Z (iq-context ad4feb4 ships leading-token status parsing; no revert of 6270818 needed). Staging dev-evidence acceptance run: CLI --development-override confirmed, installer needs PYTHONPATH=src, installed Claude agent doc differs from repo source as expected pending release.",
+  "status_summary": "Task 7 executed end to end with the owner. Full suite 459 green throughout. Dev-evidence acceptance run PASS (18/18 blocking; owner semantic review and codex blind review concordant; S11 advisory dispositioned as fixture regex gap and pattern widened forward). Product-truth update delegated to claude-implementer and verified at T2: codex + claude reviews returned 7 real findings (ledger failure-snapshot nuance, mock provider binds guidance none, four-surface parity break, over-broad affiliation claim, and more), all fixed in one re-brief and committed. Owner approved 51ff171; release executed end to end: build g51ff17173bea, published to private-alpha, frozen wheel installed, receipt-verified workflow installs to user-level and HTV, HTV repinned, full chain verified. Release-evidence acceptance then FAILED 2/2 on the frozen build (S10 twice, S6 once) - classified with owner concurrence as a semantic_guidance 1.0 wording gap, not an engine defect (DG1-DG6 passed both runs); no third run, no fixture loosening; guidance 1.1 slice planned. Owner also ruled a criteria-based sunset on the manual release apparatus, recorded as Decision 35 and Roadmap Layer 5D: ceremony ends when milestone met + 3 consecutive drift-free releases + owner broadens past maintainer-only alpha; sunset convenes the board once to amend record 002 toward auto-updating delivery with invisible attestation verification. Commits: 737f6d1, af2a130, 51ff171 (released), 1f8d838, 29beedc.",
   "active_files": [
-    "docs/testing/semantic-integrity-acceptance.md",
-    "tests/fixtures/semantic-integrity/expected-review.json",
-    "tests/fixtures/semantic-integrity/session-provider-eval.vtt"
+    "DECISIONS.md",
+    "docs/product-status.md",
+    "docs/sessions/2026-07-26-task7-release-and-acceptance.md"
   ],
   "active_artifacts": [
     "AGENTS.md"
@@ -19,16 +19,17 @@
   ],
   "open_questions": [],
   "next_actions": [
-    "Run Task 7 with the owner: full-suite plus acceptance verification, dogfood proof, and product-truth update, then the end-of-slice owner-gated release (new approved receipt covering contract and engine changes, receipt-verified install to user-level and consumer project-level destinations, repin) so acceptance runtime and HTV pick up the slice in one receipt. The acceptance run per docs/testing/semantic-integrity-acceptance.md plus the human semantic review and independent blind review are owner-involved; decide first whether to stage the acceptance run as development (non-release) evidence before the new receipt or hold it for the post-release receipt.",
-    "Fresh-tier spot-check: run the first HTV ingest on the Opus 5 receipt gb37a12a0502e per the owner trust ruling; the six 2026-07-25 meetings remain Opus 4.8 spot-check candidates.",
-    "OB-002-1 standing: any corpus adoption requires a deterministic fingerprinted adoption plan and convenes the board; the Just Works Continuity milestone claim needs the guardrails slice plus Track 4.",
-    "Stage and execute the dev-evidence acceptance run per docs/testing/semantic-integrity-acceptance.md, then owner semantic review + independent blind review, then dogfood proof, product-truth update, and the owner-gated release (new receipt, receipt-verified installs, repin)."
+    "Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal's text appears, fold in the dev run's B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.",
+    "Release the guidance 1.1 slice through the owner-gated flow (approve exact commit, build, receipt, publish, install, repin) and run a fresh release-evidence acceptance on the frozen build with both required reviews.",
+    "Optionally implement the Layer 5D interim relief under the existing contract: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin.",
+    "Run the first HTV ingest on the new build g51ff17173bea per the owner trust ruling; the six 2026-07-25 meetings remain spot-check candidates.",
+    "Triage two engine observations from this session: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude, and runtime_provenance source_commit/source_tree_sha256 are null on a clean editable checkout."
   ],
-  "continuation_hint": "Next: Run Task 7 with the owner: full-suite plus acceptance verification, dogfood proof, and product-truth update, then the end-of-slice owner-gated release (new approved receipt covering contract and engine changes, receipt-verified install to user-level and consumer project-level destinations, repin) so acceptance runtime and HTV pick up the slice in one receipt. The acceptance run per docs/testing/semantic-integrity-acceptance.md plus the human semantic review and independent blind review are owner-involved; decide first whether to stage the acceptance run as development (non-release) evidence before the new receipt or hold it for the post-release receipt.",
+  "continuation_hint": "Next: Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal's text appears, fold in the dev run's B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.",
   "branch": "main",
-  "last_saved_at": "2026-07-27T01:04:49.518Z",
-  "last_wrapped_at": "2026-07-26T17:59:17.009Z",
+  "last_saved_at": "2026-07-27T03:04:03.838Z",
+  "last_wrapped_at": "2026-07-27T03:15:47.389Z",
   "completed_at": null,
   "created_at": "2026-07-03T18:02:26.396Z",
-  "updated_at": "2026-07-27T01:04:49.518Z"
+  "updated_at": "2026-07-27T03:15:47.389Z"
 }
