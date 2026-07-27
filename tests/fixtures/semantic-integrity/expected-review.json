@@ -355,7 +355,7 @@
       "description": "Preferred handling: the unresolved attribution survives as an open question rather than being dropped silently.",
       "selector": "$.open_questions[*].question",
       "operator": "any_matches",
-      "patterns": ["\\bRo\\b", "\\bwho (?:filed|posted|reported)\\b", "\\battribution\\b"],
+      "patterns": ["\\bRo\\b", "\\bwho\\b[^.?]{0,20}\\b(?:filed|posted|reported)\\b", "\\battribution\\b"],
       "regex_flags": "i"
     },
     {
