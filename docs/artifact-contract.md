@@ -324,13 +324,35 @@ These rules govern extraction judgment. They travel in each provider request as 
 1. Preserve nearby time context. Do not add AM/PM unless it is explicit or unambiguously established by phrases such as "last run of the night."
 2. Separate observations, hypotheses, and confirmed causes. Do not use "caused by," "traced to," or equivalent causal language when root cause remains open.
 3. Record a proposal as a decision only when the transcript shows acceptance. Record an action only when an owner accepts it or a direction is acknowledged.
-4. Never carry a rejected or infeasible proposal into open actions.
-5. Do not merge people from nickname similarity alone. Conflicting or incomplete alias evidence stays unresolved and receives low confidence.
-6. Keep the TL;DR consistent with the detailed topics, decisions, risks, actions, and open questions.
+4. Never carry a rejected, infeasible, or parked proposal into open actions or commitments; stating its disposition inline does not make it eligible. Wherever such a proposal's substance appears in any other field — topic summary, decision, risk or dependency, open question, or stakeholder ask — say in that same text that it was rejected, infeasible, or parked. A disposition recorded only in a separate status field does not satisfy this.
+5. Do not merge people from nickname similarity alone. Conflicting or incomplete alias evidence stays unresolved and receives low confidence. This applies to every signal whose stakeholder name, summary, or evidence text carries the ambiguous alias, including a signal whose content is itself a report that the alias is ambiguous: confidence records how well the identity is resolved, not how plainly the ambiguity was stated. Inference level is unaffected — an ambiguity stated outright in the transcript is still explicit.
+6. Keep secondary framing fields — role context, risk and dependency impact, and similar narrative summaries — within what the transcript establishes. Do not widen a scope or deadline to cover items it did not cover, do not generalize a single occurrence into a standing condition or dependency, and do not turn a stated constraint into a broader blocker.
+7. Keep the TL;DR consistent with the detailed topics, decisions, risks, actions, and open questions.
+
+### Proposal disposition and unresolved identity
+
+Two of those responsibilities decide what a reader is entitled to conclude from a single quoted line, so their required outcome in the artifact is fixed even though the judgment behind them is not.
+
+Rules:
+
+- A rejected proposal, an infeasible proposal, and a parked proposal are one case, not three. Parked is not a softer form of open: a proposal deferred without acceptance has not been adopted. None of the three may appear in `action_items` or as a commitment, and marking the disposition inline does not earn it a place there. The exclusion is from the field, not from the wording.
+- Everywhere else the proposal's substance appears — a topic summary, a decision, a dependency or risk description, an open question, or a stakeholder ask — that same text says it was rejected, infeasible, or parked. Those three words are the vocabulary; a reader should not have to decide whether "shelved" or "on hold" means the work is dead or merely quiet. A disposition recorded only in an adjacent status field does not discharge this, because any reader or downstream consumer quoting the text alone reads the proposal as live work.
+- Identity confidence records how well an identity is resolved, not how firmly the transcript stated something. A signal whose `stakeholder_name`, `summary`, or `evidence.text` carries an unresolved alias takes `confidence: low`. This includes a signal whose own content is a report that the alias is ambiguous; stating the ambiguity plainly does not resolve it.
+- `inference_level` is independent of that constraint. An ambiguity a speaker stated outright is `explicit`, and low identity confidence never demotes it.
+
+### Secondary framing fields
+
+`role_context`, dependency and risk `impact`, and comparable narrative summaries are read as fact even though nothing deterministic checks them. They stay inside what the transcript establishes.
+
+Rules:
+
+- A scope or deadline covers what the transcript says it covers. Do not extend either to items it did not cover merely because they were discussed in the same breath.
+- A single occurrence is a single occurrence. Do not restate one observed event as a standing condition, a recurring pattern, or an ongoing dependency.
+- A stated constraint binds what it was stated to bind. Do not widen it into a broader blocker on work the transcript never tied to it.
 
 ### Semantic guidance version
 
-`semantic_guidance_version` names the exact rule set bound into one extraction. The initial version is `"1.0"`.
+`semantic_guidance_version` names the exact rule set bound into one extraction. The initial version was `"1.0"`; the current version is `"1.1"`. A published version is immutable: a rule-text change publishes a new version rather than editing the old one, so a durable record naming a version always names rules that still read as they did when they were bound.
 
 Rules:
 
@@ -349,7 +371,7 @@ Front-matter placement:
 provider: anthropic
 model_alias: balanced
 model_id: claude-sonnet-placeholder
-semantic_guidance_version: "1.0"
+semantic_guidance_version: "1.1"
 ```
 
 ### Grounding validation gates
@@ -556,7 +578,7 @@ transcript_policy: cleaned-verbatim
 provider: anthropic
 model_alias: balanced
 model_id: claude-sonnet-placeholder
-semantic_guidance_version: "1.0"
+semantic_guidance_version: "1.1"
 generated_by: meeting-ingest 0.1.0
 generated_at: 2026-07-03T12:00:00Z
 runtime_provenance_schema: "1.0"

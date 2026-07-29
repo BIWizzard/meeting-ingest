@@ -1623,21 +1623,25 @@ def test_session_provider_request_at_an_older_published_version_remains_completa
     _allow_session_provider(paths.config_path)
     source = paths.inbox / "2026-07-03-team-sync.txt"
     source.write_text("Ken: Hello\n", encoding="utf-8")
-    request_summary = provider_request(source, start=paths.inbox)
-    request_path = paths.meetings_root / request_summary.details["request_path"]
-    response_path = paths.meetings_root / request_summary.details[
-        "expected_response_path"
-    ]
-    _write_session_response(request_path, response_path)
-    monkeypatch.setitem(
-        PUBLISHED_SEMANTIC_GUIDANCE_RULES,
-        "1.1",
-        SEMANTIC_GUIDANCE_RULES,
-    )
-    monkeypatch.setattr(
-        extraction_guidance_module, "SEMANTIC_GUIDANCE_VERSION", "1.1"
-    )
-    monkeypatch.setattr(pipeline_module, "SEMANTIC_GUIDANCE_VERSION", "1.1")
+    with monkeypatch.context() as older:
+        older.setattr(extraction_guidance_module, "SEMANTIC_GUIDANCE_VERSION", "1.0")
+        older.setattr(pipeline_module, "SEMANTIC_GUIDANCE_VERSION", "1.0")
+        older.setattr(
+            pipeline_module,
+            "SEMANTIC_GUIDANCE_RULES",
+            PUBLISHED_SEMANTIC_GUIDANCE_RULES["1.0"],
+        )
+        request_summary = provider_request(source, start=paths.inbox)
+        request_path = paths.meetings_root / request_summary.details["request_path"]
+        response_path = paths.meetings_root / request_summary.details[
+            "expected_response_path"
+        ]
+        _write_session_response(request_path, response_path)
+
+    assert SEMANTIC_GUIDANCE_VERSION != "1.0"
+    assert json.loads(request_path.read_text(encoding="utf-8"))[
+        "semantic_guidance_version"
+    ] == "1.0"
 
     validation = pipeline_module.validate_response(
         response_path,

@@ -78,7 +78,7 @@ Required fields:
   "effective_date": "2026-06-12",
   "quality": "balanced",
   "output_mode": "summary-plus-verbatim",
-  "semantic_guidance_version": "1.0",
+  "semantic_guidance_version": "1.1",
   "runtime_provenance_schema": "1.0",
   "runtime_provenance_sha256": "sha256:...",
   "runtime_provenance": {
@@ -112,7 +112,7 @@ For development-mode requests, `preflight_command` also includes `--development-
 
 The `transcript_grounding` block above is the index of that example's one-line `normalized_transcript`: one speaker label and no timestamps. A real request's grounding block always matches its own transcript exactly.
 
-The abbreviated `semantic_guidance_rules` above is fully expanded in the generated request. It carries all six provider semantic responsibilities published for the bound `semantic_guidance_version`, verbatim, so the extraction agent obeys the version it was given rather than whichever prompt revision its host happens to remember.
+The abbreviated `semantic_guidance_rules` above is fully expanded in the generated request. It carries all seven provider semantic responsibilities published for the bound `semantic_guidance_version`, verbatim, so the extraction agent obeys the version it was given rather than whichever prompt revision its host happens to remember.
 
 The abbreviated `json_schema` above is fully expanded in the generated request. It is a Draft 2020-12 schema containing the complete envelope and nested response payload, request-bound `const` identity values, required field names, and allowed enum values. Extraction agents should treat that embedded schema as the authoritative response-writing contract instead of discovering fields through validation failures.
 
@@ -166,7 +166,7 @@ Required top-level envelope:
   "source_sha256": "2d17d59a230107b3e5a1df1528eacd3328d40b4746cfbcab99d86242158cfd5a",
   "normalized_transcript_sha256": "3d3f0f6c0d8c8b9d4b91d9e6df0c0c1f1b4e7f2a63ed5e8a2f1c0f54e3d6a7b8",
   "runtime_provenance_sha256": "sha256:...",
-  "semantic_guidance_version": "1.0",
+  "semantic_guidance_version": "1.1",
   "provider": {
     "name": "session",
     "host": "codex",

@@ -29,7 +29,7 @@ The transcript contains:
 4. a proposed loader split that the putative owners reject as infeasible and park;
 5. the nickname `Ro`, which could plausibly mean the attendee `Villanueva, Rosa` but which later dialogue points at a separate absent person.
 
-`expected-review.json` carries the machine-readable assertions. It is not a golden prose summary: a correct run may word its output freely as long as every assertion holds. Assertion IDs `DG*` are deterministic and blocking; `S*` are semantic, and each names the `semantic_guidance_version` `1.0` rule it enforces. The `DG` prefix is deliberate: bare `D1`/`D2` are the local decision IDs the response payload itself uses, and a recorded result table must not blur the two.
+`expected-review.json` carries the machine-readable assertions. It is not a golden prose summary: a correct run may word its output freely as long as every assertion holds. Assertion IDs `DG*` are deterministic and blocking; `S*` are semantic, and each names the `semantic_guidance_version` `1.1` rule it enforces. The `DG` prefix is deliberate: bare `D1`/`D2` are the local decision IDs the response payload itself uses, and a recorded result table must not blur the two.
 
 ## Release Evidence Versus Development Evidence
 
@@ -133,7 +133,7 @@ Before evaluating semantics, confirm the request actually bound the contract und
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["semantic_guidance_version"]); print(json.dumps(d["transcript_grounding"], indent=2))' "$REQUEST"
 ```
 
-Expect `1.0` and the grounding index recorded in `expected-review.json` under `transcript_grounding`.
+Expect `1.1` and the grounding index recorded in `expected-review.json` under `transcript_grounding`.
 
 Preflight. This is the no-side-effect grounding gate and satisfies assertion `DG6`:
 
