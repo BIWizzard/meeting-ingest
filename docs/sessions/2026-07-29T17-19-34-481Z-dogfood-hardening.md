@@ -1,0 +1,44 @@
+# Session Wrap - dogfood-hardening
+
+- Wrapped at: 2026-07-29T17:19:34.481Z
+- Workstream: dogfood-hardening
+- Lifecycle: active
+- Mode: design
+
+## Summary
+
+Workstream succession session; no code or plan work. Presented the default-workstream briefing in full, then acted on the owner objection that the project was still running in default after all this time. Opened dogfood-hardening (Dogfood Hardening) as the successor, named for the phase the work is actually in: everything still open traces back to real HTV runs on released build g51ff17173bea. Answered the owner question about how to close a workstream — iq-context workstream complete <id>, with reopen as the undo — and marked default completed. Seeded the new workstream from the briefing so it begins exactly where default left off: full status, three open questions, the corpus-adoption blocker, and ten next actions led by the semantic_guidance 1.1 slice. Three judgment calls flagged to the owner and accepted: merged the spot-check next action the briefing carried twice, keeping the superset that includes the 2026-07-28 AdBook artifact (11 to 10, nothing lost); repointed active files from the closed Task 7 session doc to src/meeting_ingest/extraction_guidance.py and docs/artifact-contract.md, where the next two actions land; and cleared the three placeholder next actions that iq-context workstream new injects. OB-002-1 and the 96 tracked artifacts carry automatically since they derive from board-log.md and project-level patterns. Capture cap_20260729T171625Z_4f3fdd76 records the succession and indexes the five substantive captures left in default so their evidence trail stays reachable from the new briefing. Committed as de761cd and pushed to main; the post-commit release-candidate hook fired but no source changed, so nothing needs releasing.
+
+## Continuation
+
+Resume with: Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal text appears, fold in the dev run B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.
+
+## Active Files
+
+- DECISIONS.md
+- docs/product-status.md
+- src/meeting_ingest/extraction_guidance.py
+- docs/artifact-contract.md
+
+## Next Actions
+
+- Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal text appears, fold in the dev run B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.
+- Release the guidance 1.1 slice through the owner-gated flow (approve exact commit, build, receipt, publish, install, repin) and run a fresh release-evidence acceptance on the frozen build with both required reviews.
+- Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class (HTV keeps fail-closed pins; general consumers get auto-updating distribution with invisible attestation verification). The charter convening trigger is met and this amends record 002.
+- Fix the date-gate friction at the skill level: have the meeting-ingest skill ask the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal, so a run stops minting blind and then forcing an abandon-and-remint.
+- Add a Decisions status vocabulary to docs/artifact-contract.md so Decisions statuses are enumerable the way Commitments statuses already are, and rule on whether Stakeholder Asks and Dependencies may keep free text after the leading status token.
+- Find or record a meeting transcript that contains a real identity ambiguity, so the guidance 1.1 identity-confidence rule can be confirmed against evidence instead of shipping unexercised.
+- Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact, and the 2026-07-28 AdBook artifact once guidance 1.1 lands, using them to confirm the framing-restraint revisions. (Merged: the briefing carried this twice, once as a subset without the AdBook artifact.)
+- Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given that model_id is the constant claude-code-session and model_alias is only a quality tier, and decide whether per-run model attestation needs to be recorded directly.
+- Triage two engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude, and runtime_provenance source_commit/source_tree_sha256 are null on a clean editable checkout.
+- Optionally implement the Layer 5D interim relief under the existing contract: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin.
+
+## Blockers
+
+- No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval (OB-002-1).
+
+## Open Questions
+
+- Should the version bump to 0.2.0 with the guidance 1.1 release so consumers can tell builds apart by semver instead of commit hash? Owner expected to be above 0.1.0 already; needs an owner ruling on version policy for private-alpha releases.
+- Does morale or capacity language about a named third party belong in the durable signal stream at all? The 2026-07-28 HTV artifact persists a colleague capacity state as a high-confidence risk_or_concern signal feeding signal JSONL, playbook derivation and briefings; the rendering softened the verbatim appropriately, so the question is inclusion rather than wording, and it may be a board matter rather than a guidance tweak.
+- Should the date-gate pre-mint fix fold into the guidance 1.1 slice, or ship as a separate change ahead of it?
