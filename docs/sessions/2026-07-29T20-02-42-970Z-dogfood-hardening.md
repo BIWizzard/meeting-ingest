@@ -1,0 +1,81 @@
+# Session Wrap - dogfood-hardening
+
+- Wrapped at: 2026-07-29T20:02:42.970Z
+- Workstream: dogfood-hardening
+- Lifecycle: active
+- Mode: design
+
+## Summary
+
+Implemented, verified, released and acceptance-tested semantic_guidance 1.1; released as meeting-ingest-0.2.0-g3695fc350c77-s61e1660c5dc8. Published 1.1 alongside a now-frozen 1.0 (previously the map aliased the live tuple, so editing rules would have silently redefined a published version). Rules 4 and 5 revised to close the S10 and S6 failures that sank both 1.0 release-evidence runs; new rule 6 carries the B2-B4 framing-restraint findings; TL;DR rule moves to 7. Propagated verbatim to five instruction surfaces, gave rules 4-6 binding contract basis in artifact-contract.md, and added four guard tests each proven to fail when its target is broken. T2 verification ran three rounds: codex clean, then a Claude review returning one BLOCKING finding (rule 4 as first written licensed recording a rejected proposal as an action item with an inline disposition, which passes S6 but fails S5 and would have turned a green blocking assertion red), then a final codex pass returning three more on text my own re-brief introduced. Key structural insight driving two fixes: the extraction agent receives semantic_guidance_rules in the request and never sees artifact-contract.md, so precision living only in the contract does no work at extraction time. Dev-evidence acceptance PASSED 18/18 blocking, 1/1 advisory, both required reviews concordant; the evaluator was itself verified by mutation, and one mutation reproduced the exact S5 regression the code review predicted, proving that finding described a live risk. Owner performed the human semantic review, accepted rule 6 as unproven, approved release, and ruled the version question by bumping 0.1.0 to 0.2.0. The bump exposed a second version source (BUILD_INFO) caught by the build-info test, and silently invalidated runtime test fixtures that pinned 0.1.0; those now derive from the real version. Release flow executed end to end from approved commit 3695fc35 with full chain verification from HTV. Release-evidence acceptance attempt 1 scored 18/18 blocking under clean approved-runtime conditions but was NOT accepted as milestone proof: the host had cached the pre-release agent definition at session start, so extraction ran against 1.0's rules while the receipt-installed file carried 1.1 (the agent detected the drift and obeyed the request-borne rules, which evidences the obey-the-request clause but is not the condition the run exists to establish), and the blind review found a factual misattribution that all 18 assertions missed, crediting Dara's 10:06 statement to Femi while citing two Dara evidence rows beside it. Two fixture blind spots now recorded: framing restraint (rule 6) and narrative attribution correctness. Answered an inbound relay from ~/.claude asserting the installed workflow artifacts had been hand-edited: verified false, both files match the receipt exactly and arrived via the receipt-verified installer, though the relay's underlying observation stands that an installed copy carries no content stamp so a hand-edit would be locally undetectable. Commits 03ec1ca, 3afe7e9, 3695fc3, e026e31; none pushed.
+
+## Continuation
+
+Resume with: Re-run the release-evidence acceptance in a fresh Claude Code session so the host loads the installed guidance 1.1 agent doc, then get the owner human semantic review; only that run can establish milestone proof.
+
+## Active Files
+
+- docs/sessions/2026-07-29-guidance-1_1-release.md
+
+## Changes This Wrap
+
+### Open questions
+
+```text
++ Should installed workflow artifacts carry a receipt or build stamp of their own? Today the installed agent doc and skill have no content stamp, so there is no local way to tell whether a copy still matches the receipt that placed it, and a hand-edit would be undetectable from the consumer side. This surfaced from an inbound ~/.claude relay that could not distinguish an installer write from a hand-edit.
++ Should docs/claude-skills/meeting-ingest/SKILL.md quote a single published rule source rather than restate the semantic guidance rules verbatim? Five surfaces now duplicate the rule text, and a parity test guards it in this repo, but the duplication remains a standing drift risk raised by the ~/.claude relay.
+- Should the version bump to 0.2.0 with the guidance 1.1 release so consumers can tell builds apart by semver instead of commit hash? Owner expected to be above 0.1.0 already; needs an owner ruling on version policy for private-alpha releases.
+- Should the date-gate pre-mint fix fold into the guidance 1.1 slice, or ship as a separate change ahead of it?
+```
+
+### Next actions
+
+```text
++ Re-run the release-evidence acceptance in a fresh Claude Code session so the host loads the installed guidance 1.1 agent doc, then get the owner human semantic review; only that run can establish milestone proof.
++ Push the four unpushed commits on main (03ec1ca, 3afe7e9, 3695fc3, e026e31).
++ Add an assertion class to the semantic-integrity fixture requiring that where a narrative field names a speaker as the source of a statement, that name agrees with the evidence rows cited for the same item; the release-evidence run passed 18/18 while crediting a statement to the wrong speaker.
++ Add framing-restraint assertions to the semantic-integrity fixture so rule 6 has detection behind it instead of relying on blind human review.
++ Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact, and the 2026-07-28 AdBook artifact now that guidance 1.1 has landed, using them to confirm the framing-restraint revisions.
++ Find or record a meeting transcript containing a real identity ambiguity so the guidance 1.1 identity-confidence rule is confirmed against evidence rather than only against the fixture it was written for.
++ Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class, with HTV keeping fail-closed pins and general consumers getting auto-updating distribution with invisible attestation verification; the charter convening trigger is met and this amends record 002.
++ Fix the date-gate friction at the skill level so the meeting-ingest skill asks the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal.
++ Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given that model_id is the constant claude-code-session and model_alias is only a quality tier, and decide whether per-run model attestation needs recording directly.
++ Triage three engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude; runtime_provenance source_commit and source_tree_sha256 are null on a clean editable checkout; and doctor and status reject a subcommand-level --development-override that five other commands accept.
++ Reconcile the ~/.claude git worktree, where the receipt-verified installer left agents/meeting-ingest-session-provider.md and skills/meeting-ingest/SKILL.md dirty against that repo's HEAD; the content is correct and receipt-matching, so this is a commit in ~/.claude, not a revert.
+- Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal text appears, fold in the dev run B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.
+- Release the guidance 1.1 slice through the owner-gated flow (approve exact commit, build, receipt, publish, install, repin) and run a fresh release-evidence acceptance on the frozen build with both required reviews.
+- Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class (HTV keeps fail-closed pins; general consumers get auto-updating distribution with invisible attestation verification). The charter convening trigger is met and this amends record 002.
+- Fix the date-gate friction at the skill level: have the meeting-ingest skill ask the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal, so a run stops minting blind and then forcing an abandon-and-remint.
+- Find or record a meeting transcript that contains a real identity ambiguity, so the guidance 1.1 identity-confidence rule can be confirmed against evidence instead of shipping unexercised.
+- Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact, and the 2026-07-28 AdBook artifact once guidance 1.1 lands, using them to confirm the framing-restraint revisions. (Merged: the briefing carried this twice, once as a subset without the AdBook artifact.)
+- Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given that model_id is the constant claude-code-session and model_alias is only a quality tier, and decide whether per-run model attestation needs to be recorded directly.
+- Triage two engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude, and runtime_provenance source_commit/source_tree_sha256 are null on a clean editable checkout.
+- Run the dev-evidence acceptance on guidance 1.1 with the owner: the procedure's verification split requires both an owner human semantic review and an independent blind review, so it cannot run unattended. Then decide whether to commit and take the slice through the owner-gated release flow.
+- Re-run the release-evidence acceptance in a FRESH Claude Code session so the host loads the installed guidance 1.1 agent doc, then obtain the owner human semantic review; only that run can establish milestone proof.
+```
+
+## Next Actions
+
+- Re-run the release-evidence acceptance in a fresh Claude Code session so the host loads the installed guidance 1.1 agent doc, then get the owner human semantic review; only that run can establish milestone proof.
+- Push the four unpushed commits on main (03ec1ca, 3afe7e9, 3695fc3, e026e31).
+- Add an assertion class to the semantic-integrity fixture requiring that where a narrative field names a speaker as the source of a statement, that name agrees with the evidence rows cited for the same item; the release-evidence run passed 18/18 while crediting a statement to the wrong speaker.
+- Add framing-restraint assertions to the semantic-integrity fixture so rule 6 has detection behind it instead of relying on blind human review.
+- Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact, and the 2026-07-28 AdBook artifact now that guidance 1.1 has landed, using them to confirm the framing-restraint revisions.
+- Find or record a meeting transcript containing a real identity ambiguity so the guidance 1.1 identity-confidence rule is confirmed against evidence rather than only against the fixture it was written for.
+- Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class, with HTV keeping fail-closed pins and general consumers getting auto-updating distribution with invisible attestation verification; the charter convening trigger is met and this amends record 002.
+- Fix the date-gate friction at the skill level so the meeting-ingest skill asks the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal.
+- Add a Decisions status vocabulary to docs/artifact-contract.md so Decisions statuses are enumerable the way Commitments statuses already are, and rule on whether Stakeholder Asks and Dependencies may keep free text after the leading status token.
+- Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given that model_id is the constant claude-code-session and model_alias is only a quality tier, and decide whether per-run model attestation needs recording directly.
+- Triage three engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude; runtime_provenance source_commit and source_tree_sha256 are null on a clean editable checkout; and doctor and status reject a subcommand-level --development-override that five other commands accept.
+- Reconcile the ~/.claude git worktree, where the receipt-verified installer left agents/meeting-ingest-session-provider.md and skills/meeting-ingest/SKILL.md dirty against that repo's HEAD; the content is correct and receipt-matching, so this is a commit in ~/.claude, not a revert.
+- Optionally implement the Layer 5D interim relief under the existing contract: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin.
+
+## Blockers
+
+- No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval (OB-002-1).
+
+## Open Questions
+
+- Should installed workflow artifacts carry a receipt or build stamp of their own? Today the installed agent doc and skill have no content stamp, so there is no local way to tell whether a copy still matches the receipt that placed it, and a hand-edit would be undetectable from the consumer side. This surfaced from an inbound ~/.claude relay that could not distinguish an installer write from a hand-edit.
+- Should docs/claude-skills/meeting-ingest/SKILL.md quote a single published rule source rather than restate the semantic guidance rules verbatim? Five surfaces now duplicate the rule text, and a parity test guards it in this repo, but the duplication remains a standing drift risk raised by the ~/.claude relay.
+- Does morale or capacity language about a named third party belong in the durable signal stream at all? The 2026-07-28 HTV artifact persists a colleague capacity state as a high-confidence risk_or_concern signal feeding signal JSONL, playbook derivation and briefings; the rendering softened the verbatim appropriately, so the question is inclusion rather than wording, and it may be a board matter rather than a guidance tweak.
