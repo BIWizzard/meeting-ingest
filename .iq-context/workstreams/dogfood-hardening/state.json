@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "workstream_id": "dogfood-hardening",
+  "title": "Dogfood Hardening",
+  "objective": "Harden Meeting Ingest against what real HTV runs on released builds expose: extraction quality (semantic_guidance 1.1 and the spot-check backlog), run-flow friction (the date gate), artifact-contract gaps (Decisions status vocabulary, third-party sensitivity), attestation, and consumer update policy.",
+  "lifecycle_status": "active",
+  "mode": "design",
+  "status_summary": "Opened as the successor to the default workstream, seeded from the 2026-07-29 briefing. Where the work stands: the release apparatus is built and exercised (Task 7 done; build g51ff17173bea published, installed, pinned), and two real HTV meetings have now been ingested on that build as dogfood. Everything currently open traces back to those runs. Extraction quality: the second HTV artifact (mtg-20260728-fa00a9b4, AdBook Dimension Overwrite Scoping) was spot-checked against the pending semantic_guidance 1.1 targets. Parked-disposition carry PASSED under 1.0 and B2-B4 framing restraint PASSED under 1.0, but the identity-ambiguity target was NOT EXERCISED because the call had two speakers with clean labels. Negative conclusion carried forward: that transcript does not stress the 1.0 gap, so the 1.1 slice still needs a transcript with a real identity ambiguity before its identity-confidence rule can ship on evidence. Run-flow friction: the mtime date gate is 2-for-2 as friction across both HTV runs, the second also hitting pending-handoff-blocks-reminting and burning two extra commands. Contract gaps: the Decisions section states no status vocabulary, so one run invented decided-and-implemented and decided, and Asks/Dependencies append prose after the leading status token. Sensitivity: a named colleague morale and capacity state is persisted as a high-confidence risk_or_concern signal into a durable client-work artifact feeding signal JSONL, playbooks and briefings. Attestation: per-run model attestation is indirect, since model_id is the constant claude-code-session and balanced is only a quality tier, so the Decision 33 Opus 5 pin is attested only via build_id to receipt to agent doc. Distribution: owner dogfood feedback rejects the explicit-update/receipt-ceremony model in favour of the npm model, which contradicts ratified record 002 clauses and meets the board convening trigger. No code has changed since the Task 7 release. Prior-workstream captures remain findable via iq-context find; the substantive ones are cap_20260728T144403Z_c680c66d, cap_20260727T134457Z_16a4f14a, cap_20260727T024600Z_86bdc8f3, cap_20260726T180703Z_6fd7e370 and cap_20260726T170623Z_e959634b.",
+  "active_files": [
+    "DECISIONS.md",
+    "docs/product-status.md",
+    "src/meeting_ingest/extraction_guidance.py",
+    "docs/artifact-contract.md"
+  ],
+  "active_artifacts": [],
+  "blockers": [
+    "No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval (OB-002-1)."
+  ],
+  "open_questions": [
+    "Should the version bump to 0.2.0 with the guidance 1.1 release so consumers can tell builds apart by semver instead of commit hash? Owner expected to be above 0.1.0 already; needs an owner ruling on version policy for private-alpha releases.",
+    "Does morale or capacity language about a named third party belong in the durable signal stream at all? The 2026-07-28 HTV artifact persists a colleague capacity state as a high-confidence risk_or_concern signal feeding signal JSONL, playbook derivation and briefings; the rendering softened the verbatim appropriately, so the question is inclusion rather than wording, and it may be a board matter rather than a guidance tweak.",
+    "Should the date-gate pre-mint fix fold into the guidance 1.1 slice, or ship as a separate change ahead of it?"
+  ],
+  "next_actions": [
+    "Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal text appears, fold in the dev run B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.",
+    "Release the guidance 1.1 slice through the owner-gated flow (approve exact commit, build, receipt, publish, install, repin) and run a fresh release-evidence acceptance on the frozen build with both required reviews.",
+    "Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class (HTV keeps fail-closed pins; general consumers get auto-updating distribution with invisible attestation verification). The charter convening trigger is met and this amends record 002.",
+    "Fix the date-gate friction at the skill level: have the meeting-ingest skill ask the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal, so a run stops minting blind and then forcing an abandon-and-remint.",
+    "Add a Decisions status vocabulary to docs/artifact-contract.md so Decisions statuses are enumerable the way Commitments statuses already are, and rule on whether Stakeholder Asks and Dependencies may keep free text after the leading status token.",
+    "Find or record a meeting transcript that contains a real identity ambiguity, so the guidance 1.1 identity-confidence rule can be confirmed against evidence instead of shipping unexercised.",
+    "Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact, and the 2026-07-28 AdBook artifact once guidance 1.1 lands, using them to confirm the framing-restraint revisions. (Merged: the briefing carried this twice, once as a subset without the AdBook artifact.)",
+    "Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given that model_id is the constant claude-code-session and model_alias is only a quality tier, and decide whether per-run model attestation needs to be recorded directly.",
+    "Triage two engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude, and runtime_provenance source_commit/source_tree_sha256 are null on a clean editable checkout.",
+    "Optionally implement the Layer 5D interim relief under the existing contract: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin."
+  ],
+  "continuation_hint": "Next: Implement the semantic_guidance 1.1 slice: revise the rules in src/meeting_ingest/extraction_guidance.py so a signal reporting an identity ambiguity stays low-confidence and rejected/parked disposition is carried inline wherever a rejected proposal text appears, fold in the dev run B2-B4 framing-restraint findings, bump PUBLISHED_SEMANTIC_GUIDANCE_RULES, align the four instruction surfaces, run the full suite, and run a dev-evidence acceptance before any release.",
+  "branch": "main",
+  "last_saved_at": "2026-07-29T17:16:12.366Z",
+  "last_wrapped_at": null,
+  "completed_at": null,
+  "created_at": "2026-07-29T17:15:16.426Z",
+  "updated_at": "2026-07-29T17:16:12.366Z"
+}
