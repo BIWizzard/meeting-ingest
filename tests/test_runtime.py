@@ -14,12 +14,17 @@ import pytest
 from meeting_ingest._build_info import BUILD_INFO
 from meeting_ingest.runtime import inspect_runtime
 
+# The runtime only resolves an install whose distribution version matches the
+# embedded build version, so these fixtures track the real version rather than
+# pinning a literal that a release bump would silently invalidate.
+VERSION = BUILD_INFO["semantic_version"]
+
 
 class StubDistribution:
     def __init__(self, root: Path, dist_info: Path, *, direct_url: dict[str, Any] | None = None) -> None:
         self.root = root
         self._path = dist_info
-        self.metadata = {"Name": "meeting-ingest", "Version": "0.1.0"}
+        self.metadata = {"Name": "meeting-ingest", "Version": VERSION}
         self._direct_url = direct_url
         self.files: tuple[()] = ()
 
@@ -45,21 +50,21 @@ def _make_distribution(
 ) -> tuple[StubDistribution, Path, Path]:
     root = tmp_path / "site-packages"
     package = root / "meeting_ingest"
-    dist_info = root / "meeting_ingest-0.1.0.dist-info"
+    dist_info = root / f"meeting_ingest-{VERSION}.dist-info"
     package.mkdir(parents=True)
     dist_info.mkdir()
     module = package / "__init__.py"
     metadata = dist_info / "METADATA"
-    module.write_text("__version__ = '0.1.0'\n", encoding="utf-8")
-    metadata.write_text("Name: meeting-ingest\nVersion: 0.1.0\n", encoding="utf-8")
+    module.write_text(f"__version__ = '{VERSION}'\n", encoding="utf-8")
+    metadata.write_text(f"Name: meeting-ingest\nVersion: {VERSION}\n", encoding="utf-8")
     rows = [
         ["meeting_ingest/__init__.py", _record_hash(module.read_bytes()), str(module.stat().st_size)],
         [
-            "meeting_ingest-0.1.0.dist-info/METADATA",
+            f"meeting_ingest-{VERSION}.dist-info/METADATA",
             _record_hash(metadata.read_bytes()),
             str(metadata.stat().st_size),
         ],
-        ["meeting_ingest-0.1.0.dist-info/RECORD", "", ""],
+        [f"meeting_ingest-{VERSION}.dist-info/RECORD", "", ""],
     ]
     output = io.StringIO(newline="")
     csv.writer(output, lineterminator="\n").writerows(rows)
@@ -83,7 +88,7 @@ def _approved_inspection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     agent.write_text("approved agent\n", encoding="utf-8")
     commit = "a" * 40
     tree_digest = "sha256:" + "b" * 64
-    build_id = "meeting-ingest-0.1.0-gaaaaaaaaaaaa-sbbbbbbbbbbbb"
+    build_id = f"meeting-ingest-{VERSION}-gaaaaaaaaaaaa-sbbbbbbbbbbbb"
     monkeypatch.setitem(BUILD_INFO, "build_id", build_id)
     monkeypatch.setitem(BUILD_INFO, "source_commit", commit)
     monkeypatch.setitem(BUILD_INFO, "source_tree_sha256", tree_digest)
@@ -93,11 +98,11 @@ def _approved_inspection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     receipt = {
         "schema_version": "1.0",
         "build": {
-            "semantic_version": "0.1.0",
+            "semantic_version": VERSION,
             "build_id": build_id,
             "source_commit": commit,
             "source_tree_sha256": tree_digest,
-            "wheel_filename": "meeting_ingest-0.1.0-py3-none-any.whl",
+            "wheel_filename": f"meeting_ingest-{VERSION}-py3-none-any.whl",
             "wheel_sha256": wheel_digest,
         },
         "workflow": {
@@ -252,7 +257,7 @@ def test_receipt_and_workflow_mismatches_report_stable_codes(
     inspection = _approved_inspection(tmp_path, monkeypatch)
     receipt_path = Path(inspection.receipt["path"])
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    receipt["build"]["build_id"] = "meeting-ingest-0.1.0-g000000000000-s000000000000"
+    receipt["build"]["build_id"] = f"meeting-ingest-{VERSION}-g000000000000-s000000000000"
     receipt_path.write_text(json.dumps(receipt, sort_keys=True) + "\n", encoding="utf-8")
     Path(inspection.workflow.skill_path).write_text("changed skill\n", encoding="utf-8")
     pin_path = Path(inspection.pin["path"])
@@ -441,7 +446,7 @@ def test_missing_or_symlinked_record_is_not_integrity_evidence(
     record.unlink()
     if record_state == "symlink":
         target = tmp_path / "outside-record"
-        target.write_text("meeting_ingest-0.1.0.dist-info/RECORD,,\n", encoding="utf-8")
+        target.write_text(f"meeting_ingest-{VERSION}.dist-info/RECORD,,\n", encoding="utf-8")
         record.symlink_to(target)
 
     inspection = inspect_runtime(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 BUILD_INFO = {
     "schema_version": "1.0",
-    "semantic_version": "0.1.0",
+    "semantic_version": "0.2.0",
     "build_id": "development",
     "source_commit": None,
     "source_tree_sha256": None,
