@@ -18,5 +18,5 @@
     "Optionally implement the Layer 5D interim relief: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin."
   ],
   "resume_from": "Resume with: Add rule 6 framing-restraint detection to the semantic-integrity fixture, using this run's concrete failing case: a committed action item whose scope exceeds what its owner accepted, where the owner's own narrowing ('Alerting change only') and self-summary ('alerting change is mine by Friday') are both in the transcript. Until this exists, rule 6 conformance is only ever established by human reading.",
-  "updated_at": "2026-07-30T02:57:56.857Z"
+  "updated_at": "2026-07-30T03:00:56.219Z"
 }

@@ -1,0 +1,47 @@
+# Session Wrap - dogfood-hardening
+
+- Wrapped at: 2026-07-30T03:00:56.219Z
+- Workstream: dogfood-hardening
+- Lifecycle: active
+- Mode: design
+
+## Summary
+
+Second wrap of the session, covering the ~/.claude follow-up after the acceptance wrap (a47540a). Committed the two receipt-installed workflow artifacts in ~/.claude as d37c9e1, closing the inbound relay thread the owner reopened. The decisive fact was found by inspection rather than argument: ~/.claude/.gitignore lines 22-25 explicitly un-ignore agents/ and skills/ (!agents/**, !skills/**), so that repo has already decided it tracks these files, which rules out the alternative of untracking them as installer-owned build output and makes committing the correct action rather than merely the tidy one. Scoped strictly to the two meeting-ingest files: ~/.claude also carried NINE unrelated dirty files (six commands/iq-*.md, settings.json, .iq-context/focus-state.json, .iq-context/workstreams/agent-orchestration/captures.jsonl) from the iq-context v0.5.1 command surface work, and a broad git add -A would have swept them into the commit; they remain dirty and untouched. Verified before committing that the diff is confined to the semantic guidance rules block and that the model pin is untouched at claude-opus-5, so Decision 33 is intact. Verified after committing that the install chain is unaffected: runtime inspect from HTV reports workflow.match true with agent sha 890878d7 and skill sha 7e2c1ae4 unchanged, 8/8 pin and 8/8 receipt comparisons matching, and readiness returns ready_with_history_warnings with no workflow_hash_mismatch. Recorded the recurrence rather than just the fix: because ~/.claude tracks installer output, every release will dirty those paths again and regenerate the same false hand-edit signal that misled the relay twice, so committing by hand resets the symptom without addressing it; folding that step into the release flow is now a next action, and the completed ~/.claude commit item was retired from the plan. Session total: four commits in meeting-ingest (cd3478a generated_by fix, 3d6c384 acceptance record and claim language, a47540a acceptance wrap, 5e7d068 context state) and one in ~/.claude (d37c9e1). Nothing pushed in either repo, per owner instruction; the push item now covers seven meeting-ingest commits.
+
+## Continuation
+
+Resume with: Add rule 6 framing-restraint detection to the semantic-integrity fixture, using this run's concrete failing case: a committed action item whose scope exceeds what its owner accepted, where the owner's own narrowing ('Alerting change only') and self-summary ('alerting change is mine by Friday') are both in the transcript. Until this exists, rule 6 conformance is only ever established by human reading.
+
+## Active Files
+
+- docs/sessions/2026-07-29-guidance-1_1-release-evidence-acceptance.md
+
+## Next Actions
+
+- Add rule 6 framing-restraint detection to the semantic-integrity fixture, using this run's concrete failing case: a committed action item whose scope exceeds what its owner accepted, where the owner's own narrowing ('Alerting change only') and self-summary ('alerting change is mine by Friday') are both in the transcript. Until this exists, rule 6 conformance is only ever established by human reading.
+- Add the attribution assertion class proposed after attempt 1 (a narrative field naming a speaker as a statement's source must agree with the evidence rows cited for the same item). Still unwritten; attempt 2 would have passed it, so it remains untested against a real failure.
+- Promote the acceptance evaluator into the repository next to the fixture it executes. Working copy preserved at /private/tmp/meeting-ingest-acceptance-evaluator (evaluate.py, selftest.py, mutate_verify.py, plus attempt 2's response snapshot and blind review).
+- Release the generated_by fix (commit cd3478a). Committed but unreleased, so rendered artifacts still stamp meeting-ingest 0.1.0 until a new build; artifacts already written, including attempt 2's, carry the wrong generator version and are not being corrected.
+- Fold 'commit the receipt-installed artifacts in ~/.claude' into the release flow. That repo tracks agents/ and skills/ by explicit gitignore allowlist, so every release dirties those paths and reproduces the false hand-edit signal that misled the inbound relay twice. Done once by hand as d37c9e1; the process gap remains.
+- Add a drift check for the non-receipt-managed Codex skill pair to the suite or a hook. Re-synced this session but maintained by explicit copy, so it can drift silently again -- and did, undetected, for three days.
+- Push the six unpushed commits on main (03ec1ca, 3afe7e9, 3695fc3, e026e31, cd3478a, 3d6c384) plus the wrap commit a47540a.
+- Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class, with HTV keeping fail-closed pins and general consumers getting auto-updating distribution with invisible attestation verification. The charter convening trigger is met and this amends record 002.
+- Fix the date-gate friction at the skill level so the meeting-ingest skill asks the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal.
+- Add a Decisions status vocabulary to docs/artifact-contract.md so Decisions statuses are enumerable the way Commitments statuses already are, and rule on whether Stakeholder Asks and Dependencies may keep free text after the leading status token.
+- Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact and the 2026-07-28 AdBook artifact now that guidance 1.1 has landed. More urgent now that rule 6 is known to fail.
+- Find or record a meeting transcript containing a real identity ambiguity so the guidance 1.1 identity-confidence rule is confirmed against evidence rather than only against the fixture it was written for.
+- Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given that model_id is the constant claude-code-session and model_alias is only a quality tier.
+- Triage three engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude; runtime_provenance source_commit and source_tree_sha256 are null on a clean editable checkout; doctor and status reject a subcommand-level --development-override that five other commands accept.
+- Optionally implement the Layer 5D interim relief: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin.
+
+## Blockers
+
+- No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval (OB-002-1).
+
+## Open Questions
+
+- Should installed workflow artifacts carry a receipt or build stamp of their own? Today the installed agent doc and skill have no content stamp, so there is no local way to tell whether a copy still matches the receipt that placed it, and a hand-edit would be undetectable from the consumer side. This surfaced from an inbound ~/.claude relay that could not distinguish an installer write from a hand-edit.
+- Should docs/claude-skills/meeting-ingest/SKILL.md quote a single published rule source rather than restate the semantic guidance rules verbatim? Five surfaces now duplicate the rule text, and a parity test guards it in this repo, but the duplication remains a standing drift risk raised by the ~/.claude relay.
+- Does morale or capacity language about a named third party belong in the durable signal stream at all? The 2026-07-28 HTV artifact persists a colleague capacity state as a high-confidence risk_or_concern signal feeding signal JSONL, playbook derivation and briefings; the rendering softened the verbatim appropriately, so the question is inclusion rather than wording, and it may be a board matter rather than a guidance tweak.
+- Should the acceptance evaluator live in the repository? It has now been written ad hoc three times because it lives in session scratchpad, and a different instrument per run weakens comparability across runs even when every tally reads 18/18. It is the instrument that decides milestone proof.
