@@ -5,9 +5,9 @@
     "Add the attribution assertion class proposed after attempt 1 (a narrative field naming a speaker as a statement's source must agree with the evidence rows cited for the same item). Still unwritten; attempt 2 would have passed it, so it remains untested against a real failure.",
     "Promote the acceptance evaluator into the repository next to the fixture it executes. Working copy preserved at /private/tmp/meeting-ingest-acceptance-evaluator (evaluate.py, selftest.py, mutate_verify.py, plus attempt 2's response snapshot and blind review).",
     "Release the generated_by fix (commit cd3478a). Committed but unreleased, so rendered artifacts still stamp meeting-ingest 0.1.0 until a new build; artifacts already written, including attempt 2's, carry the wrong generator version and are not being corrected.",
+    "Fold 'commit the receipt-installed artifacts in ~/.claude' into the release flow. That repo tracks agents/ and skills/ by explicit gitignore allowlist, so every release dirties those paths and reproduces the false hand-edit signal that misled the inbound relay twice. Done once by hand as d37c9e1; the process gap remains.",
     "Add a drift check for the non-receipt-managed Codex skill pair to the suite or a hook. Re-synced this session but maintained by explicit copy, so it can drift silently again -- and did, undetected, for three days.",
-    "Commit the two receipt-installed files in the ~/.claude worktree (agents/meeting-ingest-session-provider.md, skills/meeting-ingest/SKILL.md). Verified receipt-matching; that repo's HEAD simply predates the 15:07 install. Not a revert and not a reinstall.",
-    "Push the six unpushed commits on main (03ec1ca, 3afe7e9, 3695fc3, e026e31, cd3478a, 3d6c384).",
+    "Push the six unpushed commits on main (03ec1ca, 3afe7e9, 3695fc3, e026e31, cd3478a, 3d6c384) plus the wrap commit a47540a.",
     "Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class, with HTV keeping fail-closed pins and general consumers getting auto-updating distribution with invisible attestation verification. The charter convening trigger is met and this amends record 002.",
     "Fix the date-gate friction at the skill level so the meeting-ingest skill asks the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal.",
     "Add a Decisions status vocabulary to docs/artifact-contract.md so Decisions statuses are enumerable the way Commitments statuses already are, and rule on whether Stakeholder Asks and Dependencies may keep free text after the leading status token.",
@@ -18,5 +18,5 @@
     "Optionally implement the Layer 5D interim relief: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin."
   ],
   "resume_from": "Resume with: Add rule 6 framing-restraint detection to the semantic-integrity fixture, using this run's concrete failing case: a committed action item whose scope exceeds what its owner accepted, where the owner's own narrowing ('Alerting change only') and self-summary ('alerting change is mine by Friday') are both in the transcript. Until this exists, rule 6 conformance is only ever established by human reading.",
-  "updated_at": "2026-07-30T02:47:19.365Z"
+  "updated_at": "2026-07-30T02:57:56.857Z"
 }
