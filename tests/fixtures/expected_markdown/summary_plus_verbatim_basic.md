@@ -17,7 +17,7 @@ provider: mock
 model_alias: balanced
 model_id: none
 semantic_guidance_version: "none"
-generated_by: meeting-ingest 0.1.0
+generated_by: meeting-ingest {{TOOL_VERSION}}
 generated_at: 2026-07-03T12:00:00Z
 runtime_provenance_schema: "1.0"
 runtime_provenance_sha256: "sha256:df03cf9e8606c528b0481bcc82b6b82196230f935e74350e469c3659390c3712"

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from meeting_ingest import __version__
 from meeting_ingest.clock import FrozenClock
 from meeting_ingest.provider import ProviderRequest
 from meeting_ingest.provider_json import provider_response_from_payload
@@ -385,6 +386,57 @@ def test_render_summary_plus_verbatim_emits_required_sections_and_final_transcri
     assert markdown.rfind("## Verbatim Transcript") > markdown.rfind("## Cross-References")
 
 
+def test_render_summary_plus_verbatim_stamps_real_package_version() -> None:
+    context = RenderContext(
+        meeting_id="mtg-20260703-f953bbd2",
+        ingest_run_id="ingest-20260703-20260703T120000Z-abcd1234",
+        source_name="source.txt",
+        source_sha256="f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8",
+        slug="version-stamp",
+        effective_date="2026-07-03",
+        runtime_provenance=APPROVED_PROVENANCE,
+        runtime_provenance_ledger_record_id="lr-" + "c" * 32,
+    )
+
+    markdown = render_summary_plus_verbatim(
+        ProviderResponse(title="Version Stamp", tl_dr="Summary"),
+        "Ken: Hello\n",
+        context,
+        clock=FrozenClock(datetime(2026, 7, 3, 12, 0, tzinfo=UTC)),
+    )
+
+    generated_by_line = next(line for line in markdown.splitlines() if line.startswith("generated_by:"))
+    assert generated_by_line == f"generated_by: meeting-ingest {__version__}"
+
+
+def test_render_context_tool_version_is_sourced_from_build_info_not_a_literal() -> None:
+    """The stamp must follow the build's version, not merely equal today's value.
+
+    Asserting against the current version cannot distinguish a dynamic lookup from a
+    hardcoded literal that happens to match, which is exactly how the stamp silently
+    went stale before. Patching the build identity and reimporting proves the default
+    tracks its source.
+    """
+    import importlib
+
+    from meeting_ingest import _build_info
+    from meeting_ingest import render as render_module
+
+    original = _build_info.BUILD_INFO["semantic_version"]
+    try:
+        _build_info.BUILD_INFO["semantic_version"] = "99.98.97"
+        reloaded = importlib.reload(render_module)
+        patched_default = reloaded.RenderContext.__dataclass_fields__["tool_version"].default
+        assert patched_default == "99.98.97", (
+            "RenderContext.tool_version did not follow BUILD_INFO; it is a hardcoded literal"
+        )
+    finally:
+        _build_info.BUILD_INFO["semantic_version"] = original
+        restored = importlib.reload(render_module)
+
+    assert restored.RenderContext.__dataclass_fields__["tool_version"].default == original
+
+
 def test_render_summary_plus_verbatim_matches_golden_fixture() -> None:
     response = ProviderResponse(title="Kushali Sync", tl_dr="Discussed project status.")
     context = RenderContext(
@@ -397,7 +449,11 @@ def test_render_summary_plus_verbatim_matches_golden_fixture() -> None:
         runtime_provenance=APPROVED_PROVENANCE,
         runtime_provenance_ledger_record_id="lr-" + "c" * 32,
     )
-    expected = Path("tests/fixtures/expected_markdown/summary_plus_verbatim_basic.md").read_text(encoding="utf-8").rstrip("\n")
+    expected_template = Path("tests/fixtures/expected_markdown/summary_plus_verbatim_basic.md").read_text(
+        encoding="utf-8"
+    )
+    assert expected_template.count("{{TOOL_VERSION}}") == 1
+    expected = expected_template.replace("{{TOOL_VERSION}}", __version__).rstrip("\n")
 
     markdown = render_summary_plus_verbatim(
         response,

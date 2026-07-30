@@ -7,6 +7,7 @@ import json
 import re
 from typing import Any
 
+from meeting_ingest._build_info import BUILD_INFO
 from meeting_ingest.clock import Clock, SystemClock, format_iso_timestamp
 from meeting_ingest.provider_handoff import runtime_provenance_sha256
 from meeting_ingest.schema import ProviderResponse, SignalRecord, validate_render_response
@@ -32,7 +33,7 @@ class RenderContext:
     provider_host: str | None = None
     runtime_provenance: dict[str, Any] | None = None
     runtime_provenance_ledger_record_id: str | None = None
-    tool_version: str = "0.1.0"
+    tool_version: str = BUILD_INFO["semantic_version"]
 
 
 def render_summary_plus_verbatim(
