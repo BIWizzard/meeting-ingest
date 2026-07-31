@@ -25,6 +25,24 @@ Before substantial work, run this from the repo root:
 iq-context go
 ```
 
+Then check the relay intake lane from the repo root:
+
+```bash
+gh issue list --label relay --state open
+```
+
+Read each open relay with `gh issue view <number>` — the list gives titles only, and triage needs the body. Surface any open relay issues to the user alongside the session briefing. See [Relay Intake](#relay-intake) for what the lane is and how to triage what it returns.
+
+## Relay Intake
+
+Cross-project requests from other repos or agents arrive as GitHub issues labeled `relay`, filed with [.github/ISSUE_TEMPLATE/relay.md](.github/ISSUE_TEMPLATE/relay.md).
+
+This lane accepts dogfood findings, pipeline bugs, extraction-quality reports, and feature asks.
+
+The template makes the filer declare a target. A defect against a shipped build must name the build id and receipt sha256, because a pinned consumer may be behind HEAD and evidence from a development checkout is not release evidence. Anything aimed at HEAD — a feature ask or a contract question — targets the source repo instead.
+
+Relay issues are intake, not state. Triage each one into this project's own tracking — an iQ Context capture, a next action, or a board reading — and cross-link the issue number. Close the issue when the work ships, or when the ask is declined with a stated reason.
+
 ## Workflow
 
 Use these commands as the normal local continuity loop:

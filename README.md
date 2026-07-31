@@ -71,6 +71,8 @@ The tool should support:
 
 They should integrate cleanly, but they should not be collapsed into one codebase prematurely.
 
+Cross-project requests from other repos or agents arrive as `relay`-labeled GitHub issues; see [AGENTS.md Relay Intake](AGENTS.md#relay-intake).
+
 ## Repo Focus
 
 This repo is for the ingestion tool itself.

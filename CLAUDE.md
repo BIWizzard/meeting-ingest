@@ -8,6 +8,8 @@ Run this from the Meeting Ingest repo root before substantial work:
 iq-context go
 ```
 
+Then check the relay intake lane with `gh issue list --label relay --state open` and surface any open relay issues alongside the briefing. See [AGENTS.md Relay Intake](AGENTS.md#relay-intake) for the triage procedure.
+
 Use [AGENTS.md](AGENTS.md) as the canonical shared instruction file for Claude, Codex, Supa Code, T3 Code, and other agents working in this repository.
 
 Claude agents should use iQ Context from this repo root, not from the iQ Context source repo. Save or wrap meaningful progress so updates can surface to future agents in future sessions.
