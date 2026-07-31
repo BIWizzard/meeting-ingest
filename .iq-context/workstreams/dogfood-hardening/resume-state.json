@@ -1,22 +1,21 @@
 {
   "version": 1,
   "remaining_tasks": [
-    "Add rule 6 framing-restraint detection to the semantic-integrity fixture, using this run's concrete failing case: a committed action item whose scope exceeds what its owner accepted, where the owner's own narrowing ('Alerting change only') and self-summary ('alerting change is mine by Friday') are both in the transcript. Until this exists, rule 6 conformance is only ever established by human reading.",
-    "Add the attribution assertion class proposed after attempt 1 (a narrative field naming a speaker as a statement's source must agree with the evidence rows cited for the same item). Still unwritten; attempt 2 would have passed it, so it remains untested against a real failure.",
-    "Promote the acceptance evaluator into the repository next to the fixture it executes. Working copy preserved at /private/tmp/meeting-ingest-acceptance-evaluator (evaluate.py, selftest.py, mutate_verify.py, plus attempt 2's response snapshot and blind review).",
-    "Release the generated_by fix (commit cd3478a). Committed but unreleased, so rendered artifacts still stamp meeting-ingest 0.1.0 until a new build; artifacts already written, including attempt 2's, carry the wrong generator version and are not being corrected.",
-    "Fold 'commit the receipt-installed artifacts in ~/.claude' into the release flow. That repo tracks agents/ and skills/ by explicit gitignore allowlist, so every release dirties those paths and reproduces the false hand-edit signal that misled the inbound relay twice. Done once by hand as d37c9e1; the process gap remains.",
-    "Add a drift check for the non-receipt-managed Codex skill pair to the suite or a hook. Re-synced this session but maintained by explicit copy, so it can drift silently again -- and did, undetected, for three days.",
-    "Push the six unpushed commits on main (03ec1ca, 3afe7e9, 3695fc3, e026e31, cd3478a, 3d6c384) plus the wrap commit a47540a.",
-    "Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class, with HTV keeping fail-closed pins and general consumers getting auto-updating distribution with invisible attestation verification. The charter convening trigger is met and this amends record 002.",
+    "Add rule 6 framing-restraint detection to the semantic-integrity fixture, using attempt 2's concrete failing case: a committed action item whose scope exceeds what its owner accepted, with the owner's narrowing (Alerting change only) and self-summary (alerting change is mine by Friday) both in the transcript.",
+    "Add the attribution assertion class proposed after attempt 1: a narrative field naming a speaker as a statement's source must agree with the evidence rows cited for the same item.",
+    "Promote the acceptance evaluator into the repository next to the fixture it executes; working copy preserved at /private/tmp/meeting-ingest-acceptance-evaluator.",
+    "Release the generated_by fix (cd3478a): cut a new build so rendered artifacts stop stamping meeting-ingest 0.1.0.",
+    "Fold committing the receipt-installed ~/.claude artifacts into the release flow so each release stops regenerating the false hand-edit signal that misled the relay twice.",
+    "Add a drift check for the non-receipt-managed Codex skill pair to the suite or a hook; it drifted silently for three days once already.",
+    "Convene the North Star board on the update-policy brief from cap_20260727T024600Z: segment update policy by consumer class, HTV keeping fail-closed pins and general consumers getting auto-updating distribution with invisible attestation verification; amends record 002.",
     "Fix the date-gate friction at the skill level so the meeting-ingest skill asks the owner for the meeting date before the first phase-1 mint whenever the source file carries no reliable date signal.",
-    "Add a Decisions status vocabulary to docs/artifact-contract.md so Decisions statuses are enumerable the way Commitments statuses already are, and rule on whether Stakeholder Asks and Dependencies may keep free text after the leading status token.",
-    "Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact and the 2026-07-28 AdBook artifact now that guidance 1.1 has landed. More urgent now that rule 6 is known to fail.",
-    "Find or record a meeting transcript containing a real identity ambiguity so the guidance 1.1 identity-confidence rule is confirmed against evidence rather than only against the fixture it was written for.",
-    "Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given that model_id is the constant claude-code-session and model_alias is only a quality tier.",
+    "Add a Decisions status vocabulary to docs/artifact-contract.md and rule on whether Stakeholder Asks and Dependencies may keep free text after the leading status token.",
+    "Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact and the 2026-07-28 AdBook artifact under guidance 1.1; more urgent now that rule 6 is known to fail.",
+    "Find or record a meeting transcript containing a real identity ambiguity so the guidance 1.1 identity-confidence rule is confirmed against evidence rather than only the fixture it was written for.",
+    "Determine whether a meeting artifact can evidence that the harness honored the pinned extraction model at run time, given model_id is the constant claude-code-session and model_alias is only a quality tier.",
     "Triage three engine observations: pin_runtime resolves workflow files from <root>/.claude while inspect_runtime uses ~/.claude; runtime_provenance source_commit and source_tree_sha256 are null on a clean editable checkout; doctor and status reject a subcommand-level --development-override that five other commands accept.",
-    "Optionally implement the Layer 5D interim relief: one maintainer command wrapping build/receipt/publish/install/repin, and one consumer runtime-update command wrapping fetch/verify/install/repin."
+    "Optionally implement the Layer 5D interim relief: one maintainer command wrapping build/receipt/publish/install/repin and one consumer runtime-update command wrapping fetch/verify/install/repin."
   ],
-  "resume_from": "Resume with: Add rule 6 framing-restraint detection to the semantic-integrity fixture, using this run's concrete failing case: a committed action item whose scope exceeds what its owner accepted, where the owner's own narrowing ('Alerting change only') and self-summary ('alerting change is mine by Friday') are both in the transcript. Until this exists, rule 6 conformance is only ever established by human reading.",
-  "updated_at": "2026-07-30T03:00:56.219Z"
+  "resume_from": "Resume with: Add rule 6 framing-restraint detection to the semantic-integrity fixture, using attempt 2's concrete failing case: a committed action item whose scope exceeds what its owner accepted, with the owner's narrowing (Alerting change only) and self-summary (alerting change is mine by Friday) both in the transcript.",
+  "updated_at": "2026-07-31T05:40:25.107Z"
 }
