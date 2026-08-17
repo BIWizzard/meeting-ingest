@@ -1,0 +1,70 @@
+# Session Wrap - dogfood-hardening
+
+- Wrapped at: 2026-08-17T11:44:04.189Z
+- Workstream: dogfood-hardening
+- Lifecycle: active
+- Mode: design
+
+## Summary
+
+Filed iq-context relay #6 (no way to retire a single next action). Diagnosed the owner's Trace3 'meeting-ingest init' failure — the bare line 'failed: exit 12' — to root cause and found three separable defects: bootstrap inversion at pipeline.py:169 (initialize() applies require_write_readiness before init_project(), so a virgin consumer trips runtime_pin_missing on the one command meant to set it up), general silent CLI errors at cli.py:391 (every typed error on every command renders as 'status: exit N' with the message, finding paths and remediation discarded, all of which --json already carries), and a fabricated workflow_hash_mismatch that falsifies against pinned HTV passing exit 0 on the identical ~/.claude skill file. Unblocked Trace3 through the documented README release-flow path with no hand-edits — installer-rendered project-level artifacts, runtime pin to 0.2.1, init — and it now returns plain 'Ready' with zero findings. Owner deferred all three fixes (no time) and ruled the target shape instead: one command initializes the tool and it works, Steve Jobs standard.
+
+## Continuation
+
+Resume with: Review the 10 unresolved identity candidates from the first derivation (identity-candidates.json in the 20260807 generation dir) with the owner, then wire refresh-views.sh plus candidate review into the HTV session workflow.
+
+## Active Files
+
+- src/meeting_ingest/cli.py
+- src/meeting_ingest/pipeline.py
+- ~/dev_projects/hearst-client/HTV-IQ-DataAnalytics/_local/project-context/meetings/_playbook-state/stakeholders.toml
+- docs/sessions/2026-07-29-guidance-1_1-release-evidence-acceptance.md
+
+## Changes This Wrap
+
+### Next actions
+
+```text
++ Make 'meeting-ingest init' a true one-command bootstrap per the 2026-08-13 owner ruling (cap_20260813T171046Z_56618c59): in a virgin project it should render and install the workflow artifacts, auto-select and pin the latest published approved receipt, and scaffold the meetings root, with the user never learning that receipts, templates, skill destinations or 'uv run' exist. This SUPERSEDES the framing in the earlier bootstrap-inversion action — the owner rejected both 'exempt init from the gate' and 'emit better remediation' as insufficient. Satisfy the fail-closed approved-runtime chain automatically; do not bypass or weaken it.
+```
+
+## Next Actions
+
+- Review the 10 unresolved identity candidates from the first derivation (identity-candidates.json in the 20260807 generation dir) with the owner, then wire refresh-views.sh plus candidate review into the HTV session workflow.
+- Close relay #2 and relay #3 observation 1 with the 0.2.1 release evidence (build meeting-ingest-0.2.1-g0738520ee5d0-s0450cee69b18), and update the product-status acceptance-on-frozen-build wording now that the repin has happened.
+- Triage relay #5 (mtg-20260804-054a3878) and explain the unexamined 8/06 transcript 20703495-ken-baba-080626-am-transcript.md sitting in _quarantine.
+- Build the engine capability to retire or supersede an ingested meeting — post-hoc quarantine currently breaks readiness permanently; once it ships, re-quarantine the Wispr duplicate mtg-20260804-3d2dfcd0 properly (the restore was a readiness unblock, not a keep decision).
+- Add rule 6 framing-restraint detection to the semantic-integrity fixture, using attempt 2 concrete failing case: a committed action item whose scope exceeds what its owner accepted, with the owner narrowing (Alerting change only) and self-summary (alerting change is mine by Friday) both in the transcript.
+- Add the attribution assertion class proposed after attempt 1: a narrative field naming a speaker as a statement source must agree with the evidence rows cited for the same item.
+- Promote the acceptance evaluator into the repository next to the fixture it executes; working copy preserved at /private/tmp/meeting-ingest-acceptance-evaluator.
+- Convene the North Star board on the widened record 002 amendment brief: update-policy segmentation (HTV fail-closed pins vs auto-updating consumers), shipped-means-running adoption path, HTV as reference-consumer default, and the third-party redistribution boundary from the 8/06 single-owner intel ruling (reopens if briefs ever gain recipients beyond the owner).
+- Path-resolution family fix, widened again: validate-response --source and provider-request --source resolve CWD-relative while session-inbox prints meetings-root-relative, AND readiness run from the meetings root silently re-anchors project discovery and fabricates runtime_pin_missing plus workflow_hash_mismatch with a doubled path; centralize meetings-root resolution and name both candidate paths in errors.
+- Zero-signal guard (Wispr A/B headline): an empty signal stream passed validation silently on a meeting whose own tables held 8 commitments, 6 asks, 9 risks; add a consistency check that flags or fails empty signals when decisions or commitments are non-empty.
+- Date-gate engine entry point (relay #3): low-confidence-date recovery forces mint-then-abandon with a raw rm in _cache; add --meeting-date to session-inbox or an abandon-handoff subcommand.
+- Artifact-contract status vocabulary: define enumerated statuses for Decisions, Stakeholder Asks, Dependencies and the signal JSONL status field (live free-text evidence: declined by Ken, rejected alternative); also pin the meeting_type enum spelling (working session vs working_session drifts run-to-run on the same build).
+- Spot-check extraction quality on the six 2026-07-25 HTV meetings, the 2026-07-24 retention-policy artifact and the 2026-07-28 AdBook artifact under guidance 1.1; add the 2026-07-20 standup with 12 null/Unresolved attendee rows as a target.
+- Model-pin evidencing: model_id is provider-self-reported and inconsistent across runs on the identical frozen build (claude-code-session vs claude-opus-5[1m]); decide what the engine can attest, and rule whether claude-opus-5[1m] satisfies the plain claude-opus-5 pin.
+- Triage engine observations, now four: pin_runtime resolves workflow files from root .claude while inspect_runtime uses ~/.claude; runtime_provenance source_commit and source_tree_sha256 are null on a clean editable checkout; doctor and status reject a subcommand-level --development-override five other commands accept; the release store moved app-data roots between 0.2.0 (~/.local/share) and 0.2.1 (~/Library/Application Support) — decide the canonical root.
+- Engine adoption path (shipped-means-running ruling): init and post-update scaffold required state; ingest completion triggers or loudly nags playbook derivation; readiness gains a core-inactive severity category; product-status distinguishes implemented from active-at-reference-consumer; release evidence includes activation evidence; extraction-time registry hints so extraction stops re-minting advisory IDs for reviewed people.
+- Optionally implement the Layer 5D interim relief: one maintainer command wrapping build-receipt-publish-install-repin and one consumer runtime-update command wrapping fetch-verify-install-repin.
+- Add a drift check for the non-receipt-managed Codex skill pair to the suite or a hook; it drifted silently for three days once already.
+- Document the ~/.claude artifact commit step in the README release flow with the 0.2.1 lesson: the commit is only needed when rendered artifacts actually change; this release was byte-identical and needed nothing.
+- Attendee-table raw-label fidelity for non-VTT sources: the Wispr artifact renders Raw Speaker Labels as Unknown although the transcript carries explicit name labels.
+- Cache retention policy for provider request-response pairs: both 8/04 run pairs were deleted while a stray 2026-07-07 response survives, and relay #3 cited evidence paths no longer exist; decide retention and make it consistent.
+- Promote markdown transcript sources from tolerated to documented (owner priority): name the accepted format, add Wispr Flow guidance (canonical display names in the manual speaker-identify step; expect the manual date gate; check the signal count until the zero-signal guard ships).
+- Relay lane label fix: widen the triage poll to also match the Relay: title prefix and have file-dogfood-relay verify the label landed (note relay #5 arrived correctly labeled); granting the Hearst account triage permission is the owner call.
+- Fix the product-status self-contradiction (Signals And Ledger not-complete list still names implemented Layer 5A/5B features) and add activation-state accounting: every feature row carries implemented vs active-at-reference-consumer.
+- init bootstrap inversion: pipeline.py:169 initialize() calls require_write_readiness(operation=init) BEFORE init_project(), so a new consumer fails exit 12 runtime_pin_missing on the one command meant to set it up. Not a hard deadlock (_write_atomic mkdirs parents, so runtime pin can precede init) but the required order pin-then-init is the inverse of what the names imply and is stated in no error. Decide: exempt init from the pin gate, or have it emit the ordered remediation.
+- Silent CLI errors (general, all commands): cli.py:391 prints only f'{summary.status}: exit {summary.exit_code}' to stderr and discards summary.errors[].message plus readiness findings/remediation, which --json already carries. This is what turned the Trace3 init failure into a mystery. Render message, blocking paths and remediation on the human path.
+- Fabricated workflow_hash_mismatch when no pin exists: Trace3 init reported the ~/.claude SKILL.md 'does not match the approved runtime evidence' while HTV readiness passes exit 0 on that same file. With no pin there is no approved evidence to compare, so the check must say nothing-to-compare rather than mismatch. Adjacent to the known pin_runtime root/.claude vs inspect_runtime ~/.claude split in the engine-observations action.
+- Make 'meeting-ingest init' a true one-command bootstrap per the 2026-08-13 owner ruling (cap_20260813T171046Z_56618c59): in a virgin project it should render and install the workflow artifacts, auto-select and pin the latest published approved receipt, and scaffold the meetings root, with the user never learning that receipts, templates, skill destinations or 'uv run' exist. This SUPERSEDES the framing in the earlier bootstrap-inversion action — the owner rejected both 'exempt init from the gate' and 'emit better remediation' as insufficient. Satisfy the fail-closed approved-runtime chain automatically; do not bypass or weaken it.
+
+## Blockers
+
+- No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval (OB-002-1).
+
+## Open Questions
+
+- Should installed workflow artifacts carry a receipt or build stamp of their own? Today the installed agent doc and skill have no content stamp, so there is no local way to tell whether a copy still matches the receipt that placed it, and a hand-edit would be undetectable from the consumer side. This surfaced from an inbound ~/.claude relay that could not distinguish an installer write from a hand-edit.
+- Should docs/claude-skills/meeting-ingest/SKILL.md quote a single published rule source rather than restate the semantic guidance rules verbatim? Five surfaces now duplicate the rule text, and a parity test guards it in this repo, but the duplication remains a standing drift risk raised by the ~/.claude relay.
+- Should the acceptance evaluator live in the repository? It has now been written ad hoc three times because it lives in session scratchpad, and a different instrument per run weakens comparability across runs even when every tally reads 18/18. It is the instrument that decides milestone proof.
