@@ -508,6 +508,90 @@ def test_partial_pin_is_invalid_even_when_present(tmp_path: Path) -> None:
     assert "runtime_pin_invalid" in {finding.code for finding in inspection.findings}
 
 
+def test_missing_pin_reports_only_the_pin_finding_for_an_installed_workflow(tmp_path: Path) -> None:
+    distribution, module, _ = _make_distribution(tmp_path)
+    skill = tmp_path / "workflow/SKILL.md"
+    agent = tmp_path / "workflow/agent.md"
+    skill.parent.mkdir()
+    skill.write_text("installed skill\n", encoding="utf-8")
+    agent.write_text("installed agent\n", encoding="utf-8")
+
+    inspection = inspect_runtime(
+        tmp_path / "consumer",
+        module_path=module,
+        distribution=distribution,
+        application_data_root=tmp_path / "app-data",
+        skill_path=skill,
+        agent_path=agent,
+    )
+    codes = {finding.code for finding in inspection.findings}
+
+    assert inspection.pin["error"] == "missing"
+    assert "runtime_pin_missing" in codes
+    assert "workflow_hash_mismatch" not in codes
+    assert "runtime_pin_mismatch" not in codes
+
+
+def test_project_workflow_copy_shadows_the_user_level_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    consumer = tmp_path / "consumer"
+    user_skill = home / ".claude/skills/meeting-ingest/SKILL.md"
+    user_agent = home / ".claude/agents/meeting-ingest-session-provider.md"
+    project_skill = consumer / ".claude/skills/meeting-ingest/SKILL.md"
+    for path, payload in (
+        (user_skill, "user skill\n"),
+        (user_agent, "shared agent\n"),
+        (project_skill, "user skill\n"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(payload, encoding="utf-8")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    distribution, module, _ = _make_distribution(tmp_path)
+
+    inspection = inspect_runtime(
+        consumer,
+        module_path=module,
+        distribution=distribution,
+        application_data_root=tmp_path / "app-data",
+    )
+
+    # Byte-identical copies at both levels must not change the evidence a pin sees.
+    assert inspection.workflow.skill_path == str(project_skill)
+    assert inspection.workflow.skill_scope == "project"
+    assert inspection.workflow.skill_sha256 == _digest(user_skill)
+    assert inspection.workflow.agent_path == str(user_agent)
+    assert inspection.workflow.agent_scope == "user"
+
+
+def test_pinned_consumer_reports_a_shadowing_project_copy_as_a_workflow_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inspection = _approved_inspection(tmp_path, monkeypatch)
+    consumer = Path(inspection.pin["path"]).parents[3]
+    project_skill = consumer / ".claude/skills/meeting-ingest/SKILL.md"
+    project_skill.parent.mkdir(parents=True)
+    project_skill.write_text("tampered project skill\n", encoding="utf-8")
+    dist_path = Path(inspection.distribution["path"])
+
+    second = inspect_runtime(
+        consumer,
+        invoked_path=Path(inspection.executable["invoked"]),
+        module_path=Path(inspection.executable["module"]),
+        distribution=StubDistribution(dist_path.parent, dist_path),
+        application_data_root=tmp_path / "app-data",
+        receipt_path=Path(inspection.receipt["path"]),
+        agent_path=Path(inspection.workflow.agent_path),
+    )
+
+    assert second.workflow.skill_path == str(project_skill)
+    assert second.workflow.skill_scope == "project"
+    assert "workflow_hash_mismatch" in {finding.code for finding in second.findings}
+    assert second.runtime_mode == "unverified"
+
+
 def test_structurally_incomplete_receipt_is_invalid(tmp_path: Path) -> None:
     distribution, module, _ = _make_distribution(tmp_path)
     receipt = tmp_path / "receipt.json"

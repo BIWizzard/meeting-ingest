@@ -35,11 +35,11 @@ REQUIRED_SOURCE_PATHS = (
     PurePosixPath("pyproject.toml"),
     PurePosixPath("docs/artifact-contract.md"),
     PurePosixPath("docs/provider-handoff-contract.md"),
-    PurePosixPath("docs/claude-skills/meeting-ingest/SKILL.md"),
-    PurePosixPath("docs/claude-agents/meeting-ingest-session-provider.md"),
 )
-SKILL_TEMPLATE_PATH = PurePosixPath("docs/claude-skills/meeting-ingest/SKILL.md")
-CLAUDE_AGENT_PATH = PurePosixPath("docs/claude-agents/meeting-ingest-session-provider.md")
+# The workflow templates ship inside the package so an installed wheel can render
+# them; they are already covered by the SOURCE_DIRECTORY sweep above.
+SKILL_TEMPLATE_PATH = SOURCE_DIRECTORY / "workflow_templates/SKILL.md"
+CLAUDE_AGENT_PATH = SOURCE_DIRECTORY / "workflow_templates/meeting-ingest-session-provider.md"
 _EXACT_COMMIT = re.compile(r"[0-9a-f]{40}")
 
 
@@ -405,6 +405,10 @@ def verify_wheel(wheel_path: Path, identity: BuildIdentity, source_date_epoch: i
             raise RuntimeBuildError("Wheel does not contain embedded build identity")
         if wheel.read(embedded_name) != render_build_info(identity):
             raise RuntimeBuildError("Wheel embedded build identity does not match staged identity")
+        for template in (SKILL_TEMPLATE_PATH, CLAUDE_AGENT_PATH):
+            template_name = template.relative_to("src").as_posix()
+            if template_name not in names:
+                raise RuntimeBuildError(f"Wheel does not contain workflow template {template_name}")
         metadata_name = f"{expected_dist_info}/METADATA"
         wheel_metadata_name = f"{expected_dist_info}/WHEEL"
         if metadata_name not in names or wheel_metadata_name not in names:

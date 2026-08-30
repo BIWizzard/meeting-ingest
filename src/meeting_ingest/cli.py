@@ -377,6 +377,19 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
             content = data["content"]
             print(content if isinstance(content, str) else json.dumps(content, indent=2, sort_keys=True))
             return
+        if command == "init":
+            override = data.get("verdict") == "development_override"
+            print("Scaffolded (development override)" if override else "Ready")
+            reason = (data.get("runtime_provenance") or {}).get("development_override_reason")
+            if reason:
+                print(f"Development reason: {reason}")
+            print(f"Meetings root: {data['meetings_root']}")
+            if data.get("approved_build_id"):
+                print(f"Approved build: {data['approved_build_id']}")
+            warnings = data.get("finding_counts", {}).get("by_severity", {}).get("warning")
+            if warnings:
+                print(f"Findings: warning={warnings}")
+            return
         print(f"{command} {summary.status}")
         if "meetings_root" in data:
             print(f"meetings_root: {data['meetings_root']}")
@@ -389,6 +402,30 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
         return
 
     print(f"{summary.status}: exit {summary.exit_code}", file=sys.stderr)
+    for error in data.get("errors", []):
+        _print_error(error)
+
+
+def _print_error(error: dict) -> None:
+    """Give the human path the same code, message, and remediation --json carries."""
+    details = error.get("details") if isinstance(error.get("details"), dict) else {}
+    findings = details.get("findings") if isinstance(details.get("findings"), list) else []
+    blockers = [
+        finding
+        for finding in findings
+        if isinstance(finding, dict) and finding.get("severity") == "blocker"
+    ]
+    if not blockers:
+        print(f"{error.get('code')}: {error.get('message')}", file=sys.stderr)
+        if details.get("remediation"):
+            print(f"  Next action: {details['remediation']}", file=sys.stderr)
+        return
+    for finding in blockers:
+        print(f"{finding.get('code')}: {finding.get('message')}", file=sys.stderr)
+        if finding.get("path"):
+            print(f"  Path: {finding['path']}", file=sys.stderr)
+        if finding.get("remediation"):
+            print(f"  Next action: {finding['remediation']}", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:

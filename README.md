@@ -291,17 +291,17 @@ The maintainer-only release flow is explicit end to end:
    ```bash
    scripts/install-approved-skill.py \
      --receipt <receipt> \
-     --template docs/claude-skills/meeting-ingest/SKILL.md \
+     --template src/meeting_ingest/workflow_templates/SKILL.md \
      --executable /Users/kmgdev/.local/bin/meeting-ingest \
      --skill-destination ~/.claude/skills/meeting-ingest/SKILL.md \
-     --agent docs/claude-agents/meeting-ingest-session-provider.md \
+     --agent src/meeting_ingest/workflow_templates/meeting-ingest-session-provider.md \
      --agent-destination ~/.claude/agents/meeting-ingest-session-provider.md \
      --json
    ```
 
    The installer verifies the template hash against the receipt, substitutes only the `{{MEETING_INGEST_APPROVED_EXECUTABLE}}` marker with the machine-local absolute path, copies the agent byte-identical, and writes atomically. It reports the rendered skill hash; the pin step below records that hash in the consumer pin.
 
-   Repeat this step for every consumer that carries project-level copies: `runtime pin` verifies the artifacts the consumer session actually resolves, and a project-level `.claude/agents/meeting-ingest-session-provider.md` (or `.claude/skills/meeting-ingest/SKILL.md`) shadows the user-level install. Run the installer again with `--skill-destination <consumer-root>/.claude/skills/meeting-ingest/SKILL.md` and `--agent-destination <consumer-root>/.claude/agents/meeting-ingest-session-provider.md` before pinning, or the pin fails with `workflow_hash_mismatch` (this bit the `gb37a12a0502e` release once before the project-level copies were re-targeted). Never hand-edit the copies to match — always go through the installer.
+   Repeat this step for every consumer that carries project-level copies: `runtime pin` and `readiness` both verify the artifacts the consumer session actually resolves, per file, and a project-level `.claude/agents/meeting-ingest-session-provider.md` (or `.claude/skills/meeting-ingest/SKILL.md`) shadows the user-level install. Run the installer again with `--skill-destination <consumer-root>/.claude/skills/meeting-ingest/SKILL.md` and `--agent-destination <consumer-root>/.claude/agents/meeting-ingest-session-provider.md` before pinning, or the pin fails with `workflow_hash_mismatch` (this bit the `gb37a12a0502e` release once before the project-level copies were re-targeted). Never hand-edit the copies to match — always go through the installer. A consumer that has no pin yet gets this step and the pin below from `meeting-ingest init`.
 6. Pin the consumer to the approved receipt:
 
    ```bash
@@ -313,6 +313,18 @@ The maintainer-only release flow is explicit end to end:
    ```bash
    meeting-ingest readiness --host claude-code --json
    ```
+
+### Consumer Onboarding
+
+Once the maintainer has approved, built, published, and installed a build (steps 1-4, plus the user-level workflow install in step 5), a new consumer project needs exactly one command from its own root:
+
+```bash
+meeting-ingest init
+```
+
+With no runtime pin present, `init` selects the latest published approved receipt, requires the receipt's own wheel beside it and hashes it, verifies that the invoked command is the console script the running frozen distribution records, renders and installs the project-level Claude skill and session-provider agent through the same receipt-verified installer used above, re-inspects to confirm the session resolves exactly those bytes, writes the consumer pin, scaffolds the meetings layout, and reports readiness. Every byte it writes is verified against the receipt, and if a later step fails it removes the pin it wrote so a rerun converges.
+
+`init` never replaces an existing pin. Where one is already present it only re-runs the readiness gate and re-scaffolds, so moving a consumer to a newer build stays the explicit step 6 above. `--development-override <reason>` scaffolds without selecting a runtime and never auto-pins.
 
 Release-store publishing, installation, and `runtime pin` are bootstrap/release mutations outside project readiness. They use strict receipt/build/workflow verification and atomic writes instead of bypassing themselves through the project guard.
 

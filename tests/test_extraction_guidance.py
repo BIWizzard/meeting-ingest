@@ -10,9 +10,9 @@ from meeting_ingest.extraction_guidance import (
 REPO_ROOT = Path(__file__).parents[1]
 
 INSTRUCTION_SURFACES = (
-    "docs/claude-agents/meeting-ingest-session-provider.md",
+    "src/meeting_ingest/workflow_templates/meeting-ingest-session-provider.md",
     "docs/session-provider-subagent-prompt.md",
-    "docs/claude-skills/meeting-ingest/SKILL.md",
+    "src/meeting_ingest/workflow_templates/SKILL.md",
     "docs/codex-skills/meeting-ingest/SKILL.md",
     "docs/artifact-contract.md",
 )

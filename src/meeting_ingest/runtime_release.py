@@ -5,17 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from contextlib import contextmanager
+from importlib import resources
 import json
 import os
 from pathlib import Path
 import shutil
 import sys
 import tempfile
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from meeting_ingest._build_info import BUILD_INFO
 from meeting_ingest.errors import EXIT_RUNTIME_READINESS, MeetingIngestError
 from meeting_ingest.run_summary import RunSummary
+from meeting_ingest.runtime import RuntimeInspection, inspect_runtime
 from meeting_ingest.runtime_config import (
     RUNTIME_PIN_RELATIVE_PATH,
     RuntimeConfigError,
@@ -33,6 +35,19 @@ DEFAULT_CHANNEL = "private-alpha"
 APPROVED_EXECUTABLE_MARKER = "{{MEETING_INGEST_APPROVED_EXECUTABLE}}"
 CLAUDE_SKILL_PATH = Path(".claude/skills/meeting-ingest/SKILL.md")
 CLAUDE_AGENT_PATH = Path(".claude/agents/meeting-ingest-session-provider.md")
+WORKFLOW_TEMPLATE_DIRECTORY = "workflow_templates"
+SKILL_TEMPLATE_NAME = "SKILL.md"
+CLAUDE_AGENT_TEMPLATE_NAME = "meeting-ingest-session-provider.md"
+PUBLISH_REMEDIATION = (
+    "Ask the maintainer to build and publish an approved runtime "
+    "(scripts/build-approved-runtime.py, then scripts/publish-approved-runtime.py)."
+)
+_BOOTSTRAP_BLOCKING_CODES = (
+    "runtime_editable_blocked",
+    "runtime_install_unknown",
+    "runtime_package_integrity_failed",
+    "runtime_git_uninspectable",
+)
 _RECEIPT_KEYS = frozenset(
     {"schema_version", "build", "workflow", "verification", "approved_by", "approved_at"}
 )
@@ -54,13 +69,20 @@ _WORKFLOW_KEYS = frozenset(
 class RuntimeReleaseError(MeetingIngestError):
     """Raised when explicit release evidence cannot be verified safely."""
 
-    def __init__(self, message: str, *, code: str = "runtime_release_invalid") -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "runtime_release_invalid",
+        remediation: str | None = None,
+    ) -> None:
         super().__init__(
             phase="runtime_release",
             code=code,
             message=message,
             exit_code=EXIT_RUNTIME_READINESS,
             recoverable=True,
+            details={"remediation": remediation} if remediation else {},
         )
 
 
@@ -90,11 +112,58 @@ class WorkflowInstallResult:
     agent_sha256: str | None
 
 
+@dataclass(frozen=True)
+class PackagedWorkflowTemplates:
+    skill_template: Path
+    claude_agent: Path
+
+
+@dataclass(frozen=True)
+class BootstrappedRuntime:
+    build_id: str
+    receipt_path: Path
+    pin_path: Path
+    pin_sha256: str
+    skill_destination: Path
+    agent_destination: Path
+    executable: Path
+
+
 def default_application_data_root() -> Path:
     if sys.platform == "darwin":
         return Path.home() / "Library/Application Support/meeting-ingest"
     xdg_data = os.environ.get("XDG_DATA_HOME")
     return (Path(xdg_data) if xdg_data else Path.home() / ".local/share") / "meeting-ingest"
+
+
+def packaged_workflow_templates() -> PackagedWorkflowTemplates:
+    """Locate the workflow templates shipped inside the running installation."""
+
+    try:
+        directory = resources.files("meeting_ingest").joinpath(WORKFLOW_TEMPLATE_DIRECTORY)
+        skill = Path(os.fspath(directory.joinpath(SKILL_TEMPLATE_NAME)))
+        agent = Path(os.fspath(directory.joinpath(CLAUDE_AGENT_TEMPLATE_NAME)))
+    except (ModuleNotFoundError, TypeError, OSError) as exc:
+        raise RuntimeReleaseError(
+            f"Packaged workflow templates are unavailable: {exc}",
+            code="workflow_templates_unavailable",
+            remediation="Reinstall the approved Meeting Ingest wheel and run the command again.",
+        ) from exc
+    for label, path in (("Claude skill template", skill), ("Claude agent", agent)):
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeReleaseError(
+                f"Packaged {label} is missing or invalid: {path}",
+                code="workflow_templates_unavailable",
+                remediation="Reinstall the approved Meeting Ingest wheel and run the command again.",
+            )
+    return PackagedWorkflowTemplates(skill_template=skill, claude_agent=agent)
+
+
+def runtime_pin_present(root: Path) -> bool:
+    """Report whether a consumer already carries a runtime pin of any state."""
+
+    path = root.expanduser().resolve(strict=False) / RUNTIME_PIN_RELATIVE_PATH
+    return path.exists() or path.is_symlink()
 
 
 def _require_exact_keys(value: Mapping[str, Any], expected: frozenset[str], label: str) -> None:
@@ -197,6 +266,54 @@ def read_receipt(path: Path) -> tuple[dict[str, Any], str]:
     return value, sha256_bytes(payload)
 
 
+def _reread_receipt(path: Path, expected_sha256: str | None) -> tuple[dict[str, Any], str]:
+    """Re-open a receipt and refuse any stage that no longer sees the selected bytes."""
+    receipt, receipt_sha256 = read_receipt(path)
+    if expected_sha256 is not None and receipt_sha256 != expected_sha256:
+        raise RuntimeReleaseError(
+            f"Approved receipt changed between verification stages: {path}",
+            code="runtime_receipt_invalid",
+            remediation="Re-run the command; if it repeats, republish the approved runtime.",
+        )
+    return receipt, receipt_sha256
+
+
+def _require_unsymlinked_descent(base: Path, path: Path, label: str) -> None:
+    """Reject a symlink at any component between base and path, path included."""
+    try:
+        relative = path.relative_to(base)
+    except ValueError as exc:
+        raise RuntimeReleaseError(
+            f"{label} is not contained by {base}: {path}",
+            code="runtime_path_unsafe",
+            remediation="Remove the redirected path and run the command again.",
+        ) from exc
+    current = base
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeReleaseError(
+                f"{label} traverses a symbolic link: {current}",
+                code="runtime_path_unsafe",
+                remediation="Replace the symbolic link with a reviewed regular directory or file.",
+            )
+
+
+def _require_contained(base: Path, path: Path, label: str) -> Path:
+    """Require a resolved path to stay under a resolved base directory."""
+    resolved_base = base.resolve(strict=False)
+    resolved = path.resolve(strict=False)
+    try:
+        resolved.relative_to(resolved_base)
+    except ValueError as exc:
+        raise RuntimeReleaseError(
+            f"{label} resolves outside {resolved_base}: {resolved}",
+            code="runtime_path_unsafe",
+            remediation="Republish the approved runtime into an unredirected application data root.",
+        ) from exc
+    return resolved
+
+
 def _verified_wheel(receipt_path: Path, receipt: Mapping[str, Any], wheel_path: Path | None) -> Path:
     build = receipt["build"]
     unresolved = (wheel_path or receipt_path.parent / build["wheel_filename"]).expanduser().absolute()
@@ -247,6 +364,16 @@ def _stage_atomic(path: Path, payload: bytes) -> Path:
         temporary.unlink(missing_ok=True)
         raise
     return temporary
+
+
+def _create_atomic_exclusive(path: Path, payload: bytes) -> None:
+    """Create a file that must not already exist, durably and without clobbering."""
+    temporary = _stage_atomic(path, payload)
+    try:
+        os.link(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _write_atomic_pair(
@@ -315,10 +442,11 @@ def install_workflow_artifacts(
     skill_destination: Path,
     agent_path: Path | None = None,
     agent_destination: Path | None = None,
+    expected_receipt_sha256: str | None = None,
 ) -> WorkflowInstallResult:
     """Render and install receipt-verified workflow artifacts atomically."""
 
-    receipt, _ = read_receipt(receipt_path)
+    receipt, _ = _reread_receipt(receipt_path, expected_receipt_sha256)
     workflow = receipt["workflow"]
     if (agent_path is None) != (agent_destination is None):
         raise RuntimeReleaseError(
@@ -580,12 +708,14 @@ def pin_runtime(
     channel: str = DEFAULT_CHANNEL,
     installed_skill_path: Path | None = None,
     claude_agent_path: Path | None = None,
+    expected_receipt_sha256: str | None = None,
+    exclusive: bool = False,
 ) -> PinnedRuntime:
     """Verify the running approved build and atomically select it for one consumer."""
 
     root = root.expanduser().resolve(strict=False)
     receipt_file = receipt_path.expanduser().absolute()
-    receipt, receipt_sha256 = read_receipt(receipt_file)
+    receipt, receipt_sha256 = _reread_receipt(receipt_file, expected_receipt_sha256)
     build = receipt["build"]
     workflow = receipt["workflow"]
     embedded_pairs = {
@@ -680,8 +810,233 @@ def pin_runtime(
     except RuntimeConfigError as exc:
         raise RuntimeReleaseError(str(exc)) from exc
     pin_path = root / RUNTIME_PIN_RELATIVE_PATH
-    _write_atomic(pin_path, payload)
+    if exclusive:
+        _create_atomic_exclusive(pin_path, payload)
+    else:
+        _write_atomic(pin_path, payload)
     return PinnedRuntime(build_id=build["build_id"], pin_path=pin_path, pin_sha256=sha256_bytes(payload))
+
+
+def _latest_published_receipt(app_root: Path, channel: str) -> tuple[Path, str]:
+    """Select the newest published approved receipt without touching any pin."""
+
+    _require_unsymlinked_descent(app_root, app_root / "channels", "Release channel directory")
+    manifest = read_channel(app_root, channel)
+    if not manifest.valid:
+        raise RuntimeReleaseError(
+            f"No approved Meeting Ingest runtime is published for channel {channel!r} "
+            f"in {app_root} ({manifest.error}).",
+            code="approved_runtime_unavailable",
+            remediation=PUBLISH_REMEDIATION,
+        )
+    latest = manifest.values["latest"]
+    receipt_path = app_root / latest["receipt_path"]
+    _require_unsymlinked_descent(app_root, receipt_path, "Published receipt")
+    _require_contained(app_root, receipt_path, "Published receipt")
+    try:
+        _, receipt_sha256 = read_receipt(receipt_path)
+    except RuntimeReleaseError as exc:
+        raise RuntimeReleaseError(
+            f"The approved runtime published in {app_root} is unusable: {exc.message}",
+            code="approved_runtime_unavailable",
+            remediation=PUBLISH_REMEDIATION,
+        ) from exc
+    if receipt_sha256 != latest["receipt_sha256"]:
+        raise RuntimeReleaseError(
+            f"The approved receipt published in {app_root} does not match its channel manifest.",
+            code="approved_runtime_unavailable",
+            remediation=PUBLISH_REMEDIATION,
+        )
+    return receipt_path, receipt_sha256
+
+
+def _require_published_wheel(app_root: Path, receipt_path: Path, receipt: Mapping[str, Any]) -> Path:
+    """Require the receipt's own wheel beside it, hash-verified, before any write."""
+
+    wheel_path = receipt_path.parent / receipt["build"]["wheel_filename"]
+    _require_unsymlinked_descent(app_root, wheel_path, "Published wheel")
+    _require_contained(app_root, wheel_path, "Published wheel")
+    if not wheel_path.is_file():
+        raise RuntimeReleaseError(
+            f"The approved wheel is not published beside its receipt: {wheel_path}",
+            code="approved_runtime_unavailable",
+            remediation=PUBLISH_REMEDIATION,
+        )
+    return _verified_wheel(receipt_path, receipt, wheel_path)
+
+
+def _require_approved_frozen_install(inspection: RuntimeInspection, receipt_path: Path) -> None:
+    """Refuse to bootstrap from anything but a frozen install of the receipt's wheel."""
+
+    blocking = next(
+        (finding for finding in inspection.findings if finding.code in _BOOTSTRAP_BLOCKING_CODES),
+        None,
+    )
+    if blocking is not None and blocking.code == "runtime_editable_blocked":
+        raise RuntimeReleaseError(
+            "The running Meeting Ingest distribution is an editable development install.",
+            code="runtime_editable_blocked",
+            remediation=(
+                "Install the approved frozen wheel and run `meeting-ingest init` from it, or rerun "
+                "with --development-override <reason> to scaffold without an approved runtime."
+            ),
+        )
+    if blocking is not None:
+        raise RuntimeReleaseError(
+            blocking.message, code=blocking.code, remediation=blocking.remediation
+        )
+    if inspection.install.mode != "frozen_unapproved":
+        raise RuntimeReleaseError(
+            f"The running Meeting Ingest install mode is not a verifiable frozen install: "
+            f"{inspection.install.mode}.",
+            code="runtime_install_unknown",
+            remediation="Invoke Meeting Ingest from the approved frozen installation.",
+        )
+    if not inspection.receipt["match"]:
+        raise RuntimeReleaseError(
+            "The running Meeting Ingest build does not match the latest approved receipt.",
+            code="runtime_build_mismatch",
+            remediation=(
+                f"Install the approved wheel named by {receipt_path} and run `meeting-ingest init` again."
+            ),
+        )
+
+
+def _approved_console_script(inspection: RuntimeInspection) -> Path:
+    """Identify the executable by the console script the verified distribution ships."""
+
+    recorded = inspection.executable.get("console_script")
+    if not recorded:
+        raise RuntimeReleaseError(
+            "The running distribution does not record an installed meeting-ingest console script.",
+            code="runtime_executable_unidentified",
+            remediation="Reinstall Meeting Ingest from the approved wheel so its console script is recorded.",
+        )
+    script = Path(recorded).resolve(strict=False)
+    invoked = Path(inspection.executable["invoked"]).resolve(strict=False)
+    if invoked != script:
+        raise RuntimeReleaseError(
+            f"The invoked command is not the approved console script: {invoked} != {script}",
+            code="runtime_executable_mismatch",
+            remediation=f"Run {script} directly instead of a wrapper that imports the package.",
+        )
+    return script
+
+
+def _require_writable_destination(root: Path, destination: Path, label: str) -> None:
+    """Refuse to write through a symlinked directory between the project root and a target."""
+
+    _require_unsymlinked_descent(root, destination.parent, label)
+
+
+def _require_installed_workflow_resolves(
+    inspection: RuntimeInspection,
+    installed: WorkflowInstallResult,
+    receipt_path: Path,
+) -> None:
+    """Require host resolution to reach the exact artifacts this bootstrap just wrote."""
+
+    _require_approved_frozen_install(inspection, receipt_path)
+    expected = (
+        ("Claude skill", installed.skill_destination, installed.rendered_skill_sha256,
+         inspection.workflow.skill_path, inspection.workflow.skill_sha256),
+        ("Claude agent", installed.agent_destination, installed.agent_sha256,
+         inspection.workflow.agent_path, inspection.workflow.agent_sha256),
+    )
+    for label, destination, digest, resolved_path, resolved_digest in expected:
+        if destination is None:
+            continue
+        if Path(resolved_path) != destination.resolve(strict=False) or resolved_digest != digest:
+            raise RuntimeReleaseError(
+                f"The installed {label} is not what this session resolves: {resolved_path}",
+                code="workflow_hash_mismatch",
+                remediation="Remove the shadowing copy this session resolves and run `meeting-ingest init` again.",
+            )
+
+
+def bootstrap_consumer_runtime(
+    root: Path,
+    *,
+    application_data_root: Path | None = None,
+    channel: str = DEFAULT_CHANNEL,
+    invoked_executable: str | Path | None = None,
+    runtime_inspector: Callable[..., RuntimeInspection] = inspect_runtime,
+) -> BootstrappedRuntime:
+    """Select, install, and pin the latest approved runtime for an unpinned consumer."""
+
+    root = root.expanduser().resolve(strict=False)
+    if runtime_pin_present(root):
+        raise RuntimeReleaseError(
+            f"This consumer already carries a runtime pin: {root / RUNTIME_PIN_RELATIVE_PATH}",
+            code="runtime_pin_present",
+            remediation="Repin explicitly with `meeting-ingest runtime pin` when a new build is approved.",
+        )
+    app_root = (application_data_root or default_application_data_root()).expanduser().resolve(
+        strict=False
+    )
+    receipt_path, receipt_sha256 = _latest_published_receipt(app_root, channel)
+    receipt, _ = _reread_receipt(receipt_path, receipt_sha256)
+
+    def inspect(invoked: Path) -> RuntimeInspection:
+        return runtime_inspector(
+            root,
+            invoked_path=invoked,
+            application_data_root=app_root,
+            receipt_path=receipt_path,
+        )
+
+    inspection = inspect(_resolve_executable(invoked_executable))
+    _require_approved_frozen_install(inspection, receipt_path)
+    executable = _approved_console_script(inspection)
+    _require_published_wheel(app_root, receipt_path, receipt)
+
+    templates = packaged_workflow_templates()
+    skill_destination = root / CLAUDE_SKILL_PATH
+    agent_destination = root / CLAUDE_AGENT_PATH
+    pin_path = root / RUNTIME_PIN_RELATIVE_PATH
+    _require_writable_destination(root, skill_destination, "Claude skill destination")
+    _require_writable_destination(root, agent_destination, "Claude agent destination")
+    _require_writable_destination(root, pin_path, "Runtime pin destination")
+
+    installed = install_workflow_artifacts(
+        receipt_path,
+        template_path=templates.skill_template,
+        executable=executable,
+        skill_destination=skill_destination,
+        agent_path=templates.claude_agent,
+        agent_destination=agent_destination,
+        expected_receipt_sha256=receipt_sha256,
+    )
+    _require_installed_workflow_resolves(inspect(executable), installed, receipt_path)
+
+    try:
+        pinned = pin_runtime(
+            root,
+            receipt_path,
+            approved_executable=executable,
+            invoked_executable=executable,
+            application_data_root=app_root,
+            channel=channel,
+            installed_skill_path=skill_destination,
+            claude_agent_path=agent_destination,
+            expected_receipt_sha256=receipt_sha256,
+            exclusive=True,
+        )
+    except FileExistsError as exc:
+        raise RuntimeReleaseError(
+            f"This consumer already carries a runtime pin: {pin_path}",
+            code="runtime_pin_present",
+            remediation="Repin explicitly with `meeting-ingest runtime pin` when a new build is approved.",
+        ) from exc
+    return BootstrappedRuntime(
+        build_id=pinned.build_id,
+        receipt_path=receipt_path,
+        pin_path=pinned.pin_path,
+        pin_sha256=pinned.pin_sha256,
+        skill_destination=skill_destination,
+        agent_destination=agent_destination,
+        executable=executable,
+    )
 
 
 def update_check(

@@ -213,6 +213,96 @@ def test_readiness_cli_returns_stable_blocked_exit_code(tmp_path: Path, monkeypa
     assert result["findings"][0]["code"] == "runtime_package_integrity_failed"
 
 
+def test_emit_init_reports_history_warnings_without_overclaiming(capsys) -> None:
+    summary = RunSummary(
+        details={
+            "command": "init",
+            "meetings_root": "/project/_local/project-context/meetings",
+            "verdict": "ready_with_history_warnings",
+            "approved_build_id": "meeting-ingest-0.3.0-gaaaaaaaaaaaa-sbbbbbbbbbbbb",
+            "finding_counts": {"by_severity": {"warning": 2}},
+        }
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == (
+        "Ready\n"
+        "Meetings root: /project/_local/project-context/meetings\n"
+        "Approved build: meeting-ingest-0.3.0-gaaaaaaaaaaaa-sbbbbbbbbbbbb\n"
+        "Findings: warning=2\n"
+    )
+
+
+def test_emit_failure_prints_blocking_findings_with_paths_and_remediation(capsys) -> None:
+    summary = RunSummary(
+        status="failed",
+        exit_code=12,
+        errors=[
+            {
+                "phase": "readiness",
+                "code": "runtime_pin_missing",
+                "message": "The consumer runtime pin is missing.",
+                "recoverable": True,
+                "details": {
+                    "verdict": "blocked",
+                    "findings": [
+                        {
+                            "code": "runtime_pin_missing",
+                            "severity": "blocker",
+                            "message": "The consumer runtime pin is missing.",
+                            "path": "/project/_local/meeting-ingest-runtime.toml",
+                            "remediation": "Install and pin an approved receipt.",
+                        },
+                        {
+                            "code": "update_available",
+                            "severity": "advisory",
+                            "message": "A newer approved runtime is available.",
+                            "path": None,
+                            "remediation": "Review the newer receipt.",
+                        },
+                    ],
+                },
+            }
+        ],
+        details={"reason": "runtime_pin_missing"},
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().err == (
+        "failed: exit 12\n"
+        "runtime_pin_missing: The consumer runtime pin is missing.\n"
+        "  Path: /project/_local/meeting-ingest-runtime.toml\n"
+        "  Next action: Install and pin an approved receipt.\n"
+    )
+
+
+def test_emit_failure_prints_typed_error_message_and_remediation(capsys) -> None:
+    summary = RunSummary(
+        status="failed",
+        exit_code=12,
+        errors=[
+            {
+                "phase": "runtime_release",
+                "code": "approved_runtime_unavailable",
+                "message": "No approved runtime is published in /store.",
+                "recoverable": True,
+                "details": {"remediation": "Ask the maintainer to publish an approved build."},
+            }
+        ],
+        details={"reason": "approved_runtime_unavailable"},
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().err == (
+        "failed: exit 12\n"
+        "approved_runtime_unavailable: No approved runtime is published in /store.\n"
+        "  Next action: Ask the maintainer to publish an approved build.\n"
+    )
+
+
 def test_emit_update_check_warns_when_status_is_unavailable(capsys) -> None:
     summary = RunSummary(
         warnings=["Runtime pin unavailable or invalid: missing"],

@@ -9,7 +9,7 @@ import hashlib
 from importlib import metadata
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
@@ -33,8 +33,10 @@ CLAUDE_SKILL_PATH = Path(".claude/skills/meeting-ingest/SKILL.md")
 CLAUDE_AGENT_PATH = Path(
     ".claude/agents/meeting-ingest-session-provider.md"
 )
+CONSOLE_SCRIPT_NAME = "meeting-ingest"
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 _AUTO_DISTRIBUTION = object()
+_SCRIPT_DIRECTORIES = frozenset({"bin", "Scripts"})
 
 
 @dataclass(frozen=True)
@@ -67,8 +69,10 @@ class WorkflowEvidence:
     contract_version: str
     skill_path: str
     skill_sha256: str | None
+    skill_scope: str
     agent_path: str
     agent_sha256: str | None
+    agent_scope: str
     match: bool
 
 
@@ -217,6 +221,39 @@ def _record_integrity(distribution: Any, dist_path: Path) -> tuple[str, list[str
                 if target.stat().st_size != expected_size:
                     errors.append(f"RECORD size mismatch: {row[0]}")
     return ("invalid", errors) if errors else ("valid", [])
+
+
+def _console_script(distribution: Any, dist_path: Path) -> Path | None:
+    """Resolve the console script RECORD ships for this exact distribution."""
+    record_path = dist_path / "RECORD"
+    if record_path.is_symlink() or not record_path.is_file():
+        return None
+    root = _record_root(distribution, dist_path)
+    try:
+        rows = list(csv.reader(record_path.read_text(encoding="utf-8").splitlines()))
+    except (OSError, UnicodeError, csv.Error):
+        return None
+    for row in rows:
+        if len(row) != 3 or not row[0]:
+            continue
+        recorded = PurePosixPath(row[0])
+        if recorded.stem != CONSOLE_SCRIPT_NAME or len(recorded.parts) < 2:
+            continue
+        if recorded.parts[-2] not in _SCRIPT_DIRECTORIES:
+            continue
+        candidate = (root / Path(row[0])).resolve(strict=False)
+        return candidate if candidate.is_file() else None
+    return None
+
+
+def _resolved_workflow_path(root: Path, relative: Path, override: Path | None) -> tuple[Path, str]:
+    """Resolve one workflow artifact the way the host does: project shadows user."""
+    if override is not None:
+        return override.expanduser().resolve(strict=False), "explicit"
+    project = root / relative
+    if project.is_symlink() or project.exists():
+        return project.resolve(strict=False), "project"
+    return (Path.home() / relative).expanduser().resolve(strict=False), "user"
 
 
 def _file_url_path(value: Any) -> Path | None:
@@ -473,6 +510,7 @@ def inspect_runtime(
     dist_path: Path | None = None
     dist_version: str | None = None
     dist_name: str | None = None
+    console_script: Path | None = None
     module_matches_distribution = False
     direct_url_valid = True
 
@@ -500,6 +538,7 @@ def inspect_runtime(
             )
         if dist_path is not None:
             record_status, record_errors = _record_integrity(distribution, dist_path)
+            console_script = _console_script(distribution, dist_path)
             module_record = dist_path.parent / "meeting_ingest/__init__.py"
             module_matches_distribution = module_record.resolve(strict=False) == module
     metadata_matches_build = (
@@ -634,9 +673,8 @@ def inspect_runtime(
             )
         )
 
-    home = Path.home()
-    resolved_skill = (skill_path or home / CLAUDE_SKILL_PATH).expanduser().resolve(strict=False)
-    resolved_agent = (agent_path or home / CLAUDE_AGENT_PATH).expanduser().resolve(strict=False)
+    resolved_skill, skill_scope = _resolved_workflow_path(root, CLAUDE_SKILL_PATH, skill_path)
+    resolved_agent, agent_scope = _resolved_workflow_path(root, CLAUDE_AGENT_PATH, agent_path)
     skill_sha = _sha256_file(resolved_skill) if resolved_skill.is_file() else None
     agent_sha = _sha256_file(resolved_agent) if resolved_agent.is_file() else None
 
@@ -764,7 +802,9 @@ def inspect_runtime(
                 path=pin.path,
             )
         )
-    if not workflow_match:
+    # Without a valid pin there is no approved evidence to compare the installed
+    # workflow against, so the pin finding above is the only truthful one.
+    if pin.valid and not workflow_match:
         findings.append(
             _finding(
                 "workflow_hash_mismatch",
@@ -816,7 +856,12 @@ def inspect_runtime(
         workflow_contract_version=build.workflow_contract_version,
     )
     return RuntimeInspection(
-        executable={"invoked": str(invoked), "python": str(python), "module": str(module)},
+        executable={
+            "invoked": str(invoked),
+            "python": str(python),
+            "module": str(module),
+            "console_script": str(console_script) if console_script else None,
+        },
         build=build,
         distribution={
             "name": dist_name,
@@ -848,8 +893,10 @@ def inspect_runtime(
             contract_version=build.workflow_contract_version,
             skill_path=str(resolved_skill),
             skill_sha256=skill_sha,
+            skill_scope=skill_scope,
             agent_path=str(resolved_agent),
             agent_sha256=agent_sha,
+            agent_scope=agent_scope,
             match=workflow_match,
         ),
         channel=channel,

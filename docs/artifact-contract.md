@@ -70,11 +70,9 @@ The committed source checkout uses the same field names with explicit developmen
 The source-tree digest is SHA-256 over these tracked regular files from `git archive <source_commit>`:
 
 - `pyproject.toml`;
-- every regular file under `src/meeting_ingest/`;
+- every regular file under `src/meeting_ingest/`, which carries the workflow templates `src/meeting_ingest/workflow_templates/SKILL.md` and `src/meeting_ingest/workflow_templates/meeting-ingest-session-provider.md`;
 - `docs/artifact-contract.md`;
-- `docs/provider-handoff-contract.md`;
-- `docs/claude-skills/meeting-ingest/SKILL.md`;
-- `docs/claude-agents/meeting-ingest-session-provider.md`.
+- `docs/provider-handoff-contract.md`.
 
 Paths are normalized to relative POSIX UTF-8 and sorted by their UTF-8 bytes. For each file, the hash input is `path + NUL + decimal-byte-length + NUL + exact-file-bytes`. Directories contribute no bytes. A missing required path, symlink, non-regular entry, duplicate normalized path, or unexpected path below a required directory blocks the build. Line endings and executable contents are not rewritten for this digest. Generated build metadata, `.iq-context`, tests, wheels, receipts, untracked files, timestamps, and local runtime state are excluded. `SOURCE_DATE_EPOCH` is the selected commit timestamp and affects archive/wheel normalization only.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -60,6 +61,8 @@ from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
 from meeting_ingest.readiness import DevelopmentOverride, assess_readiness, require_write_readiness, with_runtime_provenance
+from meeting_ingest.runtime_release import BootstrappedRuntime, bootstrap_consumer_runtime, runtime_pin_present
+from meeting_ingest.runtime_config import sha256_bytes
 from meeting_ingest.schema import (
     SUPPORTED_OUTPUT_MODES,
     ProviderResponse,
@@ -166,16 +169,53 @@ def _validate_provider_output(
 def initialize(
     project_root: Path, *, development_override: DevelopmentOverride | None = None
 ) -> RunSummary:
-    readiness = require_write_readiness(project_root, operation="init", development_override=development_override)
-    paths = init_project(project_root)
+    """Initialize one project, selecting the approved runtime when none is pinned yet."""
+    bootstrapped: BootstrappedRuntime | None = None
+    if development_override is None and not runtime_pin_present(project_root):
+        # A virgin consumer has no pin for the write guard to check, so the approved
+        # runtime is selected, installed, and pinned before the guard can run at all.
+        bootstrapped = bootstrap_consumer_runtime(project_root)
+        try:
+            paths = init_project(project_root)
+            readiness = require_write_readiness(project_root, operation="init")
+        except BaseException:
+            # Never leave a half-committed selection behind: without the pin a rerun
+            # re-enters bootstrap and converges instead of wedging on its own state.
+            # Remove only the pin this bootstrap wrote — a pin replaced concurrently
+            # by an explicit repin is someone else's selection and stays.
+            try:
+                current = sha256_bytes(bootstrapped.pin_path.read_bytes())
+            except OSError:
+                current = None
+            if current == bootstrapped.pin_sha256:
+                bootstrapped.pin_path.unlink(missing_ok=True)
+            raise
+    else:
+        readiness = require_write_readiness(
+            project_root, operation="init", development_override=development_override
+        )
+        paths = init_project(project_root)
+    severity_counts = Counter(finding.severity for finding in readiness.findings)
+    details: dict[str, Any] = {
+        "command": "init",
+        "config_path": str(paths.config_path),
+        "meetings_root": str(paths.meetings_root),
+        "verdict": readiness.verdict,
+        "runtime_mode": readiness.runtime_provenance.runtime_mode,
+        "approved_build_id": (
+            readiness.runtime_provenance.build_id
+            if readiness.runtime_provenance.runtime_mode == "approved"
+            else None
+        ),
+        "bootstrapped_runtime": bootstrapped is not None,
+        "finding_counts": {"by_severity": dict(sorted(severity_counts.items()))},
+    }
+    if bootstrapped is not None:
+        details["runtime_pin_path"] = str(bootstrapped.pin_path)
     return with_runtime_provenance(RunSummary(
         status="success",
         exit_code=0,
-        details={
-            "command": "init",
-            "config_path": str(paths.config_path),
-            "meetings_root": str(paths.meetings_root),
-        },
+        details=details,
     ), readiness)
 
 

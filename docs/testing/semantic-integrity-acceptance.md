@@ -53,10 +53,10 @@ Install the receipt-verified workflow artifacts into the acceptance root before 
 ```bash
 "$REPO/scripts/install-approved-skill.py" \
   --receipt "$RECEIPT_PATH" \
-  --template "$REPO/docs/claude-skills/meeting-ingest/SKILL.md" \
+  --template "$REPO/src/meeting_ingest/workflow_templates/SKILL.md" \
   --executable "$MEETING_INGEST" \
   --skill-destination "$ACCEPTANCE_ROOT/.claude/skills/meeting-ingest/SKILL.md" \
-  --agent "$REPO/docs/claude-agents/meeting-ingest-session-provider.md" \
+  --agent "$REPO/src/meeting_ingest/workflow_templates/meeting-ingest-session-provider.md" \
   --agent-destination "$ACCEPTANCE_ROOT/.claude/agents/meeting-ingest-session-provider.md" \
   --json
 ```
@@ -213,7 +213,7 @@ Reconcile the two reviews in the record. Unresolved disagreement is a finding, n
 
 The instruction surfaces that shaped the run are part of the evidence. Verify them with the mechanism that matches how each pair is maintained.
 
-**Claude pairs are receipt-managed.** `docs/claude-skills/meeting-ingest/SKILL.md` and `docs/claude-agents/meeting-ingest-session-provider.md` reach `~/.claude/` and any consumer project-level `.claude/` copy only through the release flow: source edit, new approved receipt, receipt-verified install to every destination, repin. The installed skill is rendered, not copied — the installer substitutes the `{{MEETING_INGEST_APPROVED_EXECUTABLE}}` marker — so a byte comparison against the source is meaningless. The receipt is the verification:
+**Claude pairs are receipt-managed.** `src/meeting_ingest/workflow_templates/SKILL.md` and `src/meeting_ingest/workflow_templates/meeting-ingest-session-provider.md` reach `~/.claude/` and any consumer project-level `.claude/` copy only through the release flow: source edit, new approved receipt, receipt-verified install to every destination, repin. The installed skill is rendered, not copied — the installer substitutes the `{{MEETING_INGEST_APPROVED_EXECUTABLE}}` marker — so a byte comparison against the source is meaningless. The receipt is the verification:
 
 ```bash
 "$MEETING_INGEST" readiness --host claude-code --root "$ACCEPTANCE_ROOT" --json

@@ -20,6 +20,7 @@ from meeting_ingest.runtime_build import (
     BUILD_INFO_PATH,
     BuildIdentity,
     RuntimeBuildError,
+    SKILL_TEMPLATE_PATH,
     VerificationEvidence,
     build_approved_runtime,
     build_wheel,
@@ -53,14 +54,24 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "meeting-ingest"
 version = "0.1.0"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+meeting_ingest = ["workflow_templates/*.md"]
 """,
     )
     _write(root, "src/meeting_ingest/__init__.py", '"""Package."""\n')
     _write(root, "src/meeting_ingest/_build_info.py", "BUILD_INFO = {'build_id': 'development'}\n")
     _write(root, "docs/artifact-contract.md", "artifact contract\n")
     _write(root, "docs/provider-handoff-contract.md", "handoff contract\n")
-    _write(root, "docs/claude-skills/meeting-ingest/SKILL.md", "skill template\n")
-    _write(root, "docs/claude-agents/meeting-ingest-session-provider.md", "agent definition\n")
+    _write(root, "src/meeting_ingest/workflow_templates/SKILL.md", "skill template\n")
+    _write(
+        root,
+        "src/meeting_ingest/workflow_templates/meeting-ingest-session-provider.md",
+        "agent definition\n",
+    )
 
 
 def _identity(root: Path) -> BuildIdentity:
@@ -309,6 +320,28 @@ def test_wheel_verification_rejects_duplicate_entry(tmp_path: Path) -> None:
             archive.writestr("meeting_ingest/__init__.py", "duplicate")
 
     with pytest.raises(RuntimeBuildError, match="duplicate paths"):
+        verify_wheel(wheel, identity, source.source_date_epoch)
+
+
+def test_wheel_verification_requires_the_packaged_workflow_templates(tmp_path: Path) -> None:
+    wheel, identity, source = _built_wheel(tmp_path)
+    dropped = SKILL_TEMPLATE_PATH.relative_to("src").as_posix()
+    replacement = wheel.with_suffix(".replacement")
+    with zipfile.ZipFile(wheel) as original, zipfile.ZipFile(replacement, "w") as target:
+        for info in original.infolist():
+            if info.filename == dropped:
+                continue
+            payload = original.read(info.filename)
+            if info.filename.endswith(".dist-info/RECORD"):
+                payload = "\n".join(
+                    line
+                    for line in payload.decode("utf-8").splitlines()
+                    if not line.startswith(f"{dropped},")
+                ).encode("utf-8") + b"\n"
+            target.writestr(info, payload)
+    os.replace(replacement, wheel)
+
+    with pytest.raises(RuntimeBuildError, match="workflow template"):
         verify_wheel(wheel, identity, source.source_date_epoch)
 
 
