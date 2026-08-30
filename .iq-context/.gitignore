@@ -1,0 +1,8 @@
+# Written by iq-context init. Per-user, per-host, per-checkout runtime state.
+# Everything else under .iq-context/ is branch-coupled working state or branch-independent
+# history, and both are meant to be tracked.
+# This file says nothing about whether .iq-context/ itself should be committed.
+# If your repository ignores .iq-context/ entirely, this file has no effect.
+focus-state.json
+logs/
+workstreams/*/host-bindings.json
