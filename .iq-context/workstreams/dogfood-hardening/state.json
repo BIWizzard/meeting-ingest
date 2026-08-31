@@ -5,7 +5,7 @@
   "objective": "Harden Meeting Ingest against what real HTV runs on released builds expose: extraction quality (semantic_guidance 1.1 and the spot-check backlog), run-flow friction (the date gate), artifact-contract gaps (Decisions status vocabulary, third-party sensitivity), attestation, and consumer update policy.",
   "lifecycle_status": "active",
   "mode": "design",
-  "status_summary": "Anonymization sweep complete and T2-verified: live docs, plans, discovery log, and the docx test fixture now use role terms (the reference consumer, the secondary consumer) and corpus IDs (legacy corpus A/B); AGENTS.md carries the standing Identifiers rule (invented example names, contents-frozen/filenames-normalized boundary, CLI-managed state clause); the client-named session filename was normalized with citations repaired in two board records as pure link fixes. Review fix set applied: pre-engine gloss narrowing corrected (binding OB-002-1 clauses keep full force over engine-generated outputs at the two sites), three guardrails-plan corpus/consumer conflations fixed, two residual example filenames swept, note date corrected. Remaining name carriers: frozen records (disclosed in rule), captures (immutable), and the workstream objective field (blocked on iq-context relay #11). Next: bump 0.4.0 and drive the release through scripts/release-approved-runtime.py with both consumer roots.",
+  "status_summary": "Landmark session: all four remaining record-003 enforcement obligations closed, 0.4.0 released through the new command pair, and the repo anonymized. (1) OB-003-1 (4a62db9): 'meeting-ingest update' + scripts/release-approved-runtime.py, T2 verified with a board check-in (003/09) on a mid-verification contract deviation, consolidated fix pass, codex round 2. (2) OB-003-5 (79a4058): README channel clause corrected, Consumer Onboarding rewritten one-command-first with the asymmetry principle. (3) OB-003-2 (e2a6d9e): core_inactive category + distinct verdict, honest playbook finding codes, #26 collapse + --verdict-only; issue #26 closed, #31 filed for the detection gap. (4) OB-003-3 (9f607fd): four product-status contradictions closed plus two found in review, derived Activation Accounting section; #23 closed. Backlog issues #29 (share-safe output form) and #30 (repair command) filed per OB-003-4. Anonymization sweep (466ced3): role terms + corpus IDs across live docs/plans/tests, AGENTS.md Identifiers rule, session filename normalized with board citations repaired; iq-context relay #11 filed for the un-editable objective field. RELEASE (b1d0042): 0.4.0 build 65e5090 (suite 569) driven end to end through the command pair — attempt 1 failed closed on the PATH-vs-uv-tool-dir locator defect (fixed with reproduction test), attempt 2 moved both consumers in one command each (reference consumer core_inactive/stale playbook, secondary ready), virgin init Ready, first pasted activation snapshot discharged OB-003-3's citation trigger, OB-003-1 met, issue #16 closed. Open board obligations now: OB-002-1, OB-003-4, OB-003-6 (all check-in gates).",
   "active_files": [
     "src/meeting_ingest/runtime_release.py",
     "scripts/release-approved-runtime.py"
@@ -16,25 +16,18 @@
   ],
   "open_questions": [
     "Should installed workflow artifacts carry a receipt or build stamp of their own? Today the installed agent doc and skill have no content stamp, so there is no local way to tell whether a copy still matches the receipt that placed it, and a hand-edit would be undetectable from the consumer side. This surfaced from an inbound ~/.claude relay that could not distinguish an installer write from a hand-edit.",
-    "Should docs/claude-skills/meeting-ingest/SKILL.md quote a single published rule source rather than restate the semantic guidance rules verbatim? Five surfaces now duplicate the rule text, and a parity test guards it in this repo, but the duplication remains a standing drift risk raised by the ~/.claude relay."
+    "Should docs/claude-skills/meeting-ingest/SKILL.md quote a single published rule source rather than restate the semantic guidance rules verbatim? Five surfaces now duplicate the rule text, and a parity test guards it in this repo, but the duplication remains a standing drift risk raised by the ~/.claude relay.",
+    "Owner call: should person names in doc examples (kushali/jim-haley plus the ad-sales vocabulary the anonymization review flagged as a re-identification surface) get the same anonymization treatment the company names received, and is a deeper git-history scrub wanted? Both are OB-003-4-adjacent; no action taken without a ruling."
   ],
   "next_actions": [
-    "Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.",
-    "Land OB-003-2 readiness activation legibility: rename the threefold optional_playbook_output_missing mislabel, collapse repeated same-code history findings per issue #26, and add the core_inactive category with its own distinct verdict — required before any new finding class ships.",
-    "Close OB-003-3 and OB-003-5 before the next release: widen issue #23 to all four product-status contradictions with activation state derived from tool output, and reconcile the README channel clause and Consumer Onboarding copy per record 003.",
-    "File a sanitized backlog issue for the share-safe artifact output form required by OB-003-4, and one for the consumer repair command the record 003 developer seat identified.",
-    "Receive the OB-003-1 fix pass, re-verify at T2 (focused review of the delegation redesign + regression lenses), then commit the command pair and update issue #16",
-    "Drive the next release through scripts/release-approved-runtime.py and 'meeting-ingest update' end to end — that run is OB-003-1's acceptance proof and closes issue #16 (OB-003-3 and OB-003-5 must land before that release ships)",
-    "When OB-003-2 lands: T2 verify (codex + implementer-model, contract line item on artifact-contract clauses), commit, then dispatch OB-003-3 (#23 widened: all four product-status contradictions closed, implemented vs active-at-reference-consumer vocabulary, activation state derived from tool output)",
-    "When OB-003-3 reports: T2 verify the product-status revision (contract line item: derived activation metadata only, four contradictions closed), commit, close #23, update board row + CLAUDE.md block — then all four user-ordered items are done; offer #31 as the natural next unit",
-    "Drive the next release through scripts/release-approved-runtime.py and 'meeting-ingest update' end to end — OB-003-1's acceptance proof; its evidence must cite the activation accounting (fresh pasted snapshot) per OB-003-3",
-    "Issue #31: never-generated playbook detection on normally-initialized projects — the first new finding class gated behind the now-landed OB-003-2"
+    "Run 'meeting-ingest playbook update' at the reference consumer root to regenerate the stale playbook and clear the core_inactive verdict the 0.4.0 release snapshot recorded.",
+    "Implement issue #31: emit a core_inactive finding when a normally-initialized project has ingested meetings but no derived playbook generation — the first new finding class now unblocked by OB-003-2."
   ],
-  "continuation_hint": "Next: Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.",
+  "continuation_hint": "Next: Run 'meeting-ingest playbook update' at the reference consumer root to regenerate the stale playbook and clear the core_inactive verdict the 0.4.0 release snapshot recorded.",
   "branch": "main",
-  "last_saved_at": "2026-08-31T03:11:19.227Z",
-  "last_wrapped_at": "2026-08-31T01:17:29.166Z",
+  "last_saved_at": "2026-08-31T03:23:06.282Z",
+  "last_wrapped_at": "2026-08-31T03:32:49.751Z",
   "completed_at": null,
   "created_at": "2026-07-29T17:15:16.426Z",
-  "updated_at": "2026-08-31T03:11:19.227Z"
+  "updated_at": "2026-08-31T03:32:49.751Z"
 }
