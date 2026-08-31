@@ -25,7 +25,7 @@ It can turn `.txt`, `.vtt`, and `.docx` meeting artifacts into durable project k
 - deterministic transcript grounding enforced before any durable write
 - versioned semantic extraction guidance bound into requests and persisted provenance
 
-The current reference user is the maintainer, the reference host is Claude Code, and the release posture is maintainer-only private alpha. The engine remains host-neutral by design, but other host experiences are not current release claims. It is not yet a general self-serve product.
+The current reference user is the maintainer, the reference host is Claude Code, the reference consumer (HTV) is the formalized site where activation evidence is collected, and the release posture is maintainer-only private alpha. The engine remains host-neutral by design, but other host experiences are not current release claims. It is not yet a general self-serve product.
 
 ## Approved North Star Milestone
 
@@ -37,7 +37,7 @@ The ordered milestone tracks and their status are:
 
 1. Approved Runtime and Pre-Meeting Readiness — demonstrated complete 2026-07-24.
 2. Read-Only Power-User Corpus Reckoning — read-only reckoning complete; adoption approval-gated.
-3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is implemented, with acceptance so far recorded only as development evidence.
+3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is implemented, with release-evidence acceptance recorded on the frozen 0.2.0 build and its claim scoped to exclude rule 6.
 4. Approval-Gated Historical Qualification and Continuity Proof — not started; approval-gated.
 
 The read-only HTV/Spelman reckoning is complete. Corpus adoption remains separately approval-gated.
@@ -56,7 +56,7 @@ Guidance 1.1 answers that finding and is released. Its acceptance run on 2026-07
 Release-evidence acceptance on the frozen 0.2.0 build was performed on 2026-07-29 and passed 18/18 blocking and 1/1 advisory under clean approved-runtime conditions — readiness `ready` with zero findings, no development override, no interventions — with the host-loaded agent definition verified against the receipt-installed copy before the run and the full workflow chain verified at 8/8 pin and 8/8 receipt comparisons. Both required reviews are concordant. It is **accepted as milestone proof with a scoped claim**:
 
 - rules 4 and 5 are confirmed against the failures they were written for: S5, S6 and S10 passed on the frozen build, and S10 and S6 are the assertions that sank both 1.0 release-evidence runs;
-- rule 6 is **falsified rather than merely unproven**. It shipped accepted as unproven with no fixture detection behind it, and this run widened a committed action item beyond the scope its owner accepted. The claim excludes rule 6, and adding fixture detection for it is open work with a concrete failing case now available to write against.
+- rule 6 is **falsified rather than merely unproven**. It shipped accepted as unproven with no fixture detection behind it, and this run widened a committed action item beyond the scope its owner accepted. The claim excludes rule 6. Fixture detection has since been written against that failing case — assertions S14 and S15 in `tests/fixtures/semantic-integrity/expected-review.json` (`bb7591d`), executed by the in-repo acceptance evaluator (`c5d646c`) — but rule 6 remains unproven until an acceptance run on a frozen build carrying them.
 
 The assertion floor was measured on an evaluator verified twice before its tally was accepted — synthetic self-test in both directions for all eight executable operators, plus seven targeted mutations of the run's own payload, each detected. See `docs/sessions/2026-07-29-guidance-1_1-release-evidence-acceptance.md`.
 
@@ -76,16 +76,79 @@ See `docs/north-star-board/002-just-works-continuity/`, `docs/sessions/2026-07-2
 
 ## Current Development State
 
-Committed implementation is stable through the session-inbox, handoff-health, and semantic-integrity guardrails work. The Stakeholder Playbook effort is currently a design-and-contract workstream, not a shipped feature.
+Committed implementation is stable through the session-inbox, handoff-health, semantic-integrity guardrails, and one-command init work. The Stakeholder Playbook effort has moved past design-and-contract: Layer 5A generalized provenance and reviewed identity and the Layer 5B Stakeholder Briefing V1 foundation are implemented and published. Layer 5C Playbook Guidance V1.1 remains a design-and-contract workstream. "Shipped" is reserved for the defined sense — running at the reference consumer — and is accounted for under Activation Accounting, not asserted here.
 
 Current accounting:
 
 - Stakeholder Briefing V1 and Playbook Guidance V1.1 have an accepted durable design baseline in `docs/stakeholder-playbook-design.md`.
 - `DECISIONS.md` records the accepted identity, provenance, storage, derivation, review, privacy, and milestone boundaries.
-- schema 1.1 and Stakeholder Briefing V1 artifact-contract amendments passed focused review and are frozen for implementation.
+- schema 1.1 and Stakeholder Briefing V1 artifact-contract amendments passed focused review, and their implementation is published.
 - Layer 2 output-mode, title-repair, and regeneration contracts are written, but their implementation has not started.
-- no schema 1.1, identity-registry, stakeholder-profile, briefing, guidance, email, screenshot, or social-source code has shipped.
+- schema 1.1 signal identity, the reviewed identity registry, deterministic stakeholder profiles, and deterministic Stakeholder Briefing derivation are implemented and published; no Playbook Guidance V1.1, email, screenshot, or social-source code is implemented.
 - the current filesystem/JSONL/Markdown architecture remains sufficient for the planned V1 work; no backend or embeddings are planned.
+
+## Activation Accounting
+
+Shipped means running at the reference consumer (North Star board record 003, P2). A capability is therefore tracked on two axes:
+
+- `implemented` — the code is committed, tested, and carried in a published build.
+- `active-at-reference-consumer` — that capability is observably running at the reference consumer (HTV).
+
+Every feature ships active to the reference consumer unless it is explicitly scoped away from it. A capability can be `implemented` and not active; that gap is the point of this section, not a defect in it.
+
+**As of.** This accounting is as of `main` on 2026-08-30, with `meeting-ingest-0.3.0-gbcfe8e532721-s30753a330500` (commit `bcfe8e5`) as the published build. Work committed past that build is marked `implemented (unpublished)`: it satisfies "committed and tested" but is not yet carried in a published build, so it cannot be active anywhere.
+
+**Derivation rule.** Activation claims in this section come from tool output. `meeting-ingest status --json` and `meeting-ingest readiness` already know the pin, the registry, and the derivation state, so every `active-at-reference-consumer` cell names the command and field it derives from and carries no value that is not backed by the snapshot below. Hand-edited activation prose is a defect: a release run refreshes this section by replacing the snapshot block with fresh command output, not by editing the table's wording. Where no captured field value stands behind a claim, the cell reads `not yet evidenced` — which is a statement about the evidence, not a claim that the capability is idle.
+
+The next refresh reads a different tool than this snapshot did. From the next published build onward, readiness fields are captured with `meeting-ingest readiness --verdict-only --json` (the reduced view landed in `e2a6d9e`, unpublished as of this snapshot), and the verdict vocabulary includes `core_inactive` — so a reference consumer with an implemented but unrun core capability reports `core_inactive` rather than a clean verdict.
+
+Activation evidence is metadata only — verdicts, counts, build ids, statuses. It never carries corpus content: no meeting titles, person names, client names, or artifact excerpts.
+
+### Evidence Snapshot
+
+Captured: 2026-08-30. Interim snapshot transcribed from two committed records — the 0.3.0 release record `docs/sessions/2026-08-30-one-command-init-release.md` and the identity-review session record `docs/sessions/2026-08-30T23-24-14-734Z-dogfood-hardening.md`. It is replaced wholesale at the next release run by pasted command output. Fields not recorded in those two are listed as not evidenced rather than inferred.
+
+```
+site:    the reference consumer (HTV)
+command: meeting-ingest readiness --host claude-code
+         (the 0.3.0-era readiness run; --verdict-only --json is the
+          capture command from the next published build onward)
+
+  verdict         ready_with_history_warnings
+  running_build   meeting-ingest-0.3.0-gbcfe8e532721-s30753a330500
+  approved_build  not evidenced
+  match           not evidenced
+
+command: meeting-ingest status --json
+
+  project.identity_registry.people               17
+  project.identity_registry.identity_candidates  5
+  project.identity_registry.issues               not evidenced
+  project.ledger_records                         not evidenced
+  project.known_sources                          not evidenced
+  project.session_handoffs                       not evidenced
+  project.signal_contract.status                 not evidenced
+  project.playbook.status                        not evidenced
+```
+
+The reference-consumer holder may legitimately sit at `ready_with_history_warnings`; the 177 standing history findings belong to the separately approval-gated qualification track and are judged independently of activation.
+
+### Capability Accounting
+
+| Capability | Implemented | Active at the reference consumer | Derived from |
+|---|---|---|---|
+| Approved-runtime pin and readiness gate | yes | active | `readiness`: `verdict`, `running_build` (`approved_build` and `match` not evidenced) |
+| Meeting ingest to durable artifacts, signals, and ledger | yes | not yet evidenced | `status --json`: `project.ledger_records`, `project.known_sources` |
+| Session-provider handoff ingest | yes | not yet evidenced | `status --json`: `project.session_handoffs` |
+| Schema 1.1 signal identity and generalized provenance | yes | not yet evidenced | `status --json`: `project.signal_contract.status` |
+| Reviewed identity registry and derivation-time resolution | yes | not yet evidenced (registry populated: 17 reviewed entries, 5 candidates) | `status --json`: `project.identity_registry.people`, `.issues`, `.identity_candidates` |
+| Stakeholder Briefing V1 derivation (`playbook update`) | yes | not yet evidenced | `status --json`: `project.playbook.status`, `.profile_count`, `.unresolved_identity_count` |
+| Playbook review overlays (reject/restore/resolve/suppress) | yes | not yet evidenced | `status --json`: `project.playbook.rejected_or_suppressed_count` |
+| Release/update command pair (`scripts/release-approved-runtime.py`, `meeting-ingest update`) | implemented (unpublished) | not applicable until published | Layer 5D interim relief, `4a62db9` |
+| Readiness `core_inactive` category and verdict | implemented (unpublished) | not applicable until published | `readiness`: `verdict`, `finding_counts.by_category`, `e2a6d9e` |
+| Output modes `summary`/`verbatim`, title repair, regeneration | no | not applicable | Layer 2, not implemented |
+| Playbook Guidance V1.1 semantic synthesis | no | not applicable | `status --json`: `project.playbook.guidance_status` reports `not_available_in_briefing_v1` |
+| Email, screenshot, and social-source ingest | no | not applicable | Layer 7, not started |
 
 ## Available User Workflows
 
@@ -228,13 +291,16 @@ Complete:
 - ingest completed snapshots
 - ingest failed snapshots
 - reconcile repaired snapshots
-
-Not complete:
-
-- generalized schema 1.1 signal writing
+- generalized schema 1.1 signal writing, deterministic signal identity, and signal-set fingerprints
 - reviewed stakeholder identity registry and derivation-time resolution
 - deterministic Stakeholder Briefing aggregation
 - playbook derivation ledger, review overlays, profiles, briefings, status, and doctor behavior
+
+Not complete:
+
+- prior signal-set fingerprint recording and explicit supersession details, which land with the Layer 2 `regenerate` command
+- mechanical contradiction candidates from structured mutually exclusive source values
+- Playbook Guidance V1.1 synthesis, review state for inferred guidance, and dedicated synthesis privacy gates
 
 ### Archive, Reconcile, And Idempotency
 
@@ -414,7 +480,7 @@ Remaining:
 
 ### Layer 5: Stakeholder Briefing And Playbook Guidance
 
-Status: Layer 5A foundation complete; Layer 5B implementation started; Layer 5C not started.
+Status: Layer 5A foundation complete; Layer 5B foundation implemented with one remaining item; Layer 5C not started.
 
 Done:
 
@@ -476,14 +542,15 @@ Remaining:
 
 ### Layer 5D: Distribution Transition (Sunset Of The Manual Release Apparatus)
 
-Status: not started; governed by Decision 35 in `DECISIONS.md`.
+Status: interim relief implemented, unpublished; the distribution transition itself is not started and board-gated by Decision 35 in `DECISIONS.md`.
 
-The receipt/pin/explicit-update ceremony is trust-building scaffolding with a recorded sunset: when the Just Works Continuity milestone is met, three consecutive releases ship without a drift incident, and the owner decides to broaden beyond the maintainer-only alpha, a distribution-transition plan convenes the board to amend record 002. Target end state: auto-updating package-manager delivery with attestation verification running invisibly inside the updater, failing closed only on actual verification failure.
+The receipt/pin/explicit-update ceremony is trust-building scaffolding with a recorded sunset: when the Just Works Continuity milestone is met, three consecutive releases ship without a drift incident, and the owner decides to broaden beyond the maintainer-only alpha, a distribution-transition plan convenes the board to amend record 002. Target end state: auto-updating package-manager delivery with attestation verification running invisibly inside the updater, failing closed only on actual verification failure. None of the three exit criteria is met, and a broadening intent or a transition plan convenes the board under OB-003-6.
 
-Interim (no contract change required):
+Interim relief (no contract change required) — implemented in `4a62db9` under OB-003-1 and issue #16, on `main` and not yet carried in a published build:
 
-- collapse the maintainer release flow into a single command wrapping build, receipt, publish, install, and repin
-- collapse consumer updates into a single verified update command wrapping fetch, verification, install, and repin
+- `scripts/release-approved-runtime.py` collapses the maintainer release flow into a single command wrapping build, receipt, publish, install, and repin
+- `meeting-ingest update` collapses a consumer move to the channel-latest approved runtime into a single verified command wrapping fetch, digest verification, install, repin, and readiness
+- the README Release Flow leads with the two commands; the explicit steps remain documented as the flow they drive
 
 ### Layer 6: Migration And Existing Corpus Adoption
 
@@ -541,19 +608,13 @@ Remaining:
 - doctor/status checks for capture sync state
 - policy to avoid copying sensitive transcript content into project memory
 
-## Recommended Next Product Slice
+## Next Product Work
 
-The active product sequence is:
+The backlog of record is the GitHub issue tracker on this repository (`gh issue list --label backlog`). This document does not carry a parallel roadmap; the five-step sequence it previously listed here is superseded, and the layer accounting above is where implementation state lives. Four of its five steps are verified built. The exception is step 3 — updating the provider, prompt, and skill contracts when the new observation taxonomy becomes user-facing — which was conditional and is not discharged: `docs/artifact-contract.md` still states that the provider payload contract does not permit the three new playbook-facing types or the `interaction_response` extension, and that providers must not emit them until the handoff contract, payload validation, extraction prompts, and both skill copies are amended together.
 
-1. freeze and implement effective-date reliability, a manual meeting-date override, and controlled date repair as a Layer 1 prerequisite
-2. add annotated schema 1.1 compatibility and adversarial fixtures
-3. update provider/prompt/skill contracts when the new observation taxonomy becomes user-facing
-4. implement Layer 5A generalized provenance and reviewed identity
-5. implement deterministic Stakeholder Briefing V1
+Near-term work is gated by the standing obligations in `docs/north-star-board/board-log.md` rather than by a sequence recorded here. That obligations table is the live list; this document does not enumerate it, for the same reason activation claims are derived rather than hand-typed.
 
-Layer 2 output modes remain independently shippable and contract-ready. They are a valid smaller implementation slice, but they are no longer the default priority after the stakeholder-playbook direction was accepted.
-
-Reason: the live July 10/13 Teams VTT failure showed that meeting-date trust must be resolved before freshness and response sequencing can be credible. Once that foundation is reliable, the deterministic briefing is the highest-value next product surface.
+Layer 2 output modes remain independently shippable and contract-ready. They are a valid smaller implementation slice, but they are not the default priority after the stakeholder-playbook direction was accepted.
 
 ## Evidence
 
@@ -575,8 +636,18 @@ Recent implementation commits include:
 - `85319c5 Add Anthropic provider adapter`
 - `c5e11ca Add sequential inbox batch ingest`
 
-Current verification on 2026-07-26:
+Latest recorded full-suite verification on `main`, at `e2a6d9e` on 2026-08-30:
+
+- the repository suite passed with 568 tests (`e2a6d9e`; 555 at `4a62db9`)
+
+Full-suite verification at the published 0.3.0 release build, commit `bcfe8e5` on 2026-08-30:
+
+- the repository suite passed with 494 tests (`docs/sessions/2026-08-30-one-command-init-release.md`)
+
+Earlier verification recorded on 2026-07-26:
 
 - `uv run pytest` passed with 459 tests
 - `git diff --check` passed
 - the semantic acceptance run recorded in `docs/sessions/2026-07-26-task7-semantic-acceptance-dev-run.md` passed 18/18 blocking assertions as development/non-release evidence
+
+Current runtime and activation evidence is not restated here; it lives in the Evidence Snapshot under Activation Accounting and is refreshed from tool output at each release run.
