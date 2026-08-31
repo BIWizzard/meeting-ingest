@@ -96,56 +96,68 @@ Shipped means running at the reference consumer (North Star board record 003, P2
 
 Every feature ships active to the reference consumer unless it is explicitly scoped away from it. A capability can be `implemented` and not active; that gap is the point of this section, not a defect in it.
 
-**As of.** This accounting is as of `main` on 2026-08-30, with `meeting-ingest-0.3.0-gbcfe8e532721-s30753a330500` (commit `bcfe8e5`) as the published build. Work committed past that build is marked `implemented (unpublished)`: it satisfies "committed and tested" but is not yet carried in a published build, so it cannot be active anywhere.
+**As of.** This accounting is as of `main` on 2026-08-30, with `meeting-ingest-0.4.0-g65e509019e43-s18795c80069c` (commit `65e5090`) as the published build, released and consumed through the release/update command pair. Work committed past a published build is marked `implemented (unpublished)`: it satisfies "committed and tested" but is not yet carried in a published build, so it cannot be active anywhere.
 
 **Derivation rule.** Activation claims in this section come from tool output. `meeting-ingest status --json` and `meeting-ingest readiness` already know the pin, the registry, and the derivation state, so every `active-at-reference-consumer` cell names the command and field it derives from and carries no value that is not backed by the snapshot below. Hand-edited activation prose is a defect: a release run refreshes this section by replacing the snapshot block with fresh command output, not by editing the table's wording. Where no captured field value stands behind a claim, the cell reads `not yet evidenced` — which is a statement about the evidence, not a claim that the capability is idle.
 
-The next refresh reads a different tool than this snapshot did. From the next published build onward, readiness fields are captured with `meeting-ingest readiness --verdict-only --json` (the reduced view landed in `e2a6d9e`, unpublished as of this snapshot), and the verdict vocabulary includes `core_inactive` — so a reference consumer with an implemented but unrun core capability reports `core_inactive` rather than a clean verdict.
+The next refresh reads a different tool than this snapshot did. From the next published build onward, readiness fields are captured with `meeting-ingest readiness --verdict-only --json` (the reduced view shipped in the 0.4.0 build), and the verdict vocabulary includes `core_inactive` — so a reference consumer with an implemented but unrun core capability reports `core_inactive` rather than a clean verdict.
 
 Activation evidence is metadata only — verdicts, counts, build ids, statuses. It never carries corpus content: no meeting titles, person names, client names, or artifact excerpts.
 
 ### Evidence Snapshot
 
-Captured: 2026-08-30. Interim snapshot transcribed from two committed records — the 0.3.0 release record `docs/sessions/2026-08-30-one-command-init-release.md` and the identity-review session record `docs/sessions/2026-08-30T23-24-14-734Z-dogfood-hardening.md`. It is replaced wholesale at the next release run by pasted command output. Fields not recorded in those two are listed as not evidenced rather than inferred.
+Captured: 2026-08-30, at the 0.4.0 release run — the first snapshot pasted directly from command output at the reference consumer, replacing the interim transcription. It is replaced wholesale at each release run.
 
 ```
 site:    the reference consumer
-command: meeting-ingest readiness --host claude-code
-         (the 0.3.0-era readiness run; --verdict-only --json is the
-          capture command from the next published build onward)
+command: meeting-ingest readiness --verdict-only --json
 
-  verdict         ready_with_history_warnings
-  running_build   meeting-ingest-0.3.0-gbcfe8e532721-s30753a330500
-  approved_build  not evidenced
-  match           not evidenced
+  verdict                            core_inactive
+  running_build                      meeting-ingest-0.4.0-g65e509019e43-s18795c80069c
+  approved_build                     meeting-ingest-0.4.0-g65e509019e43-s18795c80069c
+  match                              true
+  finding_counts.by_category         core_inactive 1, history 176
+  finding_counts.by_severity         warning 177
+  next_action                        Run `meeting-ingest playbook update` to regenerate
+                                     the playbook from the current corpus; the current
+                                     output does not reflect it.
 
 command: meeting-ingest status --json
 
+  project.ledger_records                         159
+  project.known_sources                          71
+  project.inbox_files                            0
+  project.session_handoffs.total                 0
+  project.identity_registry.status               valid
   project.identity_registry.people               17
   project.identity_registry.identity_candidates  5
-  project.identity_registry.issues               not evidenced
-  project.ledger_records                         not evidenced
-  project.known_sources                          not evidenced
-  project.session_handoffs                       not evidenced
-  project.signal_contract.status                 not evidenced
-  project.playbook.status                        not evidenced
+  project.identity_registry.issues               0
+  project.signal_contract.status                 invalid (legacy pre-1.1 formats in the
+                                                 unadopted corpus; classified as history
+                                                 warnings by readiness)
+  project.playbook.status                        stale
+  project.playbook.latest_attempt_status         success
+  project.playbook.profile_count                 16
+  project.playbook.unresolved_identity_count     5
+  project.playbook.rejected_or_suppressed_count  0
+  project.playbook.guidance_status               not_available_in_briefing_v1
 ```
 
-The reference-consumer holder may legitimately sit at `ready_with_history_warnings`; the 177 standing history findings belong to the separately approval-gated qualification track and are judged independently of activation.
+The `core_inactive` verdict is the readiness legibility ruling working as ratified: the playbook derivation exists (latest attempt succeeded, 16 profiles) but is stale against the current corpus, and the verdict names the activating command instead of hiding it among history warnings. The 176 history findings belong to the separately approval-gated qualification track and are judged independently of activation.
 
 ### Capability Accounting
 
 | Capability | Implemented | Active at the reference consumer | Derived from |
 |---|---|---|---|
-| Approved-runtime pin and readiness gate | yes | active | `readiness`: `verdict`, `running_build` (`approved_build` and `match` not evidenced) |
-| Meeting ingest to durable artifacts, signals, and ledger | yes | not yet evidenced | `status --json`: `project.ledger_records`, `project.known_sources` |
-| Session-provider handoff ingest | yes | not yet evidenced | `status --json`: `project.session_handoffs` |
-| Schema 1.1 signal identity and generalized provenance | yes | not yet evidenced | `status --json`: `project.signal_contract.status` |
-| Reviewed identity registry and derivation-time resolution | yes | not yet evidenced (registry populated: 17 reviewed entries, 5 candidates) | `status --json`: `project.identity_registry.people`, `.issues`, `.identity_candidates` |
-| Stakeholder Briefing V1 derivation (`playbook update`) | yes | not yet evidenced | `status --json`: `project.playbook.status`, `.profile_count`, `.unresolved_identity_count` |
+| Approved-runtime pin and readiness gate | yes | active | `readiness --verdict-only`: `verdict`, `running_build`, `approved_build`, `match` |
+| Meeting ingest to durable artifacts, signals, and ledger | yes | active (159 ledger records, 71 known sources) | `status --json`: `project.ledger_records`, `project.known_sources` |
+| Session-provider handoff ingest | yes | not yet evidenced (no handoffs outstanding at capture; completed handoffs leave no counter) | `status --json`: `project.session_handoffs` |
+| Schema 1.1 signal identity and generalized provenance | yes | not yet evidenced (`signal_contract.status` reports corpus-wide `invalid` from legacy pre-1.1 files; no field isolates new-write conformance) | `status --json`: `project.signal_contract.status` |
+| Reviewed identity registry and derivation-time resolution | yes | active (status `valid`, 17 reviewed entries, 5 candidates, 0 issues) | `status --json`: `project.identity_registry.people`, `.issues`, `.identity_candidates` |
+| Stakeholder Briefing V1 derivation (`playbook update`) | yes | active, stale at capture (latest attempt `success`, 16 profiles; verdict `core_inactive` names the refresh) | `status --json`: `project.playbook.status`, `.profile_count`, `.unresolved_identity_count` |
 | Playbook review overlays (reject/restore/resolve/suppress) | yes | not yet evidenced | `status --json`: `project.playbook.rejected_or_suppressed_count` |
-| Release/update command pair (`scripts/release-approved-runtime.py`, `meeting-ingest update`) | implemented (unpublished) | not applicable until published | Layer 5D interim relief, `4a62db9` |
-| Readiness `core_inactive` category and verdict | implemented (unpublished) | not applicable until published | `readiness`: `verdict`, `finding_counts.by_category`, `e2a6d9e` |
+| Release/update command pair (`scripts/release-approved-runtime.py`, `meeting-ingest update`) | yes | active (the 0.4.0 release and both consumer moves ran through them) | Layer 5D interim relief; 0.4.0 release evidence |
+| Readiness `core_inactive` category and verdict | yes | active (the snapshot verdict above is `core_inactive`) | `readiness --verdict-only`: `verdict`, `finding_counts.by_category` |
 | Output modes `summary`/`verbatim`, title repair, regeneration | no | not applicable | Layer 2, not implemented |
 | Playbook Guidance V1.1 semantic synthesis | no | not applicable | `status --json`: `project.playbook.guidance_status` reports `not_available_in_briefing_v1` |
 | Email, screenshot, and social-source ingest | no | not applicable | Layer 7, not started |
@@ -542,11 +554,11 @@ Remaining:
 
 ### Layer 5D: Distribution Transition (Sunset Of The Manual Release Apparatus)
 
-Status: interim relief implemented, unpublished; the distribution transition itself is not started and board-gated by Decision 35 in `DECISIONS.md`.
+Status: interim relief published and exercised — the 0.4.0 release ran through both commands; the distribution transition itself is not started and board-gated by Decision 35 in `DECISIONS.md`.
 
 The receipt/pin/explicit-update ceremony is trust-building scaffolding with a recorded sunset: when the Just Works Continuity milestone is met, three consecutive releases ship without a drift incident, and the owner decides to broaden beyond the maintainer-only alpha, a distribution-transition plan convenes the board to amend record 002. Target end state: auto-updating package-manager delivery with attestation verification running invisibly inside the updater, failing closed only on actual verification failure. None of the three exit criteria is met, and a broadening intent or a transition plan convenes the board under OB-003-6.
 
-Interim relief (no contract change required) — implemented in `4a62db9` under OB-003-1 and issue #16, on `main` and not yet carried in a published build:
+Interim relief (no contract change required) — implemented in `4a62db9` under OB-003-1 and issue #16, published in the 0.4.0 build and exercised by the 0.4.0 release run:
 
 - `scripts/release-approved-runtime.py` collapses the maintainer release flow into a single command wrapping build, receipt, publish, install, and repin
 - `meeting-ingest update` collapses a consumer move to the channel-latest approved runtime into a single verified command wrapping fetch, digest verification, install, repin, and readiness
@@ -636,9 +648,9 @@ Recent implementation commits include:
 - `85319c5 Add Anthropic provider adapter`
 - `c5e11ca Add sequential inbox batch ingest`
 
-Latest recorded full-suite verification on `main`, at `e2a6d9e` on 2026-08-30:
+Latest recorded full-suite verification on `main`, at `65e5090` (the 0.4.0 release commit) on 2026-08-30:
 
-- the repository suite passed with 568 tests (`e2a6d9e`; 555 at `4a62db9`)
+- the repository suite passed with 569 tests (`65e5090`; 568 at `e2a6d9e`, 555 at `4a62db9`)
 
 Full-suite verification at the published 0.3.0 release build, commit `bcfe8e5` on 2026-08-30:
 
