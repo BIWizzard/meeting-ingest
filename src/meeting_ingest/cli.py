@@ -18,7 +18,11 @@ from meeting_ingest.readiness import (
     readiness_summary,
 )
 from meeting_ingest.runtime import inspect_runtime_summary
-from meeting_ingest.runtime_release import pin_runtime_summary, update_check
+from meeting_ingest.runtime_release import (
+    pin_runtime_summary,
+    update_check,
+    update_consumer_runtime,
+)
 from meeting_ingest.session_inbox import process_session_inbox
 
 
@@ -63,6 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--root", default=".", help="Project root to initialize.")
     init_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
     _add_development_override(init_parser)
+
+    update_parser = subparsers.add_parser("update")
+    update_parser.add_argument("--root", default=".", help="Consumer project root to update.")
+    update_parser.add_argument("--json", action="store_true", help="Emit a machine-readable run summary.")
 
     ingest_parser = subparsers.add_parser("ingest")
     ingest_parser.add_argument("source")
@@ -221,6 +229,8 @@ def run(args: argparse.Namespace) -> RunSummary:
         )
     if args.command == "init":
         return pipeline.initialize(Path(args.root), development_override=development_override)
+    if args.command == "update":
+        return update_consumer_runtime(Path(args.root))
     if args.command == "ingest":
         return pipeline.ingest(
             Path(args.source),
@@ -344,6 +354,20 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
         if data["findings"]:
             counts = data["finding_counts"]["by_severity"]
             print("Findings: " + ", ".join(f"{key}={value}" for key, value in counts.items()))
+        return
+
+    if data.get("command") == "runtime_update":
+        if data["updated"]:
+            print(f"Updated to {data['build_id']}")
+        else:
+            print("Already up to date")
+            print(f"Build: {data['build_id']}")
+        print(f"Pin: {data['pin_path']}")
+        print(f"Readiness: {data['verdict'].replace('_', ' ').title()}")
+        for finding in data["findings"]:
+            if finding["severity"] == "blocker":
+                print(f"{finding['code']}: {finding['message']}", file=sys.stderr)
+                print(f"  Next action: {finding['remediation']}", file=sys.stderr)
         return
 
     if summary.status in {"success", "no_op"}:

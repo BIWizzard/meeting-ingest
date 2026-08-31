@@ -259,7 +259,28 @@ For a reusable extraction sub-agent prompt, see [Session Provider Sub-Agent Prom
 
 `meeting-ingest` ships to consumers as an explicitly approved, frozen wheel — never a working-tree snapshot or editable install. Claude Code is the reference host for the approved runtime. Codex remains development/non-release evidence until separately approved.
 
-The maintainer-only release flow is explicit end to end:
+The normal path is two commands. The maintainer releases:
+
+```bash
+scripts/release-approved-runtime.py \
+  --commit <sha> \
+  --output-dir <dir> \
+  --approved-by owner \
+  --source-commit-reviewed \
+  --consumer-root <consumer-root>
+```
+
+and each consumer moves itself:
+
+```bash
+meeting-ingest update
+```
+
+`release-approved-runtime.py` wraps build → receipt → publish → install → user-level workflow install, then drives `meeting-ingest update` once per explicitly named `--consumer-root`. `meeting-ingest update` requires an existing valid pin, resolves the channel-latest receipt, and hash-verifies the published wheel against it. If the running build is already that receipt's build — the usual case, since the release command installs the wheel machine-globally — it renders and installs the project-level workflow artifacts, replaces the pin, and reports readiness, without invoking `uv` at all. If the running build is older, it installs the hash-verified wheel, verifies the newly installed console script out of process against the receipt, and hands the rest of the update to that new build in the same invocation: workflow artifacts are rendered from the running package's templates, so only the new build can render its own. It is a no-op when the consumer is already current, and if any step fails the old pin survives and rerunning the command converges.
+
+The wheel install is machine-global. One release therefore leaves every other consumer root on the machine pinned to the previous build, so each of them runs `meeting-ingest update` from its own root (or the maintainer names it with another `--consumer-root`). Nothing updates a consumer that was not explicitly named — there is no auto-updating consumer class.
+
+Both commands drive the explicit steps below and neither bypasses the fail-closed approved-runtime chain. The maintainer-only release flow is explicit end to end:
 
 1. Review and approve an exact commit.
 2. Build twice-reproducibly from that commit, producing a wheel and an external receipt:
@@ -324,7 +345,7 @@ meeting-ingest init
 
 With no runtime pin present, `init` selects the latest published approved receipt, requires the receipt's own wheel beside it and hashes it, verifies that the invoked command is the console script the running frozen distribution records, renders and installs the project-level Claude skill and session-provider agent through the same receipt-verified installer used above, re-inspects to confirm the session resolves exactly those bytes, writes the consumer pin, scaffolds the meetings layout, and reports readiness. Every byte it writes is verified against the receipt, and if a later step fails it removes the pin it wrote so a rerun converges.
 
-`init` never replaces an existing pin. Where one is already present it only re-runs the readiness gate and re-scaffolds, so moving a consumer to a newer build stays the explicit step 6 above. `--development-override <reason>` scaffolds without selecting a runtime and never auto-pins.
+`init` never replaces an existing pin. Where one is already present it only re-runs the readiness gate and re-scaffolds, so moving a consumer to a newer build is `meeting-ingest update` — the one command that legitimately replaces a pin, driving steps 4-6 above for that root and only when it is explicitly invoked there. `--development-override <reason>` scaffolds without selecting a runtime and never auto-pins.
 
 Release-store publishing, installation, and `runtime pin` are bootstrap/release mutations outside project readiness. They use strict receipt/build/workflow verification and atomic writes instead of bypassing themselves through the project guard.
 

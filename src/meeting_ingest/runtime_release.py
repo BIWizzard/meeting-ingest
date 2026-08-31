@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from contextlib import contextmanager
@@ -10,16 +11,24 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 from meeting_ingest._build_info import BUILD_INFO
 from meeting_ingest.errors import EXIT_RUNTIME_READINESS, MeetingIngestError
-from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.runtime import RuntimeInspection, inspect_runtime
+from meeting_ingest.readiness import assess_readiness, with_runtime_provenance
+from meeting_ingest.run_summary import RESERVED_KEYS, RunSummary
+from meeting_ingest.runtime import (
+    CONSOLE_SCRIPT_NAME,
+    ReadinessResult,
+    RuntimeInspection,
+    inspect_runtime,
+)
 from meeting_ingest.runtime_config import (
     RUNTIME_PIN_RELATIVE_PATH,
+    ConsumerPin,
     RuntimeConfigError,
     read_channel,
     read_pin,
@@ -42,6 +51,24 @@ PUBLISH_REMEDIATION = (
     "Ask the maintainer to build and publish an approved runtime "
     "(scripts/build-approved-runtime.py, then scripts/publish-approved-runtime.py)."
 )
+INIT_REMEDIATION = (
+    "Run `meeting-ingest init` from this consumer root to select and pin the approved runtime."
+)
+_INIT_EDITABLE_REMEDIATION = (
+    "Install the approved frozen wheel and run `meeting-ingest init` from it, or rerun "
+    "with --development-override <reason> to scaffold without an approved runtime."
+)
+_UPDATE_EDITABLE_REMEDIATION = (
+    "Run `meeting-ingest update` from the approved frozen installation; update never installs "
+    "over a development runtime."
+)
+_INIT_SHADOW_REMEDIATION = (
+    "Remove the shadowing copy this session resolves and run `meeting-ingest init` again."
+)
+_UPDATE_SHADOW_REMEDIATION = "Remove the shadowing copy this session resolves."
+UV_TOOL_INSTALL_COMMAND = ("uv", "tool", "install", "--reinstall")
+UPDATE_DELEGATION_MARKER = "MEETING_INGEST_UPDATE_DELEGATED"
+CommandRunner = Callable[..., "subprocess.CompletedProcess[str]"]
 _BOOTSTRAP_BLOCKING_CODES = (
     "runtime_editable_blocked",
     "runtime_install_unknown",
@@ -63,6 +90,15 @@ _BUILD_KEYS = frozenset(
 )
 _WORKFLOW_KEYS = frozenset(
     {"contract_version", "claude_skill_template_sha256", "claude_agent_sha256"}
+)
+_RECEIPT_BUILD_FIELDS = frozenset(
+    {
+        "semantic_version",
+        "build_id",
+        "source_commit",
+        "source_tree_sha256",
+        "workflow_contract_version",
+    }
 )
 
 
@@ -127,6 +163,13 @@ class BootstrappedRuntime:
     skill_destination: Path
     agent_destination: Path
     executable: Path
+
+
+@dataclass(frozen=True)
+class InstalledRuntime:
+    build_id: str
+    executable: Path
+    command: tuple[str, ...]
 
 
 def default_application_data_root() -> Path:
@@ -610,6 +653,19 @@ def _channel_lock(path: Path):
         path.unlink(missing_ok=True)
 
 
+def _require_expected_wheel_digest(
+    receipt: Mapping[str, Any], expected_wheel_sha256: str | None
+) -> None:
+    """Bind a receipt to the wheel digest its producer reported, not just to its own claim."""
+
+    if expected_wheel_sha256 is not None and receipt["build"]["wheel_sha256"] != expected_wheel_sha256:
+        raise RuntimeReleaseError(
+            "Approved receipt does not name the expected wheel digest",
+            code="runtime_wheel_invalid",
+            remediation="Rebuild the approved runtime and publish the receipt that build produced.",
+        )
+
+
 def publish_approved_runtime(
     receipt_path: Path,
     *,
@@ -617,11 +673,14 @@ def publish_approved_runtime(
     application_data_root: Path | None = None,
     channel: str = DEFAULT_CHANNEL,
     published_at: str,
+    expected_receipt_sha256: str | None = None,
+    expected_wheel_sha256: str | None = None,
 ) -> PublishedRuntime:
     """Copy immutable artifacts and atomically advance one advisory channel."""
 
     source_receipt = receipt_path.expanduser().absolute()
-    receipt, receipt_sha256 = read_receipt(source_receipt)
+    receipt, receipt_sha256 = _reread_receipt(source_receipt, expected_receipt_sha256)
+    _require_expected_wheel_digest(receipt, expected_wheel_sha256)
     source_wheel = _verified_wheel(source_receipt, receipt, wheel_path)
     build = receipt["build"]
     app_root = (application_data_root or default_application_data_root()).expanduser().resolve(strict=False)
@@ -865,8 +924,12 @@ def _require_published_wheel(app_root: Path, receipt_path: Path, receipt: Mappin
     return _verified_wheel(receipt_path, receipt, wheel_path)
 
 
-def _require_approved_frozen_install(inspection: RuntimeInspection, receipt_path: Path) -> None:
-    """Refuse to bootstrap from anything but a frozen install of the receipt's wheel."""
+def _require_frozen_install(
+    inspection: RuntimeInspection,
+    *,
+    editable_remediation: str = _INIT_EDITABLE_REMEDIATION,
+) -> None:
+    """Refuse to act from anything but a verifiable frozen install, receipt aside."""
 
     blocking = next(
         (finding for finding in inspection.findings if finding.code in _BOOTSTRAP_BLOCKING_CODES),
@@ -876,10 +939,7 @@ def _require_approved_frozen_install(inspection: RuntimeInspection, receipt_path
         raise RuntimeReleaseError(
             "The running Meeting Ingest distribution is an editable development install.",
             code="runtime_editable_blocked",
-            remediation=(
-                "Install the approved frozen wheel and run `meeting-ingest init` from it, or rerun "
-                "with --development-override <reason> to scaffold without an approved runtime."
-            ),
+            remediation=editable_remediation,
         )
     if blocking is not None:
         raise RuntimeReleaseError(
@@ -892,6 +952,12 @@ def _require_approved_frozen_install(inspection: RuntimeInspection, receipt_path
             code="runtime_install_unknown",
             remediation="Invoke Meeting Ingest from the approved frozen installation.",
         )
+
+
+def _require_approved_frozen_install(inspection: RuntimeInspection, receipt_path: Path) -> None:
+    """Refuse to bootstrap from anything but a frozen install of the receipt's wheel."""
+
+    _require_frozen_install(inspection)
     if not inspection.receipt["match"]:
         raise RuntimeReleaseError(
             "The running Meeting Ingest build does not match the latest approved receipt.",
@@ -929,14 +995,14 @@ def _require_writable_destination(root: Path, destination: Path, label: str) -> 
     _require_unsymlinked_descent(root, destination.parent, label)
 
 
-def _require_installed_workflow_resolves(
+def _require_resolved_workflow_matches(
     inspection: RuntimeInspection,
     installed: WorkflowInstallResult,
-    receipt_path: Path,
+    *,
+    remediation: str = _INIT_SHADOW_REMEDIATION,
 ) -> None:
-    """Require host resolution to reach the exact artifacts this bootstrap just wrote."""
+    """Require host resolution to reach the exact artifacts this command just wrote."""
 
-    _require_approved_frozen_install(inspection, receipt_path)
     expected = (
         ("Claude skill", installed.skill_destination, installed.rendered_skill_sha256,
          inspection.workflow.skill_path, inspection.workflow.skill_sha256),
@@ -950,8 +1016,19 @@ def _require_installed_workflow_resolves(
             raise RuntimeReleaseError(
                 f"The installed {label} is not what this session resolves: {resolved_path}",
                 code="workflow_hash_mismatch",
-                remediation="Remove the shadowing copy this session resolves and run `meeting-ingest init` again.",
+                remediation=remediation,
             )
+
+
+def _require_installed_workflow_resolves(
+    inspection: RuntimeInspection,
+    installed: WorkflowInstallResult,
+    receipt_path: Path,
+) -> None:
+    """Require an approved frozen install to resolve the artifacts this bootstrap wrote."""
+
+    _require_approved_frozen_install(inspection, receipt_path)
+    _require_resolved_workflow_matches(inspection, installed)
 
 
 def bootstrap_consumer_runtime(
@@ -1037,6 +1114,500 @@ def bootstrap_consumer_runtime(
         agent_destination=agent_destination,
         executable=executable,
     )
+
+
+def _receipt_build_mismatches(inspection: RuntimeInspection) -> tuple[str, ...]:
+    """Name the receipt-versus-running-build fields that disagree, the consumer pin aside."""
+
+    comparisons = [
+        item
+        for item in inspection.receipt["comparisons"]
+        if item["field"] in _RECEIPT_BUILD_FIELDS
+    ]
+    if inspection.receipt["error"] or len(comparisons) != len(_RECEIPT_BUILD_FIELDS):
+        return tuple(sorted(_RECEIPT_BUILD_FIELDS))
+    return tuple(sorted(item["field"] for item in comparisons if not item["match"]))
+
+
+def _require_receipt_build_is_running(inspection: RuntimeInspection, receipt_path: Path) -> None:
+    """Require the running build to be the receipt's own; the pin still names the old one."""
+
+    mismatched = _receipt_build_mismatches(inspection)
+    if mismatched:
+        raise RuntimeReleaseError(
+            f"The running Meeting Ingest build does not match the approved receipt: "
+            f"{', '.join(mismatched)}.",
+            code="runtime_build_mismatch",
+            remediation=(
+                f"Install the approved wheel named by {receipt_path} and run "
+                "`meeting-ingest update` from it."
+            ),
+        )
+
+
+def _require_existing_pin(root: Path) -> ConsumerPin:
+    """Require a prior explicit selection: update moves a consumer, it never adopts one."""
+
+    pin = read_pin(root)
+    if not runtime_pin_present(root):
+        raise RuntimeReleaseError(
+            f"This consumer carries no runtime pin: {pin.path}",
+            code="runtime_pin_missing",
+            remediation=INIT_REMEDIATION,
+        )
+    if not pin.valid:
+        raise RuntimeReleaseError(
+            f"This consumer's runtime pin is unreadable ({pin.error}): {pin.path}",
+            code="runtime_pin_invalid",
+            remediation=(
+                "Inspect it with `meeting-ingest runtime inspect`, then repin explicitly with "
+                "`meeting-ingest runtime pin --receipt <path> --root <consumer-root>`."
+            ),
+        )
+    return pin
+
+
+def _install_published_wheel(
+    wheel_path: Path, *, expected_sha256: str, runner: CommandRunner
+) -> tuple[str, ...]:
+    """Install one wheel staged under its verified bytes; the store copy may change after."""
+
+    if not wheel_path.is_absolute() or wheel_path.name.startswith("-"):
+        raise RuntimeReleaseError(
+            f"Approved wheel path is not safe to install: {wheel_path}",
+            code="runtime_path_unsafe",
+            remediation="Republish the approved runtime into an unredirected application data root.",
+        )
+    reported = (*UV_TOOL_INSTALL_COMMAND, str(wheel_path))
+    with tempfile.TemporaryDirectory(prefix="meeting-ingest-approved-wheel-") as staging:
+        staged = Path(staging) / wheel_path.name
+        _copy_immutable(wheel_path, staged, expected_sha256)
+        try:
+            runner(
+                [*UV_TOOL_INSTALL_COMMAND, str(staged)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            detail = str(getattr(exc, "stderr", None) or exc).strip()
+            raise RuntimeReleaseError(
+                f"Installing the approved wheel failed: {detail}",
+                code="runtime_install_failed",
+                remediation=f"Run `{' '.join(reported)}` directly, then run the command again.",
+            ) from exc
+    return reported
+
+
+def _update_command(executable: Path, root: Path) -> list[str]:
+    return [str(executable), "update", "--root", str(root), "--json"]
+
+
+@contextmanager
+def _converging_update(root: Path, previous_build_id: str):
+    """Keep the failing step's own next action and add the rerun that converges from it."""
+    try:
+        yield
+    except RuntimeReleaseError as exc:
+        original = exc.details.get("remediation") if isinstance(exc.details, dict) else None
+        rerun = (
+            f"run `meeting-ingest update --root {root}` again; this consumer still selects "
+            f"{previous_build_id}."
+        )
+        raise RuntimeReleaseError(
+            exc.message,
+            code=exc.code,
+            remediation=(
+                f"{original} Then {rerun}" if original else f"{rerun[0].upper()}{rerun[1:]}"
+            ),
+        ) from exc
+
+
+def _update_readiness(root: Path, inspection: RuntimeInspection) -> ReadinessResult:
+    """Diagnose whatever this consumer is left with without discarding a completed update."""
+
+    return assess_readiness(root, operation="update", runtime_inspector=lambda _: inspection)
+
+
+def _update_summary(
+    *,
+    updated: bool,
+    build_id: str,
+    previous_build_id: str,
+    receipt_path: Path,
+    pin_path: Path,
+    pin_sha256: str | None,
+    executable: Path,
+    installed: WorkflowInstallResult | None,
+    readiness: ReadinessResult,
+) -> RunSummary:
+    severity_counts = Counter(finding.severity for finding in readiness.findings)
+    blocked = readiness.verdict == "blocked"
+    return with_runtime_provenance(
+        RunSummary(
+            status="blocked" if blocked else ("success" if updated else "no_op"),
+            exit_code=readiness.exit_code,
+            details={
+                "command": "runtime_update",
+                "updated": updated,
+                "delegated": False,
+                "build_id": build_id,
+                "previous_build_id": previous_build_id,
+                "receipt_path": str(receipt_path),
+                "pin_path": str(pin_path),
+                "pin_sha256": pin_sha256,
+                "executable": str(executable),
+                "skill_destination": (
+                    str(installed.skill_destination) if installed is not None else None
+                ),
+                "agent_destination": (
+                    str(installed.agent_destination)
+                    if installed is not None and installed.agent_destination is not None
+                    else None
+                ),
+                "verdict": readiness.verdict,
+                "finding_counts": {"by_severity": dict(sorted(severity_counts.items()))},
+                "findings": [finding.to_dict() for finding in readiness.findings],
+            },
+        ),
+        readiness,
+    )
+
+
+def _relayed_summary(payload: Mapping[str, Any]) -> RunSummary:
+    """Carry a delegated child's own result, verdict and exit code included, unedited."""
+
+    details = {key: value for key, value in payload.items() if key not in RESERVED_KEYS}
+    provenance = payload.get("runtime_provenance")
+    if details.get("command") == "runtime_update":
+        details["delegated"] = True
+    return RunSummary(
+        schema_version=str(payload.get("schema_version", "1.1")),
+        status=str(payload["status"]),
+        exit_code=int(payload["exit_code"]),
+        warnings=list(payload.get("warnings") or []),
+        errors=list(payload.get("errors") or []),
+        runtime_provenance=provenance if isinstance(provenance, dict) else None,
+        details=details,
+    )
+
+
+def _delegate_update(root: Path, executable: Path, *, runner: CommandRunner) -> RunSummary:
+    """Hand the rest of this update to the build that ships the receipt's own templates."""
+
+    command = _update_command(executable, root)
+    remediation = f"Run `{' '.join(command)}` directly to see what the new build reports."
+    try:
+        completed = runner(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env={**os.environ, UPDATE_DELEGATION_MARKER: "1"},
+        )
+        payload = json.loads(completed.stdout)
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        detail = str(getattr(exc, "stderr", None) or exc).strip()
+        raise RuntimeReleaseError(
+            f"The installed Meeting Ingest build did not report an update result: {detail}",
+            code="runtime_update_delegation_failed",
+            remediation=remediation,
+        ) from exc
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("status"), str)
+        or not isinstance(payload.get("exit_code"), int)
+    ):
+        raise RuntimeReleaseError(
+            "The installed Meeting Ingest build reported an unusable update result",
+            code="runtime_update_delegation_failed",
+            remediation=remediation,
+        )
+    if completed.returncode != payload["exit_code"]:
+        raise RuntimeReleaseError(
+            f"The installed Meeting Ingest build exited with {completed.returncode} but "
+            f"reported exit code {payload['exit_code']}",
+            code="runtime_update_delegation_failed",
+            remediation=remediation,
+        )
+    return _relayed_summary(payload)
+
+
+def _complete_update(
+    root: Path,
+    inspection: RuntimeInspection,
+    *,
+    inspect: Callable[[Path], RuntimeInspection],
+    receipt_path: Path,
+    receipt_sha256: str,
+    application_data_root: Path,
+    channel: str,
+    previous_build_id: str,
+) -> RunSummary:
+    """Render, install, and select the running build for one consumer, then diagnose it."""
+
+    with _converging_update(root, previous_build_id):
+        executable = _approved_console_script(inspection)
+        templates = packaged_workflow_templates()
+        skill_destination = root / CLAUDE_SKILL_PATH
+        agent_destination = root / CLAUDE_AGENT_PATH
+        pin_path = root / RUNTIME_PIN_RELATIVE_PATH
+        _require_writable_destination(root, skill_destination, "Claude skill destination")
+        _require_writable_destination(root, agent_destination, "Claude agent destination")
+        _require_writable_destination(root, pin_path, "Runtime pin destination")
+
+        installed = install_workflow_artifacts(
+            receipt_path,
+            template_path=templates.skill_template,
+            executable=executable,
+            skill_destination=skill_destination,
+            agent_path=templates.claude_agent,
+            agent_destination=agent_destination,
+            expected_receipt_sha256=receipt_sha256,
+        )
+        _require_resolved_workflow_matches(
+            inspect(executable), installed, remediation=_UPDATE_SHADOW_REMEDIATION
+        )
+
+        pinned = pin_runtime(
+            root,
+            receipt_path,
+            approved_executable=executable,
+            invoked_executable=executable,
+            application_data_root=application_data_root,
+            channel=channel,
+            installed_skill_path=skill_destination,
+            claude_agent_path=agent_destination,
+            expected_receipt_sha256=receipt_sha256,
+        )
+    return _update_summary(
+        updated=True,
+        build_id=pinned.build_id,
+        previous_build_id=previous_build_id,
+        receipt_path=receipt_path,
+        pin_path=pinned.pin_path,
+        pin_sha256=pinned.pin_sha256,
+        executable=executable,
+        installed=installed,
+        readiness=_update_readiness(root, inspect(executable)),
+    )
+
+
+def update_consumer_runtime(
+    root: Path,
+    *,
+    application_data_root: Path | None = None,
+    invoked_executable: str | Path | None = None,
+    runtime_inspector: Callable[..., RuntimeInspection] = inspect_runtime,
+    command_runner: CommandRunner = subprocess.run,
+    executable_locator: Callable[[str], str | None] = shutil.which,
+) -> RunSummary:
+    """Move one explicitly named pinned consumer to the channel-latest approved runtime."""
+
+    root = root.expanduser().resolve(strict=False)
+    pin = _require_existing_pin(root)
+    previous_build_id = str(pin.values["approved_build_id"])
+    channel = str(pin.values["channel"])
+    app_root = (application_data_root or default_application_data_root()).expanduser().resolve(
+        strict=False
+    )
+    receipt_path, receipt_sha256 = _latest_published_receipt(app_root, channel)
+    receipt, _ = _reread_receipt(receipt_path, receipt_sha256)
+    wheel_path = _require_published_wheel(app_root, receipt_path, receipt)
+    build_id = receipt["build"]["build_id"]
+
+    def inspect(invoked: Path) -> RuntimeInspection:
+        return runtime_inspector(
+            root,
+            invoked_path=invoked,
+            application_data_root=app_root,
+            receipt_path=receipt_path,
+        )
+
+    selected = inspect(_resolve_executable(invoked_executable))
+    if previous_build_id == build_id and selected.runtime_mode == "approved":
+        return _update_summary(
+            updated=False,
+            build_id=build_id,
+            previous_build_id=previous_build_id,
+            receipt_path=receipt_path,
+            pin_path=Path(pin.path),
+            pin_sha256=pin.sha256,
+            executable=Path(selected.executable["invoked"]),
+            installed=None,
+            readiness=_update_readiness(root, selected),
+        )
+    _require_frozen_install(selected, editable_remediation=_UPDATE_EDITABLE_REMEDIATION)
+
+    if not _receipt_build_mismatches(selected):
+        return _complete_update(
+            root,
+            selected,
+            inspect=inspect,
+            receipt_path=receipt_path,
+            receipt_sha256=receipt_sha256,
+            application_data_root=app_root,
+            channel=channel,
+            previous_build_id=previous_build_id,
+        )
+    # This process holds the previous build in memory and can never become the new one, so
+    # a delegated run that still mismatches fails instead of installing and handing off again.
+    if os.environ.get(UPDATE_DELEGATION_MARKER) == "1":
+        _require_receipt_build_is_running(selected, receipt_path)
+
+    # The wheel install is machine-global while the pin is this consumer's alone, so the
+    # old pin survives until the new build renders and selects itself for this root.
+    _install_published_wheel(
+        wheel_path, expected_sha256=receipt["build"]["wheel_sha256"], runner=command_runner
+    )
+    with _converging_update(root, previous_build_id):
+        executable = _locate_console_script(executable_locator)
+        _require_installed_tool_matches(executable, receipt, runner=command_runner)
+        return _delegate_update(root, executable, runner=command_runner)
+
+
+def _inspect_installed_tool(executable: Path, *, runner: CommandRunner) -> Mapping[str, Any]:
+    """Read runtime evidence from the installed console script, not from this process."""
+
+    try:
+        completed = runner(
+            [str(executable), "runtime", "inspect", "--json"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        evidence = json.loads(completed.stdout)
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError, UnicodeError) as exc:
+        detail = str(getattr(exc, "stderr", None) or exc).strip()
+        raise RuntimeReleaseError(
+            f"The installed Meeting Ingest tool could not be inspected: {detail}",
+            code="runtime_install_unverified",
+            remediation=f"Run `{executable} runtime inspect --json` and repair the installation.",
+        ) from exc
+    if not isinstance(evidence, dict):
+        raise RuntimeReleaseError(
+            "The installed Meeting Ingest tool did not report an inspection object",
+            code="runtime_install_unverified",
+            remediation=f"Run `{executable} runtime inspect --json` and repair the installation.",
+        )
+    return evidence
+
+
+def _locate_console_script(locator: Callable[[str], str | None]) -> Path:
+    """Identify the console script this machine now resolves for the tool."""
+
+    located = locator(CONSOLE_SCRIPT_NAME)
+    if not located:
+        raise RuntimeReleaseError(
+            f"The installed {CONSOLE_SCRIPT_NAME} console script is not on PATH",
+            code="runtime_executable_unidentified",
+            remediation="Add the uv tool bin directory to PATH and run the command again.",
+        )
+    return Path(located).expanduser().resolve(strict=False)
+
+
+def _require_installed_tool_matches(
+    executable: Path, receipt: Mapping[str, Any], *, runner: CommandRunner
+) -> None:
+    """Verify the installed tool against the receipt out of process, not in this one."""
+
+    evidence = _inspect_installed_tool(executable, runner=runner)
+    build = evidence.get("build") if isinstance(evidence.get("build"), dict) else {}
+    distribution = (
+        evidence.get("distribution") if isinstance(evidence.get("distribution"), dict) else {}
+    )
+    reported = evidence.get("executable") if isinstance(evidence.get("executable"), dict) else {}
+    mismatches = [
+        label
+        for label, expected, actual in (
+            ("build_id", receipt["build"]["build_id"], build.get("build_id")),
+            ("build_kind", "approved-candidate", build.get("build_kind")),
+            ("record_integrity", "valid", distribution.get("record_integrity")),
+            ("console_script", str(executable), reported.get("console_script")),
+        )
+        if expected != actual
+    ]
+    if mismatches:
+        raise RuntimeReleaseError(
+            f"The installed Meeting Ingest tool does not match the approved receipt: "
+            f"{', '.join(mismatches)}",
+            code="runtime_install_unverified",
+            remediation=f"Reinstall the approved wheel and run `{executable} runtime inspect --json`.",
+        )
+
+
+def install_approved_wheel(
+    receipt_path: Path,
+    *,
+    application_data_root: Path | None = None,
+    expected_receipt_sha256: str | None = None,
+    expected_wheel_sha256: str | None = None,
+    command_runner: CommandRunner = subprocess.run,
+    executable_locator: Callable[[str], str | None] = shutil.which,
+) -> InstalledRuntime:
+    """Install one published receipt's wheel machine-globally and verify the tool it leaves."""
+
+    app_root = (application_data_root or default_application_data_root()).expanduser().resolve(
+        strict=False
+    )
+    receipt_file = receipt_path.expanduser().absolute()
+    _require_unsymlinked_descent(app_root, receipt_file, "Published receipt")
+    _require_contained(app_root, receipt_file, "Published receipt")
+    receipt, _ = _reread_receipt(receipt_file, expected_receipt_sha256)
+    _require_expected_wheel_digest(receipt, expected_wheel_sha256)
+    wheel = _require_published_wheel(app_root, receipt_file, receipt)
+    command = _install_published_wheel(
+        wheel, expected_sha256=receipt["build"]["wheel_sha256"], runner=command_runner
+    )
+
+    executable = _locate_console_script(executable_locator)
+    _require_installed_tool_matches(executable, receipt, runner=command_runner)
+    return InstalledRuntime(
+        build_id=receipt["build"]["build_id"],
+        executable=executable,
+        command=command,
+    )
+
+
+def update_consumer_roots(
+    consumer_roots: Sequence[Path],
+    *,
+    executable: Path,
+    command_runner: CommandRunner = subprocess.run,
+) -> list[dict[str, Any]]:
+    """Run the consumer update command, once per explicitly named consumer root."""
+
+    results: list[dict[str, Any]] = []
+    for consumer_root in consumer_roots:
+        resolved = Path(consumer_root).expanduser().resolve(strict=False)
+        command = _update_command(executable, resolved)
+        try:
+            completed = command_runner(command, check=False, capture_output=True, text=True)
+        except OSError as exc:
+            results.append(
+                {"root": str(resolved), "status": "failed", "summary": None, "error": str(exc)}
+            )
+            continue
+        try:
+            summary = json.loads(completed.stdout)
+        except (json.JSONDecodeError, UnicodeError):
+            summary = None
+        # The child's own status never overrides its exit code: a nonzero exit is a failure
+        # even when the summary it printed reports otherwise.
+        failed = (
+            completed.returncode != 0
+            or not isinstance(summary, dict)
+            or not isinstance(summary.get("status"), str)
+        )
+        results.append(
+            {
+                "root": str(resolved),
+                "status": "failed" if failed else str(summary["status"]),
+                "summary": summary,
+                "error": ((completed.stderr or "").strip() or None) if failed else None,
+            }
+        )
+    return results
 
 
 def update_check(
