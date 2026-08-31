@@ -406,6 +406,45 @@
         "patterns": ["\\breject", "\\bpark", "\\bnot feasible\\b", "\\binfeasible\\b", "\\bdeferred?\\b", "\\bdeclin"],
         "regex_flags": "i"
       }
+    },
+    {
+      "id": "S14",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 6,
+      "pattern": "committed-scope widening",
+      "description": "Rosa accepted the alerting change only and excluded loader logic, with both the narrowing and her closing self-summary established in the transcript. No owner accepted the timeout raise, so it may not appear as any action's substance, whether folded into the alerting commitment or recorded as its own item. The patterns deliberately do not match `raise an alert when the merge timeout wait crosses a threshold`: a correct rendering may mention the timeout as alert context, and `timeout` followed by a noun it modifies — alert, wait, threshold, notification, warning — is treated as that context; only the verb-object timeout-raise form fails.",
+      "selector": "$.action_items[*].action",
+      "operator": "none_match",
+      "patterns": [
+        "\\b(?:raise|raising|raised|increase|increasing|increased|bump|bumping|bumped|extend|extending|extended)\\s+(?:the\\s+)?(?:merge\\s+)?(?:step\\s+)?timeout\\b(?!\\s+(?:alert|wait|threshold|notification|warning))",
+        "\\btimeout\\s+(?:raise|increase|bump)\\b",
+        "\\b(?:higher|longer)\\s+(?:merge\\s+)?timeout\\b(?!\\s+(?:alert|wait|threshold|notification|warning))",
+        "\\bloader logic\\b",
+        "\\b(?:change|changes|modify|modifying|touch)\\s+(?:to\\s+)?the\\s+loader\\b"
+      ],
+      "regex_flags": "i",
+      "accepted_forms": ["Ship the alerting change by Friday", "Add an alert when the merge wait crosses a threshold (Rosa, Friday)"]
+    },
+    {
+      "id": "S15",
+      "class": "semantic",
+      "severity": "blocking",
+      "guidance_rule": 6,
+      "pattern": "committed-scope widening",
+      "description": "The alerting commitment keeps the owner and deadline the transcript establishes — Rosa, by Friday — so the deadline is neither widened nor reassigned. S14 constrains the same records' scope.",
+      "selector": "$.action_items[*]",
+      "operator": "record_conditional",
+      "when": {
+        "field": "action",
+        "patterns": ["\\balert"]
+      },
+      "require": [
+        {"field": "owner", "patterns": ["\\bRosa\\b", "\\bVillanueva\\b"]},
+        {"field": "due_timing", "patterns": ["\\bFriday\\b"]}
+      ],
+      "regex_flags": "i",
+      "companion_assertion": "S14"
     }
   ]
 }
