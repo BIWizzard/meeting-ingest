@@ -2,11 +2,11 @@
 
 **Goal:** Prevent future meeting artifacts from inventing speaker qualifiers, overstating causal certainty, converting rejected proposals into actions, resolving ambiguous identities too confidently, or losing transcript-supported time context.
 
-**Milestone placement:** This is a bounded quality gate inside Just Works Continuity Track 3, Fresh Claude Code Meeting Proof and Recovery. It does not create a competing milestone, adopt the HTV or Spelman corpus, implement Stakeholder Briefing, or broaden the supported host/provider/output-mode surface.
+**Milestone placement:** This is a bounded quality gate inside Just Works Continuity Track 3, Fresh Claude Code Meeting Proof and Recovery. It does not create a competing milestone, adopt legacy corpus A or legacy corpus B, implement Stakeholder Briefing, or broaden the supported host/provider/output-mode surface.
 
 **Architecture:** Split integrity controls by what the engine can actually prove. The engine deterministically indexes normalized transcript speaker labels and timestamps, binds that index into provider requests, and rejects provider labels or evidence locators that are absent from the transcript. A single versioned semantic-guidance source governs model judgment for time context, causal certainty, proposal/decision/action disposition, and identity ambiguity. Synthetic fixtures exercise deterministic failures in `pytest`; a redacted session-provider acceptance case evaluates semantic judgment without committing a private transcript. Existing client artifacts remain untouched until the owner separately authorizes corpus mutation and the planned regeneration contract is implemented.
 
-**Evidence:** Dogfood captures `cap_20260720T161601Z_c3b4b417` and `cap_20260720T162508Z_5966b520` record the reviewed HTV case. The private source and generated artifact are evidence for this plan but are not repository fixtures.
+**Evidence:** Dogfood captures `cap_20260720T161601Z_c3b4b417` and `cap_20260720T162508Z_5966b520` record the reviewed reference-consumer case. The private source and generated artifact are evidence for this plan but are not repository fixtures.
 
 ## Success Criteria
 
@@ -24,8 +24,8 @@
 
 ## Non-Goals And Boundaries
 
-- Do not copy, redact in place, fingerprint-adopt, or otherwise add the HTV transcript or artifact to this repository.
-- Do not mutate the existing HTV artifact, signals, ledger, processed source, or iQ Context state from this plan.
+- Do not copy, redact in place, fingerprint-adopt, or otherwise add the reference consumer's transcript or artifact to this repository.
+- Do not mutate the reference consumer's existing artifact, signals, ledger, processed source, or iQ Context state from this plan.
 - Do not claim deterministic validation can prove causality, agreement, nickname identity, or AM/PM interpretation from arbitrary natural language.
 - Do not add a second model/judge call to the normal ingest path. Extraction cost and latency are already dogfood concerns.
 - Do not implement broad identity registries, colleague/client tiers, relationship profiling, global aliases, or Stakeholder Briefing.
@@ -289,7 +289,7 @@ The final testing document must use explicit safe temporary paths and the actual
 - [ ] State that failed grounding never writes or partially replaces durable output.
 - [ ] State that already-ingested semantic correction requires the contracted but unimplemented regeneration path because markdown, signal JSONL, ledger current state, and downstream derivations must move together.
 - [ ] Add an explicit current question for the owner-approved generated-Markdown mutability and semantic-regeneration policy.
-- [ ] Keep existing HTV and Spelman artifacts read-only. Their reviewed defects remain dogfood evidence until a fingerprinted adoption/correction plan receives separate approval.
+- [ ] Keep existing legacy corpora A and B artifacts read-only. Their reviewed defects remain dogfood evidence until a fingerprinted adoption/correction plan receives separate approval.
 - [ ] Reference the already-frozen Regeneration Contract in `docs/artifact-contract.md`; do not create a second semantic-regeneration design.
 - [ ] Add a follow-on implementation slice for the existing `regenerate --provider session` contract after the owner approves generated-Markdown mutability and client-corpus correction. Its acceptance must cover the already-contracted atomic artifact/signal replacement, fingerprints, append-only `artifact_regenerated`, and downstream supersession behavior.
 - [ ] Do not recommend manual markdown or signal edits as an interim repair mechanism.

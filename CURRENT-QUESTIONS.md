@@ -166,7 +166,7 @@ Resolved runtime direction:
 ### 8a. Should existing generated corpora be adopted or left as historical artifacts?
 
 Need to decide:
-- whether to backfill ledger records for existing Hearst/Spelman outputs
+- whether to backfill ledger records for existing legacy corpora A/B outputs
 - whether to normalize old filenames
 - whether to migrate old signal files
 - whether to leave old outputs read-only and start fresh
@@ -176,7 +176,7 @@ Why it matters:
 - migration policy affects ledger, doctor, and repair tooling
 
 Resolved direction:
-- HTV and Spelman must be inventoried and classified read-only before any adoption decision
+- legacy corpus A and legacy corpus B must be inventoried and classified read-only before any adoption decision
 - redundant repository-local copies do not count as independent dogfood evidence
 - no legacy artifact may be relabeled as current-generated
 - any adoption or repair requires a deterministic, fingerprinted plan and separate owner approval
@@ -363,7 +363,7 @@ Relationship to 7a:
 Current stance:
 - the mechanism is frozen in the `Regeneration Contract` section of `docs/artifact-contract.md`; no second semantic-correction design may be introduced
 - manual markdown or signal edits are not a correction mechanism and are not an interim workaround
-- existing HTV and Spelman artifacts remain read-only and their reviewed defects remain dogfood evidence
+- existing legacy corpora A and B artifacts remain read-only and their reviewed defects remain dogfood evidence
 - until the policy is approved, a reviewed semantic defect in existing output stays recorded as evidence and the output stays as generated
 
 ### 17. Should the persisted `normalized_transcript` be self-authenticating?
@@ -460,7 +460,7 @@ Why it matters:
 - failed grounding never writes or partially replaces durable primary output; the `ingest_failed` snapshot is the only durable record a failure writes
 - semantic correction of already-ingested output requires the contracted regeneration path; manual markdown or signal edits are not a repair mechanism
 
-Runtime identity, approval, readiness verdicts, development override scope, handoff binding, and update behavior are closed Track 1 policy, now implemented and demonstrated complete as of 2026-07-24: the reference host runs an approved frozen wheel under a runtime pin and processed one fresh non-synthetic transcript end to end through one normal Claude Code request. The frozen shapes remain authoritative in `DECISIONS.md` and `docs/artifact-contract.md`; the demonstration is recorded in `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Demonstration does not claim semantic guardrails or qualified history. Remaining relevant questions are corpus class disposition under 8a, the bounded recovery mechanics under 7a, and the generated-output mutability policy under 16; none was resolved by mutating HTV or Spelman history during Track 1.
+Runtime identity, approval, readiness verdicts, development override scope, handoff binding, and update behavior are closed Track 1 policy, now implemented and demonstrated complete as of 2026-07-24: the reference host runs an approved frozen wheel under a runtime pin and processed one fresh non-synthetic transcript end to end through one normal Claude Code request. The frozen shapes remain authoritative in `DECISIONS.md` and `docs/artifact-contract.md`; the demonstration is recorded in `docs/sessions/2026-07-24-task9-reference-consumer-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Demonstration does not claim semantic guardrails or qualified history. Remaining relevant questions are corpus class disposition under 8a, the bounded recovery mechanics under 7a, and the generated-output mutability policy under 16; none was resolved by mutating legacy corpus A or legacy corpus B history during Track 1.
 
 ## Not In Scope Right Now
 

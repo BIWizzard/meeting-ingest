@@ -4,13 +4,13 @@
 
 Primary corpus reviewed:
 
-- `/Users/kmgdev/dev_projects/hearst-client/HTV-IQ-DataAnalytics/_local/project-context/meetings`
+- legacy corpus A (`_local/project-context/meetings`)
 
 Secondary sanity-check corpus:
 
-- `/Users/kmgdev/dev_projects/spelman/_local/project-context/meetings`
+- legacy corpus B (`_local/project-context/meetings`)
 
-The Hearst corpus is the better reference set because it contains sustained real use:
+Legacy corpus A is the better reference set because it contains sustained real use:
 
 - 153 top-level markdown files
 - 42 top-level verbatim markdown files
@@ -87,9 +87,9 @@ The signal categories are already meaningful, including:
 - asks
 - actions
 
-### 5. The Spelman output shows recent quality improvements
+### 5. The legacy-corpus-B output shows recent quality improvements
 
-The Spelman summary is well structured and preserves stakeholder/business context effectively. Its verbatim file also includes front matter and a clear note about transcript cleaning.
+The legacy-corpus-B summary is well structured and preserves stakeholder/business context effectively. Its verbatim file also includes front matter and a clear note about transcript cleaning.
 
 This is a good candidate reference for the newer artifact style.
 
@@ -106,7 +106,7 @@ The user specifically wants file names that identify:
 
 The corpus confirms why this matters.
 
-There are 43 Hearst markdown files with `generic` in the name. Many of these files have strong semantic titles inside the document, but the filename stays low-signal.
+There are 43 legacy-corpus-A markdown files with `generic` in the name. Many of these files have strong semantic titles inside the document, but the filename stays low-signal.
 
 Example pattern to avoid:
 
@@ -256,7 +256,7 @@ Potential direction:
 
 ### 8. Reconciliation appears directionally right but not perfectly clean
 
-The Hearst corpus has 81 processed copies, 81 ledger entries, and 80 `_inbox/_done` files. There are also files still directly under `_inbox` and raw source files in the top-level meeting root.
+Legacy corpus A has 81 processed copies, 81 ledger entries, and 80 `_inbox/_done` files. There are also files still directly under `_inbox` and raw source files in the top-level meeting root.
 
 This suggests the current done process is close but can leave residue. The rebuild should make the run summary and `doctor` command surface these states clearly.
 

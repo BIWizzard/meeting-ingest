@@ -25,7 +25,7 @@ It can turn `.txt`, `.vtt`, and `.docx` meeting artifacts into durable project k
 - deterministic transcript grounding enforced before any durable write
 - versioned semantic extraction guidance bound into requests and persisted provenance
 
-The current reference user is the maintainer, the reference host is Claude Code, the reference consumer (HTV) is the formalized site where activation evidence is collected, and the release posture is maintainer-only private alpha. The engine remains host-neutral by design, but other host experiences are not current release claims. It is not yet a general self-serve product.
+The current reference user is the maintainer, the reference host is Claude Code, the reference consumer is the formalized site where activation evidence is collected, and the release posture is maintainer-only private alpha. The engine remains host-neutral by design, but other host experiences are not current release claims. It is not yet a general self-serve product.
 
 ## Approved North Star Milestone
 
@@ -40,7 +40,7 @@ The ordered milestone tracks and their status are:
 3. Fresh Claude Code Meeting Proof and Recovery — fresh-host proof demonstrated 2026-07-24; the Semantic Integrity Guardrails quality gate inside this track (`docs/plans/2026-07-20-semantic-integrity-guardrails.md`) is implemented, with release-evidence acceptance recorded on the frozen 0.2.0 build and its claim scoped to exclude rule 6.
 4. Approval-Gated Historical Qualification and Continuity Proof — not started; approval-gated.
 
-The read-only HTV/Spelman reckoning is complete. Corpus adoption remains separately approval-gated.
+The read-only legacy corpora A/B reckoning is complete. Corpus adoption remains separately approval-gated.
 
 The Semantic Integrity Guardrails slice is implemented, and its claim is limited to guarded fresh-ingest output:
 
@@ -51,7 +51,7 @@ The Semantic Integrity Guardrails slice is implemented, and its claim is limited
 
 Guidance 1.0's acceptance history stands as recorded. The run on 2026-07-26 passed all 18 blocking assertions with concordant human semantic review and independent blind review, and its one advisory failure was dispositioned as a fixture pattern gap rather than an extraction defect; it ran on an editable checkout under `--development-override`, so it is development/non-release evidence. The slice was released as build `g51ff17173bea` (receipt cut from commit `51ff171`, installed and pinned per the release flow), and two release-evidence acceptance attempts on that frozen build then failed semantic assertions with a consistent `semantic_guidance` 1.0 wording gap; both failures are recorded as a contract finding, while the deterministic gates passed on the frozen build in both attempts. See `docs/sessions/2026-07-26-task7-semantic-acceptance-dev-run.md` and `docs/sessions/2026-07-26-task7-release-and-acceptance.md`.
 
-Guidance 1.1 answers that finding and is released. Its acceptance run on 2026-07-29 passed 18/18 blocking assertions and 1/1 advisory with both required reviews concordant, closing both 1.0 failures and recording four framing-restraint quality findings; it also ran on an editable checkout under `--development-override` and is development/non-release evidence. See `docs/sessions/2026-07-29-guidance-1_1-semantic-acceptance-dev-run.md`. The slice was released as build `meeting-ingest-0.2.0-g3695fc350c77-s61e1660c5dc8` (receipt cut from commit `3695fc3`, published, installed, and pinned per the release flow), and the HTV consumer ran pinned to it through the acceptance period. Both consumers — HTV and Trace3 (onboarded 2026-08-13) — are now pinned to `meeting-ingest-0.3.0-gbcfe8e532721-s30753a330500` (receipt cut from commit `bcfe8e5`), which carries guidance `1.1` unchanged, fixes the stale `generated_by` stamp reported by the first three dogfood relays (shipped in 0.2.1), and makes `meeting-ingest init` a true one-command consumer bootstrap. See `docs/sessions/2026-08-30-one-command-init-release.md`. See `docs/sessions/2026-07-29-guidance-1_1-release.md`.
+Guidance 1.1 answers that finding and is released. Its acceptance run on 2026-07-29 passed 18/18 blocking assertions and 1/1 advisory with both required reviews concordant, closing both 1.0 failures and recording four framing-restraint quality findings; it also ran on an editable checkout under `--development-override` and is development/non-release evidence. See `docs/sessions/2026-07-29-guidance-1_1-semantic-acceptance-dev-run.md`. The slice was released as build `meeting-ingest-0.2.0-g3695fc350c77-s61e1660c5dc8` (receipt cut from commit `3695fc3`, published, installed, and pinned per the release flow), and the reference consumer ran pinned to it through the acceptance period. Both consumers — the reference consumer and the secondary consumer (onboarded 2026-08-13) — are now pinned to `meeting-ingest-0.3.0-gbcfe8e532721-s30753a330500` (receipt cut from commit `bcfe8e5`), which carries guidance `1.1` unchanged, fixes the stale `generated_by` stamp reported by the first three dogfood relays (shipped in 0.2.1), and makes `meeting-ingest init` a true one-command consumer bootstrap. See `docs/sessions/2026-08-30-one-command-init-release.md`. See `docs/sessions/2026-07-29-guidance-1_1-release.md`.
 
 Release-evidence acceptance on the frozen 0.2.0 build was performed on 2026-07-29 and passed 18/18 blocking and 1/1 advisory under clean approved-runtime conditions — readiness `ready` with zero findings, no development override, no interventions — with the host-loaded agent definition verified against the receipt-installed copy before the run and the full workflow chain verified at 8/8 pin and 8/8 receipt comparisons. Both required reviews are concordant. It is **accepted as milestone proof with a scoped claim**:
 
@@ -70,9 +70,9 @@ The Approved Runtime policy is implemented and demonstrated as of 2026-07-24:
 - approved Claude Code client work blocks editable builds by default;
 - a deliberate maintainer override is available for testing and must remain unmistakable in readiness and generated provenance.
 
-The HTV consumer now runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. Track 1 completion demonstrates approved-runtime readiness and persisted provenance only; it does not claim semantic guardrails or qualified history. The 177 legacy findings remain classified history warnings awaiting the separately approval-gated qualification track.
+The reference consumer now runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. Track 1 completion demonstrates approved-runtime readiness and persisted provenance only; it does not claim semantic guardrails or qualified history. The 177 legacy findings remain classified history warnings awaiting the separately approval-gated qualification track.
 
-See `docs/north-star-board/002-just-works-continuity/`, `docs/sessions/2026-07-24-task9-htv-cutover.md`, and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`.
+See `docs/north-star-board/002-just-works-continuity/`, `docs/sessions/2026-07-24-task9-reference-consumer-cutover.md`, and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`.
 
 ## Current Development State
 
@@ -92,7 +92,7 @@ Current accounting:
 Shipped means running at the reference consumer (North Star board record 003, P2). A capability is therefore tracked on two axes:
 
 - `implemented` — the code is committed, tested, and carried in a published build.
-- `active-at-reference-consumer` — that capability is observably running at the reference consumer (HTV).
+- `active-at-reference-consumer` — that capability is observably running at the reference consumer.
 
 Every feature ships active to the reference consumer unless it is explicitly scoped away from it. A capability can be `implemented` and not active; that gap is the point of this section, not a defect in it.
 
@@ -109,7 +109,7 @@ Activation evidence is metadata only — verdicts, counts, build ids, statuses. 
 Captured: 2026-08-30. Interim snapshot transcribed from two committed records — the 0.3.0 release record `docs/sessions/2026-08-30-one-command-init-release.md` and the identity-review session record `docs/sessions/2026-08-30T23-24-14-734Z-dogfood-hardening.md`. It is replaced wholesale at the next release run by pasted command output. Fields not recorded in those two are listed as not evidenced rather than inferred.
 
 ```
-site:    the reference consumer (HTV)
+site:    the reference consumer
 command: meeting-ingest readiness --host claude-code
          (the 0.3.0-era readiness run; --verdict-only --json is the
           capture command from the next published build onward)
@@ -416,7 +416,7 @@ Semantic correction of ingested output requires the contracted regeneration path
 
 Manual edits to generated markdown or signal JSONL are not a correction mechanism and are not an interim workaround. A hand-edited artifact still carries the ledger provenance, fingerprints, producer links, and bound `semantic_guidance_version` of the output it replaced.
 
-Existing HTV and Spelman artifacts remain read-only. Their reviewed defects remain dogfood evidence until a deterministic, fingerprinted adoption or correction plan receives separate owner approval under North Star board record 002, OB-002-1. Whether generated Markdown may be mutated at all is an open owner decision held by record 002 under "Other Later Decisions" and tracked as question 16 in `CURRENT-QUESTIONS.md`.
+Existing legacy corpora A and B artifacts remain read-only. Their reviewed defects remain dogfood evidence until a deterministic, fingerprinted adoption or correction plan receives separate owner approval under North Star board record 002, OB-002-1. Whether generated Markdown may be mutated at all is an open owner decision held by record 002 under "Other Later Decisions" and tracked as question 16 in `CURRENT-QUESTIONS.md`.
 
 Approval-gated follow-on slice — implement `regenerate --provider session`:
 

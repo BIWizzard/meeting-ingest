@@ -4,13 +4,13 @@
 
 **Goal:** Before a transcript is processed, identify the exact Meeting Ingest build and Claude Code workflow that will run, compare them with the consumer's approved immutable pin, block unsafe or ambiguous client execution, and preserve reconstructable runtime provenance through every output.
 
-**Milestone placement:** This is Track 1 of Just Works Continuity and precedes further release-quality HTV dogfooding and the Track 3 Semantic Integrity Guardrails plan. It does not adopt or mutate HTV/Spelman history, implement Stakeholder Briefing, broaden the reference host, or silently upgrade a consumer.
+**Milestone placement:** This is Track 1 of Just Works Continuity and precedes further release-quality reference-consumer dogfooding and the Track 3 Semantic Integrity Guardrails plan. It does not adopt or mutate legacy corpora A/B history, implement Stakeholder Briefing, broaden the reference host, or silently upgrade a consumer.
 
 **Approved policy basis:** The owner has already approved one exact immutable consumer build tied to a reviewed commit and packaged build, explicit updates, Claude Code as the reference host, a maintainer-only private alpha, block-by-default editable client execution, and an explicit visibly marked development override. See `docs/north-star-board/002-just-works-continuity/09-owner-decisions.md`.
 
 **Architecture:** Build from an exact Git archive, inject immutable source identity into the wheel, and emit an external build receipt containing the final wheel digest. A consumer runtime pin records the approved build, receipt, executable, channel, and Claude workflow hashes. Runtime inspection detects executable/module paths, install mode, package integrity, editable source commit and dirty state, and workflow compatibility. `readiness` combines that result with project config, privacy, active handoff/integrity health, and separately classified history warnings. Every write-capable engine entry point calls the same guard before acquiring the project lock or writing files. A deliberate development override allows work but marks the run, handoff, artifact, ledger, and derived output as development-generated.
 
-**Dogfood evidence:** Capture `cap_20260720T165222Z_593ed953` proves the current ambiguity. `/Users/kmgdev/.local/bin/meeting-ingest` is a frozen snapshot matching commit `3bc917de8c6072239848ed190c4c45889d6cf227` but is silently replaced when `main` moves; HTV `.venv/bin/meeting-ingest` is editable and imports the live Meeting Ingest working tree. The Claude skill currently runs `uv run meeting-ingest`, which selects the HTV editable executable. Both identify only as `0.1.0`.
+**Dogfood evidence:** Capture `cap_20260720T165222Z_593ed953` proves the current ambiguity. `/Users/kmgdev/.local/bin/meeting-ingest` is a frozen snapshot matching commit `3bc917de8c6072239848ed190c4c45889d6cf227` but is silently replaced when `main` moves; the reference consumer's `.venv/bin/meeting-ingest` is editable and imports the live Meeting Ingest working tree. The Claude skill currently runs `uv run meeting-ingest`, which selects the reference consumer's editable executable. Both identify only as `0.1.0`.
 
 ## Approved Outcomes
 
@@ -26,13 +26,13 @@
 
 ## Non-Goals And Boundaries
 
-- Do not mutate, repair, regenerate, adopt, or clean HTV/Spelman meeting history in this track.
+- Do not mutate, repair, regenerate, adopt, or clean legacy corpora A/B meeting history in this track.
 - Do not make all legacy doctor findings next-meeting blockers.
 - Do not treat semantic version `0.1.0`, PATH order, a Git branch name, editable metadata, or a clone-local hook as immutable identity.
 - Do not embed the final wheel SHA-256 inside the wheel; that is self-referential. Bind the embedded identity to the wheel digest through the external receipt.
 - Do not add automatic install/update behavior to `readiness`, `status`, `doctor`, agent skills, shell startup, or Git hooks.
 - Do not require network access, a public registry, signing infrastructure, or multi-user release administration for the private-alpha implementation.
-- Do not delete the HTV virtual environment. The eventual cutover removes only its editable `meeting-ingest` distribution after rollback evidence is recorded.
+- Do not delete the reference consumer's virtual environment. The eventual cutover removes only its editable `meeting-ingest` distribution after rollback evidence is recorded.
 - Do not claim the historical corpus is qualified merely because readiness permits a safe fresh ingest.
 
 ## Approval Unit And File Contracts
@@ -427,16 +427,16 @@ uv run pytest tests/test_runtime_build.py -q
 - [x] Retire hook-based `uv tool install --reinstall` completely. Hooks may emit an informational reminder that a candidate exists, but they cannot build, publish, install, pin, or update.
 - [x] Document the explicit release flow and reference-host boundary; Codex remains development/non-release evidence until separately approved.
 
-## Task 9: Cut HTV Over With Rollback Preserved
+## Task 9: Cut The Reference Consumer Over With Rollback Preserved
 
 **Scope:** This task is authorized only after Tasks 1-8 pass review and an approved wheel/receipt exists. It changes runtime installation/configuration but does not mutate meeting corpus content.
 
-- [x] Record the existing HTV editable distribution metadata, executable/module paths, source target, Git state, and environment package snapshot for rollback.
+- [x] Record the existing reference-consumer editable distribution metadata, executable/module paths, source target, Git state, and environment package snapshot for rollback.
 - [x] Build, review, approve, publish, and explicitly install the selected frozen wheel into the canonical global tool location.
-- [x] Verify global runtime identity and package integrity before writing the HTV pin.
-- [x] Pin HTV to the exact receipt/build/executable/workflow.
+- [x] Verify global runtime identity and package integrity before writing the reference consumer's pin.
+- [x] Pin the reference consumer to the exact receipt/build/executable/workflow.
 - [x] Render the approved executable into the installed Claude skill's strict marker, then verify its hash against the consumer pin; hash-verify the extraction agent against the receipt/pin contract.
-- [x] Uninstall only `meeting-ingest` from the explicit HTV `.venv` interpreter. Do not delete or recreate the virtual environment.
+- [x] Uninstall only `meeting-ingest` from the explicit reference-consumer `.venv` interpreter. Do not delete or recreate the virtual environment.
 - [x] Verify the editable `.pth`, distribution metadata, and local console script are gone and no activated/`uv run` path can import the Meeting Ingest working tree.
 - [x] Run read-only runtime inspection and readiness. Expected verdict is `Ready with history warnings` until historical qualification is complete.
 - [x] Run `status` and `doctor` through the pinned executable and confirm legacy findings are categorized, not silently repaired.
@@ -453,12 +453,12 @@ uv run pytest tests/test_runtime_build.py -q
 - Modify: `CURRENT-QUESTIONS.md`
 - Create: dated session/acceptance evidence under `docs/sessions/`
 
-- [x] From HTV, submit one normal Claude Code request with one new non-synthetic transcript.
+- [x] From the reference consumer, submit one normal Claude Code request with one new non-synthetic transcript.
 - [x] Require the skill to show readiness and build identity without source, PATH, package, ledger, or cache inspection.
 - [x] Complete phase 1/extraction/phase 2 using the same bound runtime and workflow.
 - [x] Confirm completion reports artifact, signals, ledger, archive, reconcile, provider, host, effective date/confidence, build ID, runtime mode, and workflow contract.
 - [x] Confirm the output surfaces preserve the same provenance and post-run readiness remains safe.
-- [x] Exercise explicit update availability without installing it, then an approved update/repin in a disposable consumer before touching HTV.
+- [x] Exercise explicit update availability without installing it, then an approved update/repin in a disposable consumer before touching the reference consumer.
 - [x] Record elapsed time, interventions, failures, rollback evidence, and human trust assessment.
 - [x] Update product truth only with demonstrated claims; Track 1 completion does not claim semantic guardrails or qualified history.
 
@@ -492,7 +492,7 @@ uv run pytest tests/test_runtime_build.py -q
 | Repair rewrites signal bytes | New producer ledger record/reference; prior generation remains history |
 | Latest ledger `2.0` signal manifest missing or mismatching signal `1.2` | Write-time failure and doctor current-integrity blocker |
 | Git commit/merge on main | Does not install or repin consumer tool |
-| HTV `.venv` activated after cutover | Cannot import editable Meeting Ingest |
+| Reference-consumer `.venv` activated after cutover | Cannot import editable Meeting Ingest |
 | Readiness/status/doctor while blocked | Read-only commands still work |
 
 ## Verification Commands
@@ -511,7 +511,7 @@ Also require:
 - receipt-to-wheel and receipt-to-embedded-identity verification;
 - durable skill-template hash, controlled rendered-skill hash, and byte-for-byte agent verification;
 - a disposable-consumer install/pin/update/rollback drill;
-- the read-only HTV cutover checks;
+- the read-only reference-consumer cutover checks;
 - one fresh Claude Code meeting proof only after readiness is safe;
 - independent review with all findings resolved or explicitly deferred.
 
@@ -520,8 +520,8 @@ Also require:
 Track 1 is complete only when:
 
 1. One reviewed commit and reproducible wheel are bound by an approved receipt.
-2. HTV pins that exact immutable build, executable, and workflow.
-3. The editable HTV Meeting Ingest distribution is removed without disturbing the rest of its environment.
+2. The reference consumer pins that exact immutable build, executable, and workflow.
+3. The editable reference-consumer Meeting Ingest distribution is removed without disturbing the rest of its environment.
 4. Claude Code no longer uses ambiguous `uv run` resolution.
 5. Git hooks cannot silently install or update consumer tooling.
 6. Runtime inspection and readiness require no source/PATH/package investigation by the user.
@@ -543,6 +543,6 @@ Track 1 is complete only when:
 7. `feat: persist runtime provenance in outputs`
 8. `docs: switch Claude workflow to approved runtime`
 9. `chore: retire automatic global tool refresh`
-10. `docs: record HTV approved-runtime proof`
+10. `docs: record reference-consumer approved-runtime proof`
 
 Commits must exclude unrelated pre-existing working-tree changes, generated wheels/receipts unless explicitly approved release metadata, client corpus data, and volatile `.iq-context` runtime files.

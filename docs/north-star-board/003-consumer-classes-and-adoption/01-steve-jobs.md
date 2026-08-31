@@ -33,7 +33,7 @@ And the brief's own evidence line reports the registry **active in production** 
 
 ### P3 — Reference consumer as a formal role
 
-Supported by every piece of evidence in the record: HTV is where the cutover was proven (`docs/sessions/2026-07-24-task9-htv-cutover.md`), where the fresh-host proof ran (task10), where the 177 findings and the standing verdict live, where the registry went active, and where 0.3.0's measure of done was demonstrated (`2026-08-30-one-command-init-release.md:44`). Record 002 named "the maintainer as the sole reference user" — a person, not a place. The evidence is collected at a place. P3 closes a naming gap that already caused real ambiguity, and it is a precondition for P2 being enforceable at all: "activation evidence at the reference consumer" is meaningless until "the reference consumer" is a defined term.
+Supported by every piece of evidence in the record: HTV is where the cutover was proven (`docs/sessions/2026-07-24-task9-reference-consumer-cutover.md`), where the fresh-host proof ran (task10), where the 177 findings and the standing verdict live, where the registry went active, and where 0.3.0's measure of done was demonstrated (`2026-08-30-one-command-init-release.md:44`). Record 002 named "the maintainer as the sole reference user" — a person, not a place. The evidence is collected at a place. P3 closes a naming gap that already caused real ambiguity, and it is a precondition for P2 being enforceable at all: "activation evidence at the reference consumer" is meaningless until "the reference consumer" is a defined term.
 
 ### P4 — Third-party redistribution boundary
 

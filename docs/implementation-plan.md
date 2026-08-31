@@ -58,7 +58,7 @@ If these documents conflict, `docs/artifact-contract.md` wins for generated arti
 
 ## Current Approved Milestone: Just Works Continuity
 
-The North Star Review Board reconvened on 2026-07-20 with authoritative HTV/Spelman history and consumer runtime evidence. The owner approved this product definition:
+The North Star Review Board reconvened on 2026-07-20 with authoritative legacy corpora A/B history and consumer runtime evidence. The owner approved this product definition:
 
 > Meeting Ingest turns each meeting into a trustworthy project record and keeps accumulated meeting history usable and explainable through one approved agent workflow.
 
@@ -88,7 +88,7 @@ Approved Runtime policy:
 
 The approved execution plan is `docs/plans/2026-07-20-approved-runtime-readiness.md`. Runtime implementation must follow the normative shapes in `docs/artifact-contract.md` and `docs/provider-handoff-contract.md`; this section freezes sequencing and module ownership.
 
-**Status:** Track 1 is demonstrated complete as of 2026-07-24. All ten plan tasks are implemented, reviewed, and proven on a fresh reference host: the HTV consumer runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. See `docs/sessions/2026-07-24-task9-htv-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Completion demonstrates approved-runtime readiness and persisted provenance only; it does not claim semantic guardrails or qualified history, and no HTV/Spelman history was mutated.
+**Status:** Track 1 is demonstrated complete as of 2026-07-24. All ten plan tasks are implemented, reviewed, and proven on a fresh reference host: the reference consumer runs an approved frozen wheel under a runtime pin, and one fresh non-synthetic transcript was processed end to end through one normal Claude Code request. See `docs/sessions/2026-07-24-task9-reference-consumer-cutover.md` and `docs/sessions/2026-07-24-task10-fresh-host-proof.md`. Completion demonstrates approved-runtime readiness and persisted provenance only; it does not claim semantic guardrails or qualified history, and no legacy corpora A/B history was mutated.
 
 Frozen contracts:
 
@@ -113,11 +113,11 @@ Implementation order is mandatory:
 4. Implement readiness classification and the shared engine-level write guard.
 5. Bind runtime provenance across provider handoffs.
 6. Persist provenance in run summaries, artifacts, ledgers, signals, and derived outputs.
-7. Render/install the reference-host workflow, retire silent reinstall hooks, and cut HTV over only after disposable-consumer proof.
+7. Render/install the reference-host workflow, retire silent reinstall hooks, and cut the reference consumer over only after disposable-consumer proof.
 
 The shared write guard runs inside every public mutating pipeline/playbook entry point before locks or writes. Read-only runtime inspection, readiness, update check, `status`, `doctor`, and `validate-response` remain usable while blocked. Production cannot recognize a test environment through an environment variable; tests inject typed runtime evidence through fixtures.
 
-The current HTV corpus is not a Track 1 migration target. Runtime cutover may record read-only inventory and remove only the explicit editable `meeting-ingest` distribution after rollback evidence exists. It may not rewrite, adopt, regenerate, clean, or backfill meeting history.
+Legacy corpus A is not a Track 1 migration target. Runtime cutover may record read-only inventory and remove only the explicit editable `meeting-ingest` distribution after rollback evidence exists. It may not rewrite, adopt, regenerate, clean, or backfill meeting history.
 
 ### Track 3 Semantic Integrity Guardrails
 
@@ -129,7 +129,7 @@ Verification is deliberately split. `uv run pytest` proves the deterministic gat
 
 The 2026-07-26 acceptance run passed all 18 blocking assertions under guidance `1.0` with concordant human and blind review, and its one advisory failure was dispositioned as a fixture pattern gap rather than an extraction defect. The 2026-07-29 run repeated the procedure under guidance `1.1` and passed 18/18 blocking and 1/1 advisory with both required reviews concordant, closing the two failures the 1.0 release-evidence runs hit. Both used an editable checkout under `--development-override` and are development/non-release evidence (`docs/sessions/2026-07-26-task7-semantic-acceptance-dev-run.md`, `docs/sessions/2026-07-29-guidance-1_1-semantic-acceptance-dev-run.md`). Release evidence requires the same procedure on the approved frozen build in a freshly pinned consumer project, and that run was performed on 2026-07-29: 18/18 blocking, 1/1 advisory, readiness `ready` with zero findings and no override, on an evaluator verified by both synthetic self-test and seven mutations of the run's own payload. A first attempt the same day was rejected despite scoring 18/18, because the host had cached the pre-release agent definition and extraction therefore ran against 1.0's rules; the accepted attempt verified the host-loaded definition against the receipt-installed copy before running. Blind review found a rule 6 scope widening that no assertion detects, so the accepted claim excludes rule 6 (`docs/sessions/2026-07-29-guidance-1_1-release-evidence-acceptance.md`).
 
-The claim is limited to guarded fresh-ingest output. Post-ingest semantic correction still requires the frozen but unimplemented `regenerate` path, and no HTV or Spelman artifact is adopted, corrected, or mutated by this track.
+The claim is limited to guarded fresh-ingest output. Post-ingest semantic correction still requires the frozen but unimplemented `regenerate` path, and no legacy corpus A or legacy corpus B artifact is adopted, corrected, or mutated by this track.
 
 ## V1 Scope
 
@@ -685,7 +685,7 @@ Deliverables:
 Lead review:
 
 - confirm provider data routing with user before sending real client transcript content
-- first real-provider test must use a synthetic fixture transcript, not Hearst/Spelman content
+- first real-provider test must use a synthetic fixture transcript, not legacy corpora A/B content
 
 ### Milestone 7: Host/Session-Backed Provider Path
 
@@ -1065,7 +1065,7 @@ Ready when selected:
 - add read-only corpus scan for existing markdown, signal JSONL, processed copies, inbox done files, and legacy ledger entries
 - produce an adoption report that classifies files as adoptable, needs repair, ignored, or conflicting
 - support ledger adoption records for existing source hashes only when enough provenance exists
-- add migration docs for Hearst/Spelman-style corpora and dry-run-first workflows
+- add migration docs for legacy-corpora-A/B-style corpora and dry-run-first workflows
 
 Needs design decision:
 
@@ -1190,7 +1190,7 @@ Acceptance criteria:
 
 The roadmap layer-specific decision lists above are authoritative. Ask the user before deciding:
 
-- whether existing Hearst/Spelman corpora should be migrated, adopted read-only, or left outside the new ledger
+- whether the existing legacy corpora A and B should be migrated, adopted read-only, or left outside the new ledger
 - which host wrapper or API-backed provider should receive the next productization investment
 - whether Layer 2 output modes should interrupt the active Layer 1 → 5A → 5B sequence
 - exact deterministic cleanup or date-resolution rules when fixtures expose genuine ambiguity

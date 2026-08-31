@@ -263,11 +263,11 @@ def test_extract_docx_preserves_hour_long_teams_speaker_timestamps(tmp_path: Pat
 
 
 def test_extract_docx_uses_content_date_duration_and_removes_export_chrome(tmp_path: Path) -> None:
-    source = tmp_path / "Spelman College - Data as Infrastructure.docx"
+    source = tmp_path / "Bramford College - Data as Infrastructure.docx"
     document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    <w:p><w:r><w:t>Spelman College - Data as Infrastructure -20260701_143044-Meeting Transcript</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Bramford College - Data as Infrastructure -20260701_143044-Meeting Transcript</w:t></w:r></w:p>
     <w:p><w:r><w:t>July 1, 2026, 6:30PM</w:t></w:r></w:p>
     <w:p><w:r><w:t>43m 0s</w:t></w:r></w:p>
     <w:p><w:r><w:t>started transcription</w:t></w:r></w:p>

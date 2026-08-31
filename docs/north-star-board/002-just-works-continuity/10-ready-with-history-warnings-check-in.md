@@ -6,7 +6,7 @@
 the `ready_with_history_warnings` verdict: the Task 9 cutover left HTV at that
 verdict with all 177 findings classified history warnings, and the Task 10
 fresh-host proof processed one new non-synthetic transcript end to end under it
-(`docs/sessions/2026-07-24-task9-htv-cutover.md`,
+(`docs/sessions/2026-07-24-task9-reference-consumer-cutover.md`,
 `docs/sessions/2026-07-24-task10-fresh-host-proof.md`).
 **Mode:** `check-in` (orchestrator only, no seats)
 **Reconciler:** `reconcile.sh` → `OK: 2 records, 2 open obligations`, exit 0,

@@ -4,8 +4,14 @@
     "Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.",
     "Land OB-003-2 readiness activation legibility: rename the threefold optional_playbook_output_missing mislabel, collapse repeated same-code history findings per issue #26, and add the core_inactive category with its own distinct verdict — required before any new finding class ships.",
     "Close OB-003-3 and OB-003-5 before the next release: widen issue #23 to all four product-status contradictions with activation state derived from tool output, and reconcile the README channel clause and Consumer Onboarding copy per record 003.",
-    "File a sanitized backlog issue for the share-safe artifact output form required by OB-003-4, and one for the consumer repair command the record 003 developer seat identified."
+    "File a sanitized backlog issue for the share-safe artifact output form required by OB-003-4, and one for the consumer repair command the record 003 developer seat identified.",
+    "Receive the OB-003-1 fix pass, re-verify at T2 (focused review of the delegation redesign + regression lenses), then commit the command pair and update issue #16",
+    "Drive the next release through scripts/release-approved-runtime.py and 'meeting-ingest update' end to end — that run is OB-003-1's acceptance proof and closes issue #16 (OB-003-3 and OB-003-5 must land before that release ships)",
+    "When OB-003-2 lands: T2 verify (codex + implementer-model, contract line item on artifact-contract clauses), commit, then dispatch OB-003-3 (#23 widened: all four product-status contradictions closed, implemented vs active-at-reference-consumer vocabulary, activation state derived from tool output)",
+    "When OB-003-3 reports: T2 verify the product-status revision (contract line item: derived activation metadata only, four contradictions closed), commit, close #23, update board row + CLAUDE.md block — then all four user-ordered items are done; offer #31 as the natural next unit",
+    "Drive the next release through scripts/release-approved-runtime.py and 'meeting-ingest update' end to end — OB-003-1's acceptance proof; its evidence must cite the activation accounting (fresh pasted snapshot) per OB-003-3",
+    "Issue #31: never-generated playbook detection on normally-initialized projects — the first new finding class gated behind the now-landed OB-003-2"
   ],
   "resume_from": "Resume with: Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.",
-  "updated_at": "2026-08-31T01:17:29.166Z"
+  "updated_at": "2026-08-31T03:11:19.227Z"
 }

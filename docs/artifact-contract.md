@@ -412,7 +412,7 @@ Rules:
 - The contracted path is `Regeneration Contract` in this document, with signal identity and supersession governed by `Signal Regeneration And Supersession`. That contract is frozen and unimplemented. It replaces the selected mode's artifact atomically, refreshes the signal file when the regeneration path produces new signals, records the current and prior signal-set fingerprints, and resolves downstream effects through supersession, playbook rebuild reporting, and `doctor` checks rather than through simultaneous rewrites. Semantic correction of ingested output is a regeneration of the affected mode from `_processed/`; no second semantic-correction design exists, and none may be introduced.
 - Manual edits to generated markdown or signal JSONL are not a correction mechanism and are not an interim workaround. A hand-edited artifact still carries the ledger provenance, fingerprints, producer links, and bound `semantic_guidance_version` of the output it replaced, which converts a reviewed semantic defect into an untraceable one.
 - Until the mutability policy is approved and regeneration is implemented, a reviewed semantic defect in existing output stays recorded as evidence and the output stays as generated.
-- The existing HTV and Spelman artifacts are read-only. Their reviewed defects are dogfood evidence. This document authorizes no correction, regeneration, adoption, or mutation of them; that requires a deterministic, fingerprinted adoption plan and separate owner approval under North Star board record 002, OB-002-1.
+- The existing legacy corpora A and B artifacts are read-only. Their reviewed defects are dogfood evidence. This document authorizes no correction, regeneration, adoption, or mutation of them; that requires a deterministic, fingerprinted adoption plan and separate owner approval under North Star board record 002, OB-002-1.
 - Whether generated Markdown may be mutated at all, and under what semantic-regeneration policy, is an open owner decision held by record 002 under "Other Later Decisions" and tracked in `CURRENT-QUESTIONS.md`. This document specifies the mechanism; it does not authorize its use.
 
 ## Identity
@@ -481,7 +481,7 @@ Examples:
 
 ```text
 2026-06-12-kushali-adbook-fact-revenue-detail.md
-2026-07-01-spelman-data-infrastructure-rfp-prep.md
+2026-07-01-bramford-data-infrastructure-rfp-prep.md
 2026-06-10-jim-haley-historical-revenue-dedup.md
 ```
 
@@ -607,7 +607,7 @@ counterpart_name: Kushali G
 duration: PT16M12S
 source_started_at: 2026-06-12T04:42:00-04:00
 timezone: America/Detroit
-project: htv-iq-dataanalytics
+project: example-data-analytics
 provider_host: codex
 ```
 

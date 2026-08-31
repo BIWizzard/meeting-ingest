@@ -176,7 +176,7 @@ Good filename shape:
 
 ```text
 2026-06-12-kushali-adbook-fact-revenue-detail.md
-2026-07-01-spelman-data-infrastructure-rfp-prep.md
+2026-07-01-bramford-data-infrastructure-rfp-prep.md
 2026-06-10-jim-haley-historical-revenue-dedup.md
 ```
 

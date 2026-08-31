@@ -90,6 +90,12 @@ Do not routinely commit volatile local runtime state:
 
 Review iQ Context changes before staging. Do not commit local runtime files just because they changed during a session.
 
+## Identifiers
+
+Repository files and GitHub issues refer to consumers by role — "the reference consumer", "the secondary consumer" — and to the two pre-existing client meeting corpora — engine-generated outputs at those sites included — as "legacy corpus A" and "legacy corpus B". Client names are never written into repository files or issues; the role-to-holder mapping is held by the owner outside the repository.
+
+Frozen records and dated history under `docs/north-star-board/`, `docs/sessions/`, `docs/legacy/`, `docs/discoveries/`, and `docs/decisions/` predate this rule and are not retro-edited: contents stay frozen, though a client-named *filename* may be normalized, with citations to it repaired as pure link fixes. Examples and test fixtures use invented names (e.g. the invented "Bramford College") or explicit `example-*` placeholders, never real client or institution names. `.iq-context/` state is written only through the iq-context CLI: new state text follows this rule, and pre-existing stored text is normalized as CLI capability allows (tracked in the iq-context relay lane).
+
 ## Meeting Ingest Agent Notes
 
 The Meeting Ingest engine remains the source of truth for transcript extraction, validation, markdown rendering, signal enrichment, ledger writes, archive, and reconcile behavior.
