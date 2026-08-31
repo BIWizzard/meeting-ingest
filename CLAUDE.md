@@ -16,9 +16,15 @@ Claude agents should use iQ Context from this repo root, not from the iQ Context
 
 ## North Star Board
 
-Binding records: [docs/north-star-board/board-log.md](docs/north-star-board/board-log.md). Record 002 (Just Works Continuity, approved-runtime policies) governs product direction; contract deviation is a halting smell.
+Binding records: [docs/north-star-board/board-log.md](docs/north-star-board/board-log.md). Record 002 (Just Works Continuity, approved-runtime policies) and record 003 (consumer classes, update policy, adoption path — amends 002's consumer policy) govern product direction; contract deviation is a halting smell.
 
 <!-- north-star-board:open-obligations -->
 - OB-002-1: corpus adoption ratification — no corpus adoption or mutation without a deterministic fingerprinted adoption plan and separate owner approval; a proposed plan convenes the board.
+- OB-003-1: release/update command pair (issue #16) — due when the next release ships.
+- OB-003-2: readiness activation legibility — required before any new finding class ships.
+- OB-003-3: product-truth activation accounting — the next release's evidence cites it.
+- OB-003-4: single-owner candor precondition — summary/analysis artifacts are not shared with anyone until a share-safe output form exists; a decision or act extending brief/signal audience beyond the owner, or a reference-consumer role transfer, is a check-in trigger.
+- OB-003-5: P5 documentation reconciliation — before the next release's README update.
+- OB-003-6: auto-update deferral — a broadening intent or distribution-transition plan convenes the board per Decision 35.
 <!-- /north-star-board:open-obligations -->
 

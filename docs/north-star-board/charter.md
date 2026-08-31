@@ -45,6 +45,7 @@ deviations from panel consensus are legitimate and logged.
 |---|---|---|---|
 | 001 | 2026-07-20 | Founding product review and level-set | superseded |
 | 002 | 2026-07-20 | Reconvened: Just Works Continuity milestone and approved-runtime policies | ratified |
+| 003 | 2026-08-30 | Consumer classes, update policy, and the adoption path | ratified |
 
 ## Migration note (2026-07-24)
 
