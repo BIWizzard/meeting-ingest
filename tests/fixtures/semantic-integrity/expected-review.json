@@ -272,6 +272,7 @@
       ],
       "operator": "each_matching_also_matches",
       "when_patterns": [
+        "\\bloader split\\b",
         "\\bsplit(?:ting)? the loader\\b",
         "\\bsplit the (?:extract|merge)\\b",
         "\\btwo (?:staged|separate) jobs\\b",

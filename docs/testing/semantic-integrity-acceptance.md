@@ -170,14 +170,23 @@ Expect a clean `doctor` and no lingering `session_handoff_*` issues: successful 
 
 ## Evaluate The Assertions
 
-Evaluate every assertion in `expected-review.json` against the preserved response payload — the `response` key of `$EVAL_RESPONSE` — using the selector, operator, null, and severity vocabulary declared in that file's `evaluation` block. That payload is the declared root, and the selectors resolve against nothing else. The rendered Markdown and signal JSONL are inputs to the human review below, not to the assertions.
+Run the in-repository evaluator against the preserved response. It uses the `response` key of `$EVAL_RESPONSE` as the payload root and reads `expected-review.json` from beside the script. The rendered Markdown and signal JSONL are inputs to the human review below, not to the assertions.
+
+```bash
+EVAL_RESULTS="$ACCEPTANCE_ROOT/semantic-integrity-evaluation.json"
+python3 "$REPO/tests/fixtures/semantic-integrity/evaluate.py" "$EVAL_RESPONSE" \
+  --json "$EVAL_RESULTS"
+```
+
+The command prints one result per assertion and a closing tally, writes the machine-readable record to `$EVAL_RESULTS`, and exits `1` if any blocking assertion fails. Exit `2` means the run did not evaluate because of a specification or usage error and must never be recorded as an assertion result. `DG6` is `not_applicable` in this invocation because the preflight above already satisfied it and successful phase 2 deleted the live response file.
 
 - Every `blocking` assertion must pass. One blocking failure fails the acceptance run.
 - An `advisory` failure is a recorded quality finding that the human reviewer dispositions in the record.
 - `DG2`–`DG5` are enforced by the engine, so they should pass by construction once `DG6` passes. Evaluate them anyway: a `DG*` assertion that fails while `validate-response` succeeded is an enforcement gap, not a provider defect, and is the more serious of the two findings.
+- For an absent evidence speaker, the missing-key form is caught by the `validate-response` preflight (`DG6`), while `DG3` and `DG5` catch the explicit `null` form.
 - `DG1` is the exception, and its result must not be read as an engine guarantee. `validate_provider_grounding` only checks that each supplied raw label belongs to the grounding set; it never requires every transcript speaker to appear as an attendee. `DG1`'s set equality is a completeness expectation this fixture adds, so a `DG1` failure is an ordinary extraction defect, not an enforcement gap.
 
-Record each assertion as `pass`, `fail`, or `not_applicable`, with the offending value quoted for every failure.
+Record the evaluator output with the acceptance evidence. Each assertion is `pass`, `fail`, or `not_applicable`, with the offending value quoted for every failure.
 
 ## Record
 
