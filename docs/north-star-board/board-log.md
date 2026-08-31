@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | 001 | 2026-07-20 | Founding product review and level-set | Internal/private alpha verdict: engine credible, low-ceremony product experience not independently proven | superseded |
 | 002 | 2026-07-20 | Reconvened: Just Works Continuity milestone and approved-runtime policies | Product definition, Just Works Continuity milestone, Claude Code reference host, maintainer-only private alpha, read-only corpus reckoning, immutable-build and editable-block runtime policies ratified | ratified |
+| 003 | 2026-08-30 | Consumer classes, update policy, and the adoption path (amendment reconvening on 002's consumer policy) | pending | seats convened |
 
 ## Obligations
 
