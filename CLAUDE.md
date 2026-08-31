@@ -24,7 +24,6 @@ Binding records: [docs/north-star-board/board-log.md](docs/north-star-board/boar
 - OB-003-2: readiness activation legibility — required before any new finding class ships.
 - OB-003-3: product-truth activation accounting — the next release's evidence cites it.
 - OB-003-4: single-owner candor precondition — summary/analysis artifacts are not shared with anyone until a share-safe output form exists; a decision or act extending brief/signal audience beyond the owner, or a reference-consumer role transfer, is a check-in trigger.
-- OB-003-5: P5 documentation reconciliation — before the next release's README update.
 - OB-003-6: auto-update deferral — a broadening intent or distribution-transition plan convenes the board per Decision 35.
 <!-- /north-star-board:open-obligations -->
 

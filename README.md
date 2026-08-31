@@ -300,7 +300,7 @@ Both commands drive the explicit steps below and neither bypasses the fail-close
    scripts/publish-approved-runtime.py --receipt <path> --published-at <utc>
    ```
 
-   The channel manifest is advisory. It identifies the latest approved receipt/build and retained rollback artifacts, but it never installs, selects, or repins a consumer.
+   The channel carries only builds bearing release evidence. Its manifest is data, not an actor: it identifies the latest approved receipt/build and retained rollback artifacts, and it never installs or repins anything. Selection from it happens only inside an explicitly invoked command — `meeting-ingest init` at bootstrap, attested by the already-installed, human-installed approved runtime, and `meeting-ingest update` thereafter, attested by the pinned build it moves from.
 4. Install the frozen wheel explicitly:
 
    ```bash
@@ -337,15 +337,15 @@ Both commands drive the explicit steps below and neither bypasses the fail-close
 
 ### Consumer Onboarding
 
-Once the maintainer has approved, built, published, and installed a build (steps 1-4, plus the user-level workflow install in step 5), a new consumer project needs exactly one command from its own root:
+Once a release is on the machine (the release command above, or steps 1-5), a new consumer project needs exactly one command from its own root:
 
 ```bash
 meeting-ingest init
 ```
 
-With no runtime pin present, `init` selects the latest published approved receipt, requires the receipt's own wheel beside it and hashes it, verifies that the invoked command is the console script the running frozen distribution records, renders and installs the project-level Claude skill and session-provider agent through the same receipt-verified installer used above, re-inspects to confirm the session resolves exactly those bytes, writes the consumer pin, scaffolds the meetings layout, and reports readiness. Every byte it writes is verified against the receipt, and if a later step fails it removes the pin it wrote so a rerun converges.
+That is the whole onboarding: `init` adopts the current approved build for this project, sets up the meetings layout, and reports readiness. Approval attaches at publication; adoption is automatic at init and explicit thereafter — a project's first selection is the one automatic step, and every later move is the explicitly invoked `meeting-ingest update`, the one command that legitimately replaces a pin.
 
-`init` never replaces an existing pin. Where one is already present it only re-runs the readiness gate and re-scaffolds, so moving a consumer to a newer build is `meeting-ingest update` — the one command that legitimately replaces a pin, driving steps 4-6 above for that root and only when it is explicitly invoked there. `--development-override <reason>` scaffolds without selecting a runtime and never auto-pins.
+Under the hood `init` drives the same receipt-verified workflow-artifact installer and pin machinery documented above — it never installs a runtime, which is why the one-command path holds only on a machine whose approved runtime is current — and unwinds its own pin if a later step fails, so a rerun converges. `init` is bootstrap, not repair: it never replaces an existing pin, and where one is already present it only re-runs the readiness gate and re-scaffolds. `--development-override <reason>` scaffolds without selecting a runtime and never auto-pins.
 
 Release-store publishing, installation, and `runtime pin` are bootstrap/release mutations outside project readiness. They use strict receipt/build/workflow verification and atomic writes instead of bypassing themselves through the project guard.
 
