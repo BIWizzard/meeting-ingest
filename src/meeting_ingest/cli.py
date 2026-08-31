@@ -15,6 +15,7 @@ from meeting_ingest.readiness import (
     DevelopmentOverride,
     clear_runtime_provenance,
     current_runtime_provenance,
+    readiness_next_action,
     readiness_summary,
 )
 from meeting_ingest.runtime import inspect_runtime_summary
@@ -61,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Reserved host selector; the current reference host is claude-code.",
     )
     readiness_parser.add_argument("--json", action="store_true", help="Emit machine-readable readiness findings.")
+    readiness_parser.add_argument(
+        "--verdict-only",
+        action="store_true",
+        help="Emit the verdict, build match, next action, and grouped finding counts without the findings array.",
+    )
     _add_development_override(readiness_parser)
 
     init_parser = subparsers.add_parser("init")
@@ -225,6 +231,7 @@ def run(args: argparse.Namespace) -> RunSummary:
     if args.command == "readiness":
         return readiness_summary(
             Path(args.root),
+            verdict_only=args.verdict_only,
             development_override=development_override,
         )
     if args.command == "init":
@@ -339,21 +346,15 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
         print(f"Readiness: {data['verdict'].replace('_', ' ').title()}")
         if data["verdict"] == "development_override":
             print(f"Development reason: {data['runtime_provenance']['development_override_reason']}")
-        actionable = [
-            finding
-            for finding in data["findings"]
-            if (
-                data["verdict"] == "blocked" and finding["severity"] == "blocker"
-            ) or (
-                data["verdict"] == "ready_with_history_warnings"
-                and finding["severity"] == "warning"
-            )
-        ]
-        if actionable:
-            print(f"Next action: {actionable[0]['remediation']}")
-        if data["findings"]:
-            counts = data["finding_counts"]["by_severity"]
+        findings = data.get("findings", [])
+        next_action = readiness_next_action(data["verdict"], findings) or data.get("next_action")
+        if next_action:
+            print(f"Next action: {next_action}")
+        counts = data.get("finding_counts", {}).get("by_severity", {})
+        if counts:
             print("Findings: " + ", ".join(f"{key}={value}" for key, value in counts.items()))
+        for line in _collapsed_finding_lines(findings):
+            print(line)
         return
 
     if data.get("command") == "runtime_update":
@@ -364,6 +365,10 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
             print(f"Build: {data['build_id']}")
         print(f"Pin: {data['pin_path']}")
         print(f"Readiness: {data['verdict'].replace('_', ' ').title()}")
+        if data["verdict"] == "core_inactive":
+            next_action = readiness_next_action(data["verdict"], data["findings"])
+            if next_action:
+                print(f"Next action: {next_action}")
         for finding in data["findings"]:
             if finding["severity"] == "blocker":
                 print(f"{finding['code']}: {finding['message']}", file=sys.stderr)
@@ -402,8 +407,16 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
             print(content if isinstance(content, str) else json.dumps(content, indent=2, sort_keys=True))
             return
         if command == "init":
-            override = data.get("verdict") == "development_override"
-            print("Scaffolded (development override)" if override else "Ready")
+            verdict = data.get("verdict")
+            if verdict == "development_override":
+                print("Scaffolded (development override)")
+            elif verdict == "core_inactive":
+                print("Core Inactive")
+            else:
+                print("Ready")
+            next_action = data.get("next_action")
+            if verdict == "core_inactive" and next_action:
+                print(f"Next action: {next_action}")
             reason = (data.get("runtime_provenance") or {}).get("development_override_reason")
             if reason:
                 print(f"Development reason: {reason}")
@@ -428,6 +441,23 @@ def emit(summary: RunSummary, *, as_json: bool) -> None:
     print(f"{summary.status}: exit {summary.exit_code}", file=sys.stderr)
     for error in data.get("errors", []):
         _print_error(error)
+
+
+def _collapsed_finding_lines(findings: list[dict]) -> list[str]:
+    """Collapse repeated same-code warnings so the verdict is not buried in per-meeting volume."""
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for finding in findings:
+        if finding.get("severity") != "warning":
+            continue
+        groups.setdefault((finding.get("category", ""), finding.get("code", "")), []).append(finding)
+    lines: list[str] = []
+    for (category, code), group in groups.items():
+        path = group[0].get("path")
+        line = f"- {len(group)} {category}/{code}"
+        if path:
+            line += f" ({path})" if len(group) == 1 else f" (e.g. {path})"
+        lines.append(line)
+    return lines
 
 
 def _print_error(error: dict) -> None:

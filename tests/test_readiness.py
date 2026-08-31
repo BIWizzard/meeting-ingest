@@ -82,6 +82,103 @@ def test_history_issue_is_renamed_and_does_not_block(tmp_path: Path, monkeypatch
     assert result.findings[0].severity == "warning"
 
 
+def test_inactive_playbook_issues_are_named_honestly_and_name_the_activating_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [
+            DoctorIssue("playbook_state_missing", "Durable playbook state directory is missing.", "_playbook-state"),
+            DoctorIssue("playbook_stale", "Generation does not match current inputs.", "_derived/playbook-index.json"),
+            DoctorIssue("derivation_index_mismatch", "Index is behind the latest generation.", "_derived/playbook-index.json"),
+            DoctorIssue("playbook_profile_missing", "Indexed playbook profile is missing.", "_derived/profiles/a.json"),
+        ],
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "core_inactive"
+    assert result.exit_code == 0
+    assert {finding.code for finding in result.findings} == {
+        "playbook_never_generated",
+        "playbook_outputs_incomplete",
+        "playbook_outputs_stale",
+    }
+    assert {finding.category for finding in result.findings} == {"core_inactive"}
+    assert {finding.severity for finding in result.findings} == {"warning"}
+    assert all("meeting-ingest playbook update" in finding.remediation for finding in result.findings)
+    assert not any("does not block" in finding.remediation for finding in result.findings)
+
+
+def test_uncommitted_generation_is_history_and_names_the_cleanup_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [
+            DoctorIssue(
+                "derivation_generation_uncommitted",
+                "Generation directory has no successful derivation-ledger commit.",
+                "_derived/generations/g1",
+            )
+        ],
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "ready_with_history_warnings"
+    assert [(finding.code, finding.category, finding.severity) for finding in result.findings] == [
+        ("playbook_generation_uncommitted", "history", "warning")
+    ]
+    assert "meeting-ingest playbook cleanup-uncommitted" in result.findings[0].remediation
+    assert "does not block" not in result.findings[0].remediation
+
+
+def test_core_inactive_outranks_history_warnings_and_yields_to_blockers_and_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [
+            DoctorIssue("low_confidence_meeting_date", "Date needs review.", "meeting.md"),
+            DoctorIssue("playbook_stale", "Generation does not match current inputs.", "_derived/playbook-index.json"),
+        ],
+    )
+
+    mixed = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+    blocked = assess_readiness(
+        tmp_path,
+        runtime_inspector=lambda root: _runtime_with_finding(root, _runtime_blocker("runtime_pin_missing")),
+    )
+    override = assess_readiness(
+        tmp_path,
+        development_override=DevelopmentOverride("local test"),
+        runtime_inspector=approved_runtime_inspection,
+    )
+
+    assert mixed.verdict == "core_inactive"
+    assert blocked.verdict == "blocked"
+    assert override.verdict == "development_override"
+
+
+def test_history_warnings_alone_never_report_core_inactive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [DoctorIssue("inbox_residue", "Source file remains in inbox.", "_inbox/meeting.vtt")],
+    )
+
+    result = assess_readiness(tmp_path, runtime_inspector=approved_runtime_inspection)
+
+    assert result.verdict == "ready_with_history_warnings"
+    assert [finding.category for finding in result.findings] == ["history"]
+
+
 def test_deprecated_three_field_ledger_record_is_a_history_warning(tmp_path: Path) -> None:
     paths = init_project(tmp_path)
     paths.ledger.write_text(
@@ -652,6 +749,59 @@ def test_readiness_summary_preserves_full_json_findings_and_grouped_counts(
         "by_severity": {"warning": 1},
     }
     assert data["findings"][0]["path"] == "meeting.md"
+
+
+def test_default_json_keeps_every_finding_on_a_many_finding_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    issues = [
+        DoctorIssue("inbox_residue", "Source file remains in inbox.", f"_inbox/meeting-{index:02d}.vtt")
+        for index in range(40)
+    ]
+    issues.append(DoctorIssue("playbook_stale", "Generation does not match current inputs.", "_derived/playbook-index.json"))
+    monkeypatch.setattr("meeting_ingest.doctor.find_issues", lambda _: issues)
+
+    data = readiness_summary(tmp_path, runtime_inspector=approved_runtime_inspection).to_dict()
+
+    assert data["verdict"] == "core_inactive"
+    assert len(data["findings"]) == 41
+    assert data["findings"][0]["category"] == "core_inactive"
+    assert [finding["path"] for finding in data["findings"][1:]] == [
+        f"_inbox/meeting-{index:02d}.vtt" for index in range(40)
+    ]
+    assert data["finding_counts"] == {
+        "by_category": {"core_inactive": 1, "history": 40},
+        "by_severity": {"warning": 41},
+    }
+    assert "next_action" not in data
+
+
+def test_verdict_only_summary_is_the_explicit_reduced_gate_view(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.doctor.find_issues",
+        lambda _: [
+            DoctorIssue("playbook_stale", "Generation does not match current inputs.", "_derived/playbook-index.json"),
+            DoctorIssue("inbox_residue", "Source file remains in inbox.", "_inbox/meeting.vtt"),
+        ],
+    )
+
+    summary = readiness_summary(tmp_path, verdict_only=True, runtime_inspector=approved_runtime_inspection)
+    data = summary.to_dict()
+
+    assert "findings" not in data
+    assert data["verdict"] == "core_inactive"
+    assert data["exit_code"] == 0
+    assert data["match"] is True
+    assert data["running_build"] == summary.runtime_provenance["build_id"]
+    assert data["finding_counts"] == {
+        "by_category": {"core_inactive": 1, "history": 1},
+        "by_severity": {"warning": 2},
+    }
+    assert "meeting-ingest playbook update" in data["next_action"]
 
 
 def test_readiness_summary_match_uses_the_pin_comparison(tmp_path: Path) -> None:

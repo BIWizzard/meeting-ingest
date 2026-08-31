@@ -49,6 +49,7 @@ Before any natural-language inbox processing, check runtime readiness:
 Read `verdict` from the JSON and continue only as follows:
 
 - `ready` or `ready_with_history_warnings`: proceed with the workflow.
+- `core_inactive`: proceed with the workflow, and report the finding's `remediation` command in the completion message; a core capability is not running in this project until someone runs it.
 - `development_override`: proceed only when the user has explicitly authorized the override reason in this session. Pass `--development-override "<reason>"` on every mutating command (`session-inbox`, `provider-request`, `ingest`), using the exact authorized reason, and state in the completion message that the results are development-marked.
 - `blocked` (exit `12`): stop and report the findings. Do not process the inbox. Read-only commands (`status`, `doctor`, `readiness`, `runtime inspect`) remain usable while blocked.
 

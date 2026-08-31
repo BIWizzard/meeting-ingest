@@ -96,7 +96,7 @@ Frozen contracts:
 - deterministic build ID from semantic version, commit prefix, and source-tree digest prefix;
 - source-tree hashing over the exact archived runtime and reference-workflow path manifest;
 - `runtime inspect`, `readiness`, `runtime pin`, and `runtime update-check` CLI surfaces;
-- verdicts `ready`, `ready_with_history_warnings`, `development_override`, and `blocked`, with blocked runtime readiness at exit `12`;
+- verdicts `ready`, `ready_with_history_warnings`, `core_inactive`, `development_override`, and `blocked`, with blocked runtime readiness at exit `12`;
 - invocation-scoped development override that bypasses only eligible approval/install selection and is included in provenance;
 - canonical runtime provenance `1.0` and canonical-JSON SHA-256 fingerprint;
 - meeting artifact `1.1`, source-ledger `2.0`, signal `1.2`, run-summary `1.1`, provider handoff `1.1`, and provenance-aware playbook `2.0` cutovers;

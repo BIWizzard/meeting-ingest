@@ -58,8 +58,7 @@ _NEVER_OVERRIDABLE_RUNTIME_CODES = {
     "runtime_package_integrity_failed",
 }
 _HISTORY_ISSUE_CODES = {
-    "derivation_generation_uncommitted": "optional_playbook_output_missing",
-    "derivation_index_mismatch": "optional_playbook_output_missing",
+    "derivation_generation_uncommitted": "playbook_generation_uncommitted",
     "historical_identity_gap": "historical_identity_gap",
     "historical_artifact_path_drift": "corpus_adoption_pending",
     "identity_alias_ambiguous": "historical_identity_gap",
@@ -67,13 +66,36 @@ _HISTORY_ISSUE_CODES = {
     "legacy_ledger_record": "legacy_provenance_missing",
     "legacy_signal_format": "legacy_signal_link_missing",
     "low_confidence_meeting_date": "historical_date_low_confidence",
-    "playbook_profile_missing": "optional_playbook_output_missing",
-    "playbook_stale": "optional_playbook_output_missing",
-    "playbook_state_missing": "optional_playbook_output_missing",
     "review_event_orphaned": "historical_identity_gap",
     "session_handoff_stale": "corpus_adoption_pending",
     "stale_provider_request": "corpus_adoption_pending",
     "stale_provider_response": "corpus_adoption_pending",
+}
+_HISTORY_REMEDIATION = "Review or adopt this historical state separately; it does not block the next safe write."
+_HISTORY_REMEDIATIONS = {
+    "playbook_generation_uncommitted": (
+        "Run `meeting-ingest playbook cleanup-uncommitted` to remove this orphaned generation; "
+        "it has no successful derivation-ledger commit."
+    ),
+}
+_CORE_INACTIVE_ISSUE_CODES = {
+    "derivation_index_mismatch": "playbook_outputs_stale",
+    "playbook_profile_missing": "playbook_outputs_incomplete",
+    "playbook_stale": "playbook_outputs_stale",
+    "playbook_state_missing": "playbook_never_generated",
+}
+_CORE_INACTIVE_REMEDIATIONS = {
+    "playbook_never_generated": (
+        "Run `meeting-ingest playbook update` to generate this project's playbook; "
+        "no derived playbook output exists here yet."
+    ),
+    "playbook_outputs_incomplete": (
+        "Run `meeting-ingest playbook update` to rebuild the playbook output this project is missing."
+    ),
+    "playbook_outputs_stale": (
+        "Run `meeting-ingest playbook update` to regenerate the playbook from the current corpus; "
+        "the current output does not reflect it."
+    ),
 }
 _PROJECT_BLOCKER_CODES = {
     "artifact_provenance_mismatch",
@@ -187,6 +209,9 @@ def assess_readiness(
     elif development_override is not None:
         verdict = "development_override"
         exit_code = 0
+    elif any(finding.category == "core_inactive" for finding in findings):
+        verdict = "core_inactive"
+        exit_code = 0
     elif warnings:
         verdict = "ready_with_history_warnings"
         exit_code = 0
@@ -225,31 +250,57 @@ def with_runtime_provenance(summary: RunSummary, result: ReadinessResult) -> Run
     return summary
 
 
-def readiness_summary(root: Path, **kwargs: object) -> RunSummary:
+def readiness_summary(root: Path, *, verdict_only: bool = False, **kwargs: object) -> RunSummary:
     inspector = kwargs.get("runtime_inspector") or _RUNTIME_INSPECTOR
     inspection = inspector(root.expanduser().resolve(strict=False))  # type: ignore[operator]
     result = assess_readiness(root, **{**kwargs, "runtime_inspector": lambda _: inspection})
     category_counts = Counter(finding.category for finding in result.findings)
     severity_counts = Counter(finding.severity for finding in result.findings)
     approved_build = inspection.pin.get("comparisons", [])
+    findings = [finding.to_dict() for finding in result.findings]
+    details: dict[str, object] = {
+        "command": "readiness",
+        "verdict": result.verdict,
+        "running_build": inspection.build.build_id,
+        "approved_build": _comparison_expected(approved_build, "approved_build_id"),
+        "match": bool(inspection.pin.get("match", False)),
+        "finding_counts": {
+            "by_category": dict(sorted(category_counts.items())),
+            "by_severity": dict(sorted(severity_counts.items())),
+        },
+    }
+    if verdict_only:
+        details["next_action"] = readiness_next_action(result.verdict, findings)
+    else:
+        details["update_available"] = bool(inspection.channel.get("update_available", False))
+        details["findings"] = findings
     return RunSummary(
         status="success" if result.exit_code == 0 else "blocked",
         exit_code=result.exit_code,
         runtime_provenance=asdict(result.runtime_provenance),
-        details={
-            "command": "readiness",
-            "verdict": result.verdict,
-            "running_build": inspection.build.build_id,
-            "approved_build": _comparison_expected(approved_build, "approved_build_id"),
-            "match": bool(inspection.pin.get("match", False)),
-            "update_available": bool(inspection.channel.get("update_available", False)),
-            "finding_counts": {
-                "by_category": dict(sorted(category_counts.items())),
-                "by_severity": dict(sorted(severity_counts.items())),
-            },
-            "findings": [finding.to_dict() for finding in result.findings],
-        },
+        details=details,
     )
+
+
+def readiness_next_action(verdict: str, findings: Iterable[dict]) -> str | None:
+    """Select the one remediation this verdict makes actionable."""
+    for finding in findings:
+        if not _is_actionable(verdict, finding):
+            continue
+        remediation = finding.get("remediation")
+        if isinstance(remediation, str):
+            return remediation
+    return None
+
+
+def _is_actionable(verdict: str, finding: dict) -> bool:
+    if verdict == "blocked":
+        return finding.get("severity") == "blocker"
+    if verdict == "core_inactive":
+        return finding.get("category") == "core_inactive"
+    if verdict == "ready_with_history_warnings":
+        return finding.get("severity") == "warning"
+    return False
 
 
 def _project_findings(
@@ -410,15 +461,28 @@ def _doctor_findings(
             "playbook-cleanup",
         }:
             continue
-        if issue.code in _HISTORY_ISSUE_CODES:
+        if issue.code in _CORE_INACTIVE_ISSUE_CODES:
+            code = _CORE_INACTIVE_ISSUE_CODES[issue.code]
             findings.append(
                 ReadinessFinding(
-                    code=_HISTORY_ISSUE_CODES[issue.code],
+                    code=code,
+                    category="core_inactive",
+                    severity="warning",
+                    message=issue.message,
+                    path=issue.path,
+                    remediation=_CORE_INACTIVE_REMEDIATIONS[code],
+                )
+            )
+        elif issue.code in _HISTORY_ISSUE_CODES:
+            code = _HISTORY_ISSUE_CODES[issue.code]
+            findings.append(
+                ReadinessFinding(
+                    code=code,
                     category="history",
                     severity="warning",
                     message=issue.message,
                     path=issue.path,
-                    remediation="Review or adopt this historical state separately; it does not block the next safe write.",
+                    remediation=_HISTORY_REMEDIATIONS.get(code, _HISTORY_REMEDIATION),
                 )
             )
         elif issue.code == "session_handoff_pending" or issue.code in _PROJECT_BLOCKER_CODES:
@@ -457,7 +521,7 @@ def _classify_runtime_findings(findings: Iterable[ReadinessFinding]) -> list[Rea
             | _NEVER_OVERRIDABLE_RUNTIME_CODES
         ):
             classified.append(replace(finding, category="runtime", severity="blocker"))
-        elif finding.category in {"project", "history"}:
+        elif finding.category in {"project", "history", "core_inactive"}:
             classified.append(finding)
         else:
             classified.append(

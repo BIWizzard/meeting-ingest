@@ -213,6 +213,196 @@ def test_readiness_cli_returns_stable_blocked_exit_code(tmp_path: Path, monkeypa
     assert result["findings"][0]["code"] == "runtime_package_integrity_failed"
 
 
+def test_emit_core_inactive_leads_with_the_activating_command_and_collapses_repeats(capsys) -> None:
+    activation = "Run `meeting-ingest playbook update` to generate this project's playbook."
+    adoption = "Review or adopt this historical state separately; it does not block the next safe write."
+    summary = RunSummary(
+        details={
+            "command": "readiness",
+            "verdict": "core_inactive",
+            "findings": [
+                {
+                    "code": "playbook_never_generated",
+                    "category": "core_inactive",
+                    "severity": "warning",
+                    "message": "Durable playbook state directory is missing.",
+                    "path": "_playbook-state",
+                    "remediation": activation,
+                },
+                {
+                    "code": "corpus_adoption_pending",
+                    "category": "history",
+                    "severity": "warning",
+                    "message": "Source file remains in inbox.",
+                    "path": "_inbox/first.vtt",
+                    "remediation": adoption,
+                },
+                {
+                    "code": "corpus_adoption_pending",
+                    "category": "history",
+                    "severity": "warning",
+                    "message": "Source file remains in inbox.",
+                    "path": "_inbox/second.vtt",
+                    "remediation": adoption,
+                },
+            ],
+            "finding_counts": {"by_severity": {"warning": 3}},
+        }
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == (
+        "Readiness: Core Inactive\n"
+        f"Next action: {activation}\n"
+        "Findings: warning=3\n"
+        "- 1 core_inactive/playbook_never_generated (_playbook-state)\n"
+        "- 2 history/corpus_adoption_pending (e.g. _inbox/first.vtt)\n"
+    )
+
+
+def test_emit_blocked_corpus_with_core_inactive_findings_renders_one_next_action(capsys) -> None:
+    summary = RunSummary(
+        status="blocked",
+        exit_code=12,
+        details={
+            "command": "readiness",
+            "verdict": "blocked",
+            "findings": [
+                {
+                    "code": "runtime_pin_missing",
+                    "category": "runtime",
+                    "severity": "blocker",
+                    "message": "The consumer runtime pin is missing.",
+                    "path": "meeting-ingest-runtime.toml",
+                    "remediation": "Install and pin the approved runtime.",
+                },
+                {
+                    "code": "playbook_never_generated",
+                    "category": "core_inactive",
+                    "severity": "warning",
+                    "message": "Durable playbook state directory is missing.",
+                    "path": "_playbook-state",
+                    "remediation": "Run `meeting-ingest playbook update` to generate this project's playbook.",
+                },
+            ],
+            "finding_counts": {"by_severity": {"blocker": 1, "warning": 1}},
+        },
+    )
+
+    emit(summary, as_json=False)
+
+    out = capsys.readouterr().out
+    assert out.count("Next action:") == 1
+    assert out == (
+        "Readiness: Blocked\n"
+        "Next action: Install and pin the approved runtime.\n"
+        "Findings: blocker=1, warning=1\n"
+        "- 1 core_inactive/playbook_never_generated (_playbook-state)\n"
+    )
+
+
+def test_emit_verdict_only_human_path_uses_the_carried_next_action(capsys) -> None:
+    activation = "Run `meeting-ingest playbook update` to generate this project's playbook."
+    summary = RunSummary(
+        details={
+            "command": "readiness",
+            "verdict": "core_inactive",
+            "next_action": activation,
+            "finding_counts": {"by_severity": {"warning": 42}},
+        }
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == (
+        "Readiness: Core Inactive\n"
+        f"Next action: {activation}\n"
+        "Findings: warning=42\n"
+    )
+
+
+def test_emit_init_core_inactive_names_the_activating_command(capsys) -> None:
+    activation = "Run `meeting-ingest playbook update` to generate this project's playbook."
+    summary = RunSummary(
+        details={
+            "command": "init",
+            "meetings_root": "/project/_local/project-context/meetings",
+            "verdict": "core_inactive",
+            "next_action": activation,
+            "finding_counts": {"by_severity": {"warning": 1}},
+        }
+    )
+
+    emit(summary, as_json=False)
+
+    assert capsys.readouterr().out == (
+        "Core Inactive\n"
+        f"Next action: {activation}\n"
+        "Meetings root: /project/_local/project-context/meetings\n"
+        "Findings: warning=1\n"
+    )
+
+
+def test_emit_runtime_update_core_inactive_names_the_activating_command(capsys) -> None:
+    activation = "Run `meeting-ingest playbook update` to generate this project's playbook."
+    summary = RunSummary(
+        details={
+            "command": "runtime_update",
+            "updated": True,
+            "build_id": "meeting-ingest-0.3.0-gaaaaaaaaaaaa-sbbbbbbbbbbbb",
+            "pin_path": "/project/meeting-ingest-runtime.toml",
+            "verdict": "core_inactive",
+            "findings": [
+                {
+                    "code": "playbook_never_generated",
+                    "category": "core_inactive",
+                    "severity": "warning",
+                    "message": "Durable playbook state directory is missing.",
+                    "path": "_playbook-state",
+                    "remediation": activation,
+                }
+            ],
+        }
+    )
+
+    emit(summary, as_json=False)
+
+    captured = capsys.readouterr()
+    assert captured.out == (
+        "Updated to meeting-ingest-0.3.0-gaaaaaaaaaaaa-sbbbbbbbbbbbb\n"
+        "Pin: /project/meeting-ingest-runtime.toml\n"
+        "Readiness: Core Inactive\n"
+        f"Next action: {activation}\n"
+    )
+    assert captured.err == ""
+
+
+def test_readiness_verdict_only_reduces_the_payload_on_request(tmp_path: Path, monkeypatch, capsys) -> None:
+    from meeting_ingest.paths import init_project
+
+    init_project(tmp_path)
+    monkeypatch.setattr(
+        "meeting_ingest.readiness._RUNTIME_INSPECTOR", lambda _: approved_runtime_inspection(tmp_path)
+    )
+
+    exit_code = main(["readiness", "--root", str(tmp_path), "--json", "--verdict-only"])
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert result["verdict"] == "ready"
+    assert "findings" not in result
+    assert result["next_action"] is None
+    assert result["finding_counts"] == {"by_category": {}, "by_severity": {}}
+
+
+def test_cli_parses_readiness_verdict_only() -> None:
+    args = build_parser().parse_args(["readiness", "--root", "/tmp/consumer", "--json", "--verdict-only"])
+
+    assert args.verdict_only is True
+    assert build_parser().parse_args(["readiness"]).verdict_only is False
+
+
 def test_emit_init_reports_history_warnings_without_overclaiming(capsys) -> None:
     summary = RunSummary(
         details={

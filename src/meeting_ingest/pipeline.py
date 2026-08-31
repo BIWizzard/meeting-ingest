@@ -60,7 +60,13 @@ from meeting_ingest.provider_handoff import (
 from meeting_ingest.providers import get_provider
 from meeting_ingest.render import RenderContext, render_summary_plus_verbatim
 from meeting_ingest.run_summary import RunSummary
-from meeting_ingest.readiness import DevelopmentOverride, assess_readiness, require_write_readiness, with_runtime_provenance
+from meeting_ingest.readiness import (
+    DevelopmentOverride,
+    assess_readiness,
+    readiness_next_action,
+    require_write_readiness,
+    with_runtime_provenance,
+)
 from meeting_ingest.runtime_release import BootstrappedRuntime, bootstrap_consumer_runtime, runtime_pin_present
 from meeting_ingest.runtime_config import sha256_bytes
 from meeting_ingest.schema import (
@@ -209,6 +215,9 @@ def initialize(
         ),
         "bootstrapped_runtime": bootstrapped is not None,
         "finding_counts": {"by_severity": dict(sorted(severity_counts.items()))},
+        "next_action": readiness_next_action(
+            readiness.verdict, [finding.to_dict() for finding in readiness.findings]
+        ),
     }
     if bootstrapped is not None:
         details["runtime_pin_path"] = str(bootstrapped.pin_path)

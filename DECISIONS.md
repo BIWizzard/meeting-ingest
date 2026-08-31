@@ -328,7 +328,7 @@ The approval unit is an embedded build identity bound externally to one reproduc
 
 Approved bootstrap is explicit `runtime pin` followed by `init`. Updates and rollback are explicit install-plus-pin operations. Git hooks, skills, readiness, and status commands may not silently change an installed or selected runtime.
 
-Readiness has four verdicts: `ready`, `ready_with_history_warnings`, `development_override`, and `blocked`. Editable or unverifiable client writes block by default. A non-empty invocation-scoped development reason can authorize eligible development selection, but it cannot bypass config, privacy, path, package-integrity, handoff-identity, or current-data corruption failures. Development provenance and rendered output must remain visibly distinguishable from approved output.
+Readiness has five verdicts: `ready`, `ready_with_history_warnings`, `core_inactive`, `development_override`, and `blocked` (`core_inactive` added under North Star record 003, OB-003-2). Editable or unverifiable client writes block by default. A non-empty invocation-scoped development reason can authorize eligible development selection, but it cannot bypass config, privacy, path, package-integrity, handoff-identity, or current-data corruption failures. Development provenance and rendered output must remain visibly distinguishable from approved output.
 
 One shared engine-level guard runs before every public mutation, before locks or writes. Read-only inspection, readiness, update check, status, doctor, and response validation remain available while blocked. Production does not trust test-environment variables; tests inject typed runtime evidence.
 

@@ -136,7 +136,7 @@ Codex, Supa Code, and T3 Code are not reference hosts. Their runs are developmen
 
 Process the inbox with this loop:
 
-0. Check runtime readiness with `"$MEETING_INGEST" readiness --host claude-code --json`. Continue only when `verdict` is `ready` or `ready_with_history_warnings`, or when the user has explicitly authorized a `development_override` reason (then pass `--development-override "<reason>"` on every mutating command and mark the results development-generated). On `blocked` (exit `12`), stop and report the findings; read-only `status`, `doctor`, `readiness`, and `runtime inspect` remain usable while blocked.
+0. Check runtime readiness with `"$MEETING_INGEST" readiness --host claude-code --json`. Continue only when `verdict` is `ready`, `ready_with_history_warnings`, or `core_inactive` (report the `core_inactive` finding's activating command), or when the user has explicitly authorized a `development_override` reason (then pass `--development-override "<reason>"` on every mutating command and mark the results development-generated). On `blocked` (exit `12`), stop and report the findings; read-only `status`, `doctor`, `readiness`, and `runtime inspect` remain usable while blocked.
 1. Run `"$MEETING_INGEST" session-inbox --quality balanced --json`.
 2. For each result with `status: "pending_provider_response"`, read the generated request file from `details.request_path`.
 3. Produce the expected provider response JSON at `details.expected_response_path`.

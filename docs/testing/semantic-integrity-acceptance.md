@@ -33,7 +33,7 @@ The transcript contains:
 
 ## Release Evidence Versus Development Evidence
 
-A release-evidence run uses the approved immutable build in a freshly pinned consumer project, with `readiness` reporting `ready` or `ready_with_history_warnings`. Only such a run is milestone proof.
+A release-evidence run uses the approved immutable build in a freshly pinned consumer project, with `readiness` reporting `ready`, `ready_with_history_warnings`, or `core_inactive`. Only such a run is milestone proof. A run reporting `core_inactive` must name every `core_inactive` finding and its activating command in the evidence record: a milestone record never passes silently with a core capability switched off. A `core_inactive` verdict is admissible here because this acceptance case exercises extraction, not playbook activation; it does not satisfy record 003 P2 activation evidence, which is accounted separately (OB-003-3).
 
 Any run that needs `--development-override`, uses an editable checkout, or reports `development_override` is development evidence and must be labeled non-release in the record. Codex runs are development/non-release evidence regardless of verdict; Claude Code is the reference host.
 
