@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any
 
@@ -17,7 +18,7 @@ from meeting_ingest._build_info import BUILD_INFO
 from meeting_ingest.cli import emit, main
 from meeting_ingest.errors import EXIT_RUNTIME_READINESS
 from meeting_ingest.paths import init_project
-from meeting_ingest.runtime import inspect_runtime
+from meeting_ingest.runtime import CONSOLE_SCRIPT_NAME, inspect_runtime
 from meeting_ingest.runtime_config import read_pin
 from meeting_ingest.runtime_release import (
     APPROVED_EXECUTABLE_MARKER,
@@ -191,6 +192,8 @@ class _Machine:
         if command[:3] == ["uv", "tool", "install"]:
             self.tool_build = self.latest
             return subprocess.CompletedProcess(command, 0, "", "")
+        if command == ["uv", "tool", "dir", "--bin"]:
+            return subprocess.CompletedProcess(command, 0, f"{self.executable.parent}\n", "")
         if command[1:3] == ["runtime", "inspect"]:
             evidence = {
                 "build": {"build_id": self.tool_build[0], "build_kind": "approved-candidate"},
@@ -234,7 +237,6 @@ class _Machine:
             invoked_executable=self.executable,
             runtime_inspector=self.inspector,
             command_runner=self.runner,
-            executable_locator=lambda name: str(self.executable),
         )
 
     def rendered_skill(self) -> bytes:
@@ -344,7 +346,8 @@ def test_update_installs_and_delegates_to_the_new_build_in_one_invocation(
     assert summary.details["previous_build_id"] == BUILD_A
     assert summary.details["verdict"] == "ready"
     assert _installed_wheels(machine) == [published.wheel_path.name]
-    assert machine.commands[1] == [str(machine.executable), "runtime", "inspect", "--json"]
+    assert machine.commands[1] == ["uv", "tool", "dir", "--bin"]
+    assert machine.commands[2] == [str(machine.executable), "runtime", "inspect", "--json"]
     assert _delegations(machine) == [
         [str(machine.executable), "update", "--root", str(consumer), "--json"]
     ]
@@ -569,14 +572,14 @@ def test_install_approved_wheel_stages_the_verified_bytes_and_verifies_the_tool(
         application_data_root=machine.app_root,
         expected_wheel_sha256=_digest(published.wheel_path),
         command_runner=machine.runner,
-        executable_locator=lambda name: str(machine.executable),
     )
 
     assert result.build_id == BUILD_A
     assert result.executable == machine.executable.resolve()
     assert result.command == ("uv", "tool", "install", "--reinstall", str(published.wheel_path))
     assert _installed_wheels(machine) == [published.wheel_path.name]
-    assert machine.commands[1] == [str(machine.executable), "runtime", "inspect", "--json"]
+    assert machine.commands[1] == ["uv", "tool", "dir", "--bin"]
+    assert machine.commands[2] == [str(machine.executable), "runtime", "inspect", "--json"]
 
 
 def test_install_approved_wheel_refuses_a_tool_that_is_not_the_approved_build(
@@ -596,9 +599,42 @@ def test_install_approved_wheel_refuses_a_tool_that_is_not_the_approved_build(
             published.receipt_path,
             application_data_root=machine.app_root,
             command_runner=runner,
-            executable_locator=lambda name: str(machine.executable),
         )
 
+    assert error.value.code == "runtime_install_unverified"
+    assert "build_id" in error.value.message
+
+
+def test_install_approved_wheel_ignores_a_development_shim_earlier_on_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    machine = _Machine(tmp_path, monkeypatch)
+    published = machine.publish(BUILD_A, COMMIT_A, TREE_A)
+    decoy_directory = tmp_path / "repo/.venv/bin"
+    decoy_directory.mkdir(parents=True)
+    decoy = decoy_directory / "meeting-ingest"
+    decoy.write_text("#!/bin/sh\necho development shim\n", encoding="utf-8")
+    decoy.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{decoy_directory}{os.pathsep}{os.environ['PATH']}")
+    machine.tool_build = (BUILD_B, COMMIT_B, TREE_B)
+
+    def runner(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if command[:3] == ["uv", "tool", "install"]:
+            machine.commands.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return machine.runner(command, **kwargs)
+
+    with pytest.raises(RuntimeReleaseError) as error:
+        install_approved_wheel(
+            published.receipt_path,
+            application_data_root=machine.app_root,
+            command_runner=runner,
+        )
+
+    assert shutil.which(CONSOLE_SCRIPT_NAME) == str(decoy)
+    assert machine.commands[1] == ["uv", "tool", "dir", "--bin"]
+    assert machine.commands[2] == [str(machine.executable), "runtime", "inspect", "--json"]
+    assert all(str(decoy) not in argument for line in machine.commands for argument in line)
     assert error.value.code == "runtime_install_unverified"
     assert "build_id" in error.value.message
 
@@ -615,7 +651,6 @@ def test_install_approved_wheel_refuses_a_receipt_that_names_another_wheel_diges
             application_data_root=machine.app_root,
             expected_wheel_sha256="sha256:" + "9" * 64,
             command_runner=machine.runner,
-            executable_locator=lambda name: str(machine.executable),
         )
 
     assert error.value.code == "runtime_wheel_invalid"

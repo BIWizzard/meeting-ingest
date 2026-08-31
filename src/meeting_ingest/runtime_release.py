@@ -67,6 +67,7 @@ _INIT_SHADOW_REMEDIATION = (
 )
 _UPDATE_SHADOW_REMEDIATION = "Remove the shadowing copy this session resolves."
 UV_TOOL_INSTALL_COMMAND = ("uv", "tool", "install", "--reinstall")
+UV_TOOL_BIN_COMMAND = ("uv", "tool", "dir", "--bin")
 UPDATE_DELEGATION_MARKER = "MEETING_INGEST_UPDATE_DELEGATED"
 CommandRunner = Callable[..., "subprocess.CompletedProcess[str]"]
 _BOOTSTRAP_BLOCKING_CODES = (
@@ -1400,7 +1401,6 @@ def update_consumer_runtime(
     invoked_executable: str | Path | None = None,
     runtime_inspector: Callable[..., RuntimeInspection] = inspect_runtime,
     command_runner: CommandRunner = subprocess.run,
-    executable_locator: Callable[[str], str | None] = shutil.which,
 ) -> RunSummary:
     """Move one explicitly named pinned consumer to the channel-latest approved runtime."""
 
@@ -1461,7 +1461,7 @@ def update_consumer_runtime(
         wheel_path, expected_sha256=receipt["build"]["wheel_sha256"], runner=command_runner
     )
     with _converging_update(root, previous_build_id):
-        executable = _locate_console_script(executable_locator)
+        executable = _locate_console_script(runner=command_runner)
         _require_installed_tool_matches(executable, receipt, runner=command_runner)
         return _delegate_update(root, executable, runner=command_runner)
 
@@ -1493,17 +1493,40 @@ def _inspect_installed_tool(executable: Path, *, runner: CommandRunner) -> Mappi
     return evidence
 
 
-def _locate_console_script(locator: Callable[[str], str | None]) -> Path:
-    """Identify the console script this machine now resolves for the tool."""
+def _locate_console_script(*, runner: CommandRunner) -> Path:
+    """Locate the installed tool by its uv bin directory; PATH can resolve a dev shim first."""
 
-    located = locator(CONSOLE_SCRIPT_NAME)
-    if not located:
-        raise RuntimeReleaseError(
-            f"The installed {CONSOLE_SCRIPT_NAME} console script is not on PATH",
-            code="runtime_executable_unidentified",
-            remediation="Add the uv tool bin directory to PATH and run the command again.",
+    remediation = (
+        "Run `uv tool dir --bin` to find the tool bin directory, then reinstall the approved "
+        "wheel with `uv tool install --reinstall <published-wheel-path>`."
+    )
+    try:
+        completed = runner(
+            list(UV_TOOL_BIN_COMMAND), check=True, capture_output=True, text=True
         )
-    return Path(located).expanduser().resolve(strict=False)
+        directory = (completed.stdout or "").strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = str(getattr(exc, "stderr", None) or exc).strip()
+        raise RuntimeReleaseError(
+            f"The uv tool bin directory could not be resolved: {detail}",
+            code="runtime_tool_bin_unresolved",
+            remediation=remediation,
+        ) from exc
+    if not directory:
+        raise RuntimeReleaseError(
+            "uv reported no tool bin directory",
+            code="runtime_tool_bin_unresolved",
+            remediation=remediation,
+        )
+    executable = Path(directory).expanduser() / CONSOLE_SCRIPT_NAME
+    if not executable.is_file():
+        raise RuntimeReleaseError(
+            f"The installed {CONSOLE_SCRIPT_NAME} console script is not in the uv tool bin "
+            f"directory: {executable}",
+            code="runtime_executable_unidentified",
+            remediation=remediation,
+        )
+    return executable.resolve(strict=False)
 
 
 def _require_installed_tool_matches(
@@ -1543,7 +1566,6 @@ def install_approved_wheel(
     expected_receipt_sha256: str | None = None,
     expected_wheel_sha256: str | None = None,
     command_runner: CommandRunner = subprocess.run,
-    executable_locator: Callable[[str], str | None] = shutil.which,
 ) -> InstalledRuntime:
     """Install one published receipt's wheel machine-globally and verify the tool it leaves."""
 
@@ -1560,7 +1582,7 @@ def install_approved_wheel(
         wheel, expected_sha256=receipt["build"]["wheel_sha256"], runner=command_runner
     )
 
-    executable = _locate_console_script(executable_locator)
+    executable = _locate_console_script(runner=command_runner)
     _require_installed_tool_matches(executable, receipt, runner=command_runner)
     return InstalledRuntime(
         build_id=receipt["build"]["build_id"],
