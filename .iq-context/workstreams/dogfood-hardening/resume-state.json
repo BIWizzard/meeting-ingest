@@ -1,10 +1,11 @@
 {
   "version": 1,
   "remaining_tasks": [
-    "Add rule 6 framing-restraint detection to the semantic-integrity fixture, using attempt 2 concrete failing case: a committed action item whose scope exceeds what its owner accepted, with the owner narrowing (Alerting change only) and self-summary (alerting change is mine by Friday) both in the transcript.",
-    "Promote the acceptance evaluator into the repository next to the fixture it executes; working copy preserved at /private/tmp/meeting-ingest-acceptance-evaluator.",
-    "Convene the North Star board on the widened record 002 amendment brief: update-policy segmentation (HTV fail-closed pins vs auto-updating consumers), shipped-means-running adoption path, HTV as reference-consumer default, the third-party redistribution boundary from the 8/06 single-owner intel ruling, and the 8/13 one-command-init ruling (now shipped in 0.3.0 — the brief reports it as implemented)."
+    "Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.",
+    "Land OB-003-2 readiness activation legibility: rename the threefold optional_playbook_output_missing mislabel, collapse repeated same-code history findings per issue #26, and add the core_inactive category with its own distinct verdict — required before any new finding class ships.",
+    "Close OB-003-3 and OB-003-5 before the next release: widen issue #23 to all four product-status contradictions with activation state derived from tool output, and reconcile the README channel clause and Consumer Onboarding copy per record 003.",
+    "File a sanitized backlog issue for the share-safe artifact output form required by OB-003-4, and one for the consumer repair command the record 003 developer seat identified."
   ],
-  "resume_from": "Resume with: Add rule 6 framing-restraint detection to the semantic-integrity fixture, using attempt 2 concrete failing case: a committed action item whose scope exceeds what its owner accepted, with the owner narrowing (Alerting change only) and self-summary (alerting change is mine by Friday) both in the transcript.",
-  "updated_at": "2026-08-30T23:24:14.734Z"
+  "resume_from": "Resume with: Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.",
+  "updated_at": "2026-08-31T01:17:29.166Z"
 }

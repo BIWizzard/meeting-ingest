@@ -1,0 +1,46 @@
+# Session Wrap - dogfood-hardening
+
+- Wrapped at: 2026-08-31T01:17:29.166Z
+- Workstream: dogfood-hardening
+- Lifecycle: active
+- Mode: design
+
+## Summary
+
+Triple-deliverable session on released-build hardening and governance. (1) Rule 6 framing-restraint detection shipped (bb7591d): S14 blocks timeout-raise/loader-logic substance in committed action items with a noun-adjunct lookahead protecting correct alert-context renderings; S15 pins the alerting commitment's owner and Friday due_timing; codex-implemented from an orchestrator spec quoting the contract clause, codex-reviewed, one P2 false-match fix verified by a 12-case truth table. (2) Acceptance evaluator promoted into the repo (c5d646c) — the /tmp working copy was gone, written final-time from the evaluation block as spec; 625-line stdlib CLI + 41 tests + known-good integration payload; T2 verified (implementer probe review clean, codex 1 P1 + 3 P2s), one consolidated fix pass; suite 535 green; spec errors exit 2 and never masquerade as results; S6 gained the loader-split noun-phrase when-pattern; resolves the evaluator open question. (3) BOARD RECORD 003 convened and RATIFIED (b9afeac brief, 66712aa seats, 843a171 chair, b42a87a ratification): no auto-updating consumer class (P1 redesigned, #16 is the relief), shipped-means-running ratified scoped to the reference consumer (P2), HTV reference-consumer role formalized (P3), single-owner candor precondition codified with the historical disclosure RECORDED — full summary/analysis artifacts shared with Baba Opeyemi; forward rule: no summary artifacts leave the owner until a share-safe form exists (P4), one-command init ratified by mechanism (P5). Obligations OB-003-1..6 created and surfaced in the CLAUDE.md open-obligations block. Owner rulings at ratification: tooling/distribution is the honest priority, Track 4 deferred openly; owner had never seen a stakeholder brief — first real one (Dilip Jayavelu) generated live via 'meeting-ingest playbook brief person-dilip-jayavelu'. Relay #4 (zero-signals-recorded-ready, 25 days unlabeled via the #22 gap) restored to backlog with #9 named the first acceptance proof of the P2 gate; the chair report corrects the frozen brief's 'relay lane clear' claim.
+
+## Continuation
+
+Resume with: Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.
+
+## Active Files
+
+- tests/fixtures/semantic-integrity/evaluate.py
+- tests/test_acceptance_evaluator.py
+
+## Changes This Wrap
+
+### Next actions
+
+```text
++ Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.
++ Land OB-003-2 readiness activation legibility: rename the threefold optional_playbook_output_missing mislabel, collapse repeated same-code history findings per issue #26, and add the core_inactive category with its own distinct verdict — required before any new finding class ships.
++ Close OB-003-3 and OB-003-5 before the next release: widen issue #23 to all four product-status contradictions with activation state derived from tool output, and reconcile the README channel clause and Consumer Onboarding copy per record 003.
++ File a sanitized backlog issue for the share-safe artifact output form required by OB-003-4, and one for the consumer repair command the record 003 developer seat identified.
+```
+
+## Next Actions
+
+- Build the OB-003-1 command pair (issue #16): one maintainer release command and one consumer 'meeting-ingest update' command that drive the existing verified build/publish/install/repin steps end to end.
+- Land OB-003-2 readiness activation legibility: rename the threefold optional_playbook_output_missing mislabel, collapse repeated same-code history findings per issue #26, and add the core_inactive category with its own distinct verdict — required before any new finding class ships.
+- Close OB-003-3 and OB-003-5 before the next release: widen issue #23 to all four product-status contradictions with activation state derived from tool output, and reconcile the README channel clause and Consumer Onboarding copy per record 003.
+- File a sanitized backlog issue for the share-safe artifact output form required by OB-003-4, and one for the consumer repair command the record 003 developer seat identified.
+
+## Blockers
+
+- No corpus adoption or mutation is authorized; a deterministic fingerprinted adoption plan requires later owner approval (OB-002-1).
+
+## Open Questions
+
+- Should installed workflow artifacts carry a receipt or build stamp of their own? Today the installed agent doc and skill have no content stamp, so there is no local way to tell whether a copy still matches the receipt that placed it, and a hand-edit would be undetectable from the consumer side. This surfaced from an inbound ~/.claude relay that could not distinguish an installer write from a hand-edit.
+- Should docs/claude-skills/meeting-ingest/SKILL.md quote a single published rule source rather than restate the semantic guidance rules verbatim? Five surfaces now duplicate the rule text, and a parity test guards it in this repo, but the duplication remains a standing drift risk raised by the ~/.claude relay.
